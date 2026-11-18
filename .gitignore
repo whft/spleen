@@ -92,3 +92,6 @@ packages/ui/.tsbuild/
 
 # Pinned CLI download cache
 packages/desktop/.cache/
+
+# Playwright MCP artifacts
+.playwright-mcp/

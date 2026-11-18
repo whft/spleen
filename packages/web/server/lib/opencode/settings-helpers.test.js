@@ -221,6 +221,16 @@ describe('settings helpers', () => {
     }
   }, 120_000);
 
+  it('shows reasoning traces unless the user turned them off', () => {
+    const helpers = createTestHelpers();
+
+    // The UI store defaults to true; a server default of false silently hid
+    // every thinking block from clients that had no stored preference.
+    expect(helpers.formatSettingsResponse({}).showReasoningTraces).toBe(true);
+    expect(helpers.formatSettingsResponse({ showReasoningTraces: false }).showReasoningTraces).toBe(false);
+    expect(helpers.formatSettingsResponse({ showReasoningTraces: true }).showReasoningTraces).toBe(true);
+  });
+
   it('accepts only booleans for draft starter visibility', () => {
     const helpers = createTestHelpers();
 

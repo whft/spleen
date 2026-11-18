@@ -287,6 +287,43 @@ describe("translateWireEvent", () => {
     expect(ended[0]).toMatchObject({ properties: { part: { id: "msg_a:text:1", text: "hello", time: { start: 1000, end: 1000 } } } })
   })
 
+  test("reasoning streams as its own part so the thinking block can render live", () => {
+    const started = translateWireEvent({
+      ...base,
+      type: "session.reasoning.started",
+      durable,
+      data: { sessionID: "ses_1", assistantMessageID: "msg_a", ordinal: 0 },
+    })
+    expect(started).toEqual([
+      {
+        type: "message.part.updated",
+        properties: {
+          sessionID: "ses_1",
+          part: { id: partIds.reasoning("msg_a", 0), sessionID: "ses_1", messageID: "msg_a", type: "reasoning", text: "", time: { start: 1000 } },
+        },
+      },
+    ])
+    expect(
+      translateWireEvent({
+        ...base,
+        type: "session.reasoning.delta",
+        data: { sessionID: "ses_1", assistantMessageID: "msg_a", ordinal: 0, delta: "17*23" },
+      }),
+    ).toEqual([
+      {
+        type: "message.part.delta",
+        properties: { sessionID: "ses_1", messageID: "msg_a", partID: partIds.reasoning("msg_a", 0), field: "text", delta: "17*23" },
+      },
+    ])
+    const ended = translateWireEvent({
+      ...base,
+      type: "session.reasoning.ended",
+      durable,
+      data: { sessionID: "ses_1", assistantMessageID: "msg_a", ordinal: 0, text: "17*23 = 391" },
+    })
+    expect(ended[0]).toMatchObject({ properties: { part: { id: partIds.reasoning("msg_a", 0), text: "17*23 = 391", time: { start: 1000, end: 1000 } } } })
+  })
+
   test("tool calls: pending while streaming input, running once called, then a success transition", () => {
     const pending = translateWireEvent({
       ...base,

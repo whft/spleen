@@ -1380,7 +1380,7 @@ export const createSettingsHelpers = (dependencies) => {
           ? settings.showReasoningTraces
           : typeof sanitized.showReasoningTraces === 'boolean'
             ? sanitized.showReasoningTraces
-            : false,
+            : true,
       collapsibleThinkingBlocks:
         typeof settings.collapsibleThinkingBlocks === 'boolean'
           ? settings.collapsibleThinkingBlocks

@@ -83,6 +83,31 @@ Found only by running the compiled sidecar, each fixed at the cause:
 - Ledger recorded `execution.started` → `execution.completed` for that turn:
   `recovery.sqlite3`, session `ses_e12c4c106ffeJAreAVLdO5IwUI`.
 
+### Chat reasoning traces (2026-11-18)
+
+- Reasoning is rendered as a `Thinking` block above the answer, folded to a
+  one-line summary, expandable to the whole trace, with `Thinking…` while the
+  model is still reasoning. Proven in the running app with
+  `deepseek-v4.1-flash-free`: the transcript carried a `reasoning` content part
+  (`tokens.reasoning: 169`) and the UI showed the block; expanding it revealed
+  the full trace (`docs/quality/EVIDENCE.md`).
+- Cause of thinking blocks being invisible by default: the server's
+  `formatSettingsResponse` defaulted `showReasoningTraces` to `false` while the
+  UI store defaulted to `true`, so every client received `false`. The server
+  default is now `true`; an explicit user choice of `false` is still honored
+  (`settings-helpers.test.js`).
+- Live streaming of reasoning (`session.reasoning.started/delta/ended`) is
+  covered by `packages/ui/src/lib/opencode/events.test.ts`.
+
+### Packaging (2026-11-18)
+
+- `bun run desktop:build:unsigned` builds the NSIS installer without updater
+  signing; plain `desktop:build` needs `TAURI_SIGNING_PRIVATE_KEY` because the
+  bundle produces `v1Compatible` updater artifacts.
+- NSIS installer produced once: `Spleen_0.1.0_x64-setup.exe` (155.1 MiB) and its
+  `.nsis.zip` updater artifact; the build then failed on the missing private
+  key, before the unsigned script existed.
+
 ### Durable recovery (2026-11-18)
 
 - New module `packages/web/server/lib/session-recovery/`: SQLite WAL ledger,
@@ -99,18 +124,30 @@ Found only by running the compiled sidecar, each fixed at the cause:
   current turn's outcome and closed an unfinished turn. The transcript is now
   authoritative and a unit test covers the stale-outcome case.
 
+### Repository, docs and CI (2026-11-18)
+
+- `git init -b main`, initial commit `f04e7a0` (8,864 tracked files), pushed to
+  the private `whft/spleen` remote; generated artifacts, the pinned CLI cache
+  and Playwright output are ignored.
+- `.github/workflows/ci.yml` (brand gate, types, recovery + desktop contract
+  tests), `windows-package.yml` (unsigned NSIS artifact) and `release.yml`
+  (tag/version agreement, signing-secret guard, draft release). The inherited
+  upstream workflows that depended on OpenChamber infrastructure were removed.
+- Brand gate `scripts/brand/audit.mjs` with a two-entry allowlist for upstream
+  attribution; `bun run brand:audit` reports `8864 tracked files clean`.
+- Internal docs: `docs/INDEX.md`, architecture, recovery, Windows dev, evidence
+  and upstream pages, plus `packages/web/server/lib/session-recovery/DOCUMENTATION.md`.
+
 ## In progress
 
-- Windows installer and first clean-install smoke test (no NSIS build yet).
+- Clean-install smoke test of the produced NSIS installer (build exists, install
+  not yet run).
 - Parity of the Tauri bridge commands still marked
   `not_implemented_in_tauri` (multi-window, mini chat, browser panel, SSH,
   open-in-app).
 
 ## Not started
 
-- Git repository, first commit, `whft/spleen` remote.
-- CI workflows, brand audit gate, release workflow.
-- Internal docs tree beyond this ledger and the module docs.
 - Data migration wizard from an existing OpenChamber/OpenCode install.
 - Version alignment: the app reports `0.1.0` in Tauri but `2.7.2` in the web
   package and `spleenVersion` in health.
@@ -118,10 +155,10 @@ Found only by running the compiled sidecar, each fixed at the cause:
 ## Blockers / owner actions
 
 - Tauri updater `pubkey` is `REPLACE_WITH_SPLEEN_UPDATER_PUBKEY`. The owner must
-  generate the keypair and keep the private key out of the repo.
+  generate the keypair and keep the private key out of the repo. Until then
+  `desktop:build` cannot finish and no updater artifact can be trusted.
 - No Windows code-signing certificate; signed release and upgrade tests cannot
   be claimed without it.
-- GitHub repository `whft/spleen` does not exist yet.
 - The bundled OpenCode server and an already-installed OpenCode desktop can read
   the same user data store. Not yet evaluated for lock contention; treat as a
   product risk until measured.

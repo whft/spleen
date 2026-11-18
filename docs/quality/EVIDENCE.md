@@ -35,8 +35,17 @@ Spleen and remain visible until addressed.
 | Real turn | session created with `opencode/big-pickle`, assistant `pong`, `finish: stop` |
 | Ledger after turn | `execution.started` → `execution.completed` in `%APPDATA%\Spleen\recovery.sqlite3` |
 
-## Recovery
+## Chat rendering (reasoning traces)
 
+| Probe | Observation |
+|---|---|
+| Transcript from the bundled backend | `deepseek-v4.1-flash-free` assistant message carried `content: [{ type: "reasoning", text: ... }, { type: "text", ... }]` with `tokens.reasoning: 169` |
+| Web UI in the Tauri-hosted sidecar | Live turn rendered a `Thinking` block above the answer, folded to a one-line summary while collapsed |
+| Expand | Clicking the header set `aria-expanded="true"` and showed the full trace text |
+| Server default | `formatSettingsResponse({}).showReasoningTraces === true` (`settings-helpers.test.js`), matching the UI store; previously the server returned `false` and hid every thinking block |
+| Live events | `session.reasoning.started/delta/ended` map to a `reasoning` part and append deltas (`events.test.ts`) |
+
+## Recovery
 | Scenario | Observation |
 |---|---|
 | Ten crashed chats + children (test) | exactly 10 resume prompts, children `waiting_parent`, second pass sends none |
