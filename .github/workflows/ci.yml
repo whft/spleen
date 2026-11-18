@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Brand gate
+        run: bun run brand:audit
+      - name: Types
+        run: |
+          bun run type-check:ui
+          bun run type-check:web
+      - name: Recovery and desktop contract tests
+        run: |
+          bun run --cwd packages/web vitest run server/lib/session-recovery/
+          bun run --cwd packages/desktop test
+      - name: Spleen logo tests
+        run: bun test packages/ui/src/components/ui/SpleenLogo.test.tsx
+
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+      - run: bun install --frozen-lockfile
+      - name: Stage the UI, sidecar and pinned OpenCode CLI
+        run: |
+          bun run build:web
+          bun run --cwd packages/desktop build:web-assets
+          bun run --cwd packages/desktop build:sidecar
+          bun run --cwd packages/desktop prepare:opencode-cli
+      - name: Rust check
+        working-directory: packages/desktop/src-tauri
+        run: cargo check --locked

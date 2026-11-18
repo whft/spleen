@@ -2,15 +2,15 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Spleen, please report it privately through [GitHub](https://github.com/spleen/spleen/security/advisories/new). The form asks for everything needed to assess the report, and an accepted report becomes the security advisory.
+If you discover a security vulnerability in Spleen, please report it privately through [GitHub](https://github.com/whft/spleen/security/advisories/new). The form asks for everything needed to assess the report, and an accepted report becomes the security advisory.
 
-If you can't use GitHub, email [security@spleen.invalid](mailto:security@spleen.invalid) and include:
+If you can't use GitHub, open a minimal public issue that only asks the maintainer for a private channel, without details of the vulnerability. Include, in the private report:
 - Description of the vulnerability
 - Steps to reproduce
 - Affected version(s)
 - Potential impact
 
-I'll acknowledge receipt within 48 hours and aim to provide a fix or mitigation as quickly as possible.
+Reports are acknowledged within 48 hours, with a fix or mitigation plan as quickly as possible.
 
 **Please do not open public GitHub issues for security vulnerabilities.**
 

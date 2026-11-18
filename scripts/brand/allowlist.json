@@ -1,0 +1,4 @@
+[
+  { "glob": "README.md", "reason": "Attribution of the MIT source snapshot" },
+  { "glob": "docs/**", "reason": "Architecture, evidence and upstream notes name the source project" }
+]

@@ -55,10 +55,14 @@ POST /api/spleen/sessions
 ```powershell
 cd C:\Users\Admin\Documents\Spleen
 bun run desktop:build          # tauri build, NSIS current-user installer
+bun run desktop:build:unsigned # same without updater signing; works before the keypair exists
 ```
 
 `bun run desktop:dev` builds extensions and starts `tauri dev`; `bun run
-desktop:build` does not run the extension build for you.
+desktop:build` does not run the extension build for you. A plain
+`desktop:build` fails after bundling while the updater public key is set and no
+`TAURI_SIGNING_PRIVATE_KEY` is present, because `bundle.createUpdaterArtifacts`
+is `v1Compatible`; use `desktop:build:unsigned` for local and CI smoke builds.
 
 The NSIS installer is a current-user install. The updater endpoint is
 `https://github.com/whft/spleen/releases/latest/download/latest.json`; its public

@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { SpleenLogo } from './SpleenLogo';
-import { OPEN_CHAMBER_LOGO_ART as ART } from './spleenLogoArt';
+import { SPLEEN_LOGO_ART as ART } from './spleenLogoArt';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
