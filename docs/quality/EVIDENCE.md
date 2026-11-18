@@ -14,6 +14,8 @@ the repository root unless a directory is named.
 | `cargo check` (src-tauri) | pass, 1 warning (`sidecar::shared` unused) |
 | `bun run --cwd packages/desktop test` | 4 pass |
 | `vitest run server/lib/session-recovery/` (packages/web) | 15 pass |
+| `bun run desktop:build:unsigned` | pass, `Spleen_0.1.0_x64-setup.exe` (155.1 MiB), no updater artifact |
+| `bun run brand:audit` | pass, `8843 tracked files clean` |
 
 ## Shell tests (upstream baseline)
 

@@ -104,9 +104,10 @@ Found only by running the compiled sidecar, each fixed at the cause:
 - `bun run desktop:build:unsigned` builds the NSIS installer without updater
   signing; plain `desktop:build` needs `TAURI_SIGNING_PRIVATE_KEY` because the
   bundle produces `v1Compatible` updater artifacts.
-- NSIS installer produced once: `Spleen_0.1.0_x64-setup.exe` (155.1 MiB) and its
-  `.nsis.zip` updater artifact; the build then failed on the missing private
-  key, before the unsigned script existed.
+- Unsigned build verified end to end on 2026-11-18: `Finished 1 bundle`,
+  `Spleen_0.1.0_x64-setup.exe` (155.1 MiB), exit 0, no `.nsis.zip` emitted.
+- An earlier `desktop:build` ran the full pipeline including the signed updater
+  artifact and failed only at the signing step because the private key is absent.
 
 ### Durable recovery (2026-11-18)
 
@@ -134,7 +135,7 @@ Found only by running the compiled sidecar, each fixed at the cause:
   (tag/version agreement, signing-secret guard, draft release). The inherited
   upstream workflows that depended on OpenChamber infrastructure were removed.
 - Brand gate `scripts/brand/audit.mjs` with a two-entry allowlist for upstream
-  attribution; `bun run brand:audit` reports `8864 tracked files clean`.
+  attribution; `bun run brand:audit` reports `8843 tracked files clean`.
 - Internal docs: `docs/INDEX.md`, architecture, recovery, Windows dev, evidence
   and upstream pages, plus `packages/web/server/lib/session-recovery/DOCUMENTATION.md`.
 
