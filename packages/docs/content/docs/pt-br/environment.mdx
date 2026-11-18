@@ -1,0 +1,185 @@
+---
+title: Variáveis de ambiente
+description: Configure a integração do Spleen e do OpenCode com variáveis de ambiente.
+---
+
+# Variáveis de ambiente
+
+O Spleen lê estas variáveis na inicialização. Para serviços de inicialização, `spleen startup enable` salva por padrão um snapshot do ambiente atual, então execute de novo após mudar variáveis que o serviço deve usar.
+
+## Variáveis para o OpenCode, o Git e o terminal
+
+Para passar variáveis suas ao OpenCode, ao Git, ao terminal e às [ações de projeto](/pt-br/project-actions/), como um token de API ou o endereço de um banco de dados, adicione-as em **Configurações → Geral → Variáveis de ambiente** em vez de exportá-las antes de iniciar o Spleen. Os valores ficam na máquina que roda o Spleen, em `environment.json` no diretório de dados, e só o seu usuário consegue lê-los. As Configurações nunca mostram um valor de novo: você pode substituí-lo ou removê-lo, mas não lê-lo de volta.
+
+- O OpenCode recebe as variáveis quando inicia, então reinicie-o depois de uma mudança. As Configurações oferecem o botão para isso.
+- Variáveis definidas com `opencode service set env` também chegam ao OpenCode. As das Configurações têm prioridade.
+- O Git, o terminal e as ações de projeto recebem as variáveis na próxima execução.
+- Variáveis que o Spleen define para o próprio OpenCode, como a senha e a configuração dele, têm prioridade sobre as suas.
+
+Um projeto pode adicionar variáveis próprias, ou um comando que as imprime, como `direnv export json`, em **Configurações → Projetos**. Veja [Projetos](/pt-br/projects/#ambiente-do-projeto).
+
+As variáveis não chegam a um servidor OpenCode que você iniciou por conta própria, e a extensão do VS Code não tem essa configuração. Tudo o que vem abaixo é lido pelo próprio Spleen na inicialização.
+
+## Servidor Spleen
+
+### `SPLEEN_HOST`
+
+Endereço onde o servidor web do Spleen escuta. Use `0.0.0.0` para permitir acesso de outras máquinas.
+
+### `SPLEEN_LAN_URL`
+
+O endereço que outros dispositivos da sua rede usam para acessar o Spleen, por exemplo `http://192.168.1.20:3000`. Links e QR codes de pareamento oferecem esse endereço em vez do que o Spleen detecta sozinho. Defina quando essa detecção errar, por exemplo no Docker, onde o Spleen só vê o endereço interno do contêiner.
+
+### `SPLEEN_UI_PASSWORD`
+
+Senha da interface no navegador. Use quando expor fora do localhost, por túnel ou por proxy reverso.
+
+### `SPLEEN_UI_SESSION_TTL_HOURS`
+
+Quanto tempo dura o login no navegador, em horas, quando "confiar neste dispositivo" está desligado. O padrão é `12`.
+
+### `SPLEEN_UI_TRUSTED_SESSION_TTL_DAYS`
+
+Quanto tempo dura o login, em dias, num dispositivo marcado como confiável. O padrão é `7`.
+
+### `SPLEEN_API_ONLY`
+
+Inicia o Spleen em modo headless quando definido como `true` ou `1`. As rotas de API continuam disponíveis para clientes desktop e mobile, mas a UI do navegador não é servida.
+
+### `SPLEEN_FRAME_ANCESTORS`
+
+Origens que podem mostrar o Spleen dentro de um frame na própria página, separadas por espaços, por exemplo `https://dash.example.com`. `*` permite qualquer site. Por padrão só o próprio Spleen e seus apps desktop e mobile podem incorporá-lo, o que impede outros sites de sobrepor os botões dele.
+
+### `SPLEEN_DATA_DIR`
+
+Altera o diretório de dados do Spleen. O padrão é `~/.config/spleen`.
+
+### `SPLEEN_CHATS_DIR`
+
+Move os diretórios de chat gerenciados que o Spleen cria para chats sem projeto. O padrão é `~/.config/spleen/chats`. Defina um diretório que o servidor OpenCode consiga ler quando o Spleen e o OpenCode rodam com usuários diferentes. Os chats existentes não são movidos.
+
+### `SPLEEN_COMPRESS_API`
+
+Controla a compressão das respostas da API. `true` ou `1` ativa; `false` ou `0` desativa.
+
+### `SPLEEN_SKIP_API_COMPRESSION`
+
+Desativa a compressão das respostas da API quando definido como `true` ou `1`. Tem prioridade sobre `SPLEEN_COMPRESS_API`.
+
+### `SPLEEN_VERBOSE_REQUEST_LOGS`
+
+Ativa logs HTTP detalhados quando definido como `true` ou `1`.
+
+### `SPLEEN_UPDATE_API_URL`
+
+Altera o endpoint de verificação de atualizações. A maioria dos usuários deve deixar isso sem definir.
+
+### `SPLEEN_PACKAGE_MANAGER`
+
+Força o gerenciador de pacotes usado em atualizações quando a detecção automática estiver errada.
+
+## Proxy
+
+### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
+
+Envia por um proxy as requisições de saída do próprio Spleen, como limites de uso e catálogos de skills. Nomes em minúsculas também funcionam. Hosts em `NO_PROXY` se conectam diretamente, e `localhost`, `127.0.0.1` e `::1` sempre se conectam, então os retornos de login e o servidor local do OpenCode continuam funcionando.
+
+## Servidor OpenCode
+
+### `OPENCODE_HOST`
+
+Conecta o Spleen a um servidor OpenCode existente. O valor deve ser um origin `http` ou `https` com porta explícita e sem path, query ou hash. `OPENCODE_HOST` tem prioridade sobre `OPENCODE_PORT`.
+
+### `OPENCODE_PORT`
+
+Define a porta do servidor OpenCode. Com OpenCode gerenciado, solicita essa porta; com `OPENCODE_SKIP_START=true`, conecta a um servidor externo nessa porta.
+
+### `OPENCODE_SKIP_START`
+
+Impede o Spleen de iniciar seu próprio servidor OpenCode quando definido como `true`.
+
+### `SPLEEN_OPENCODE_HOSTNAME`
+
+Hostname do servidor OpenCode gerenciado pelo Spleen. O padrão é `127.0.0.1`.
+
+### `SPLEEN_OPENCODE_HEALTH_TIMEOUT_MS`
+
+Tempo limite de uma verificação de integridade do OpenCode, em milissegundos. O padrão é `5000`.
+
+### `SPLEEN_OPENCODE_HEALTH_CONSECUTIVE_FAILURES`
+
+Falhas consecutivas contabilizadas antes que o Spleen reinicie um processo gerenciado do OpenCode que ainda está em execução. O padrão é `20`. Sessões ocupadas podem atrasar a reinicialização.
+
+### `SPLEEN_OPENCODE_HEALTH_INTERVAL_MS`
+
+Substitui o intervalo de verificação de integridade do OpenCode gerenciado, em milissegundos. Também define o tempo mínimo entre falhas contabilizadas. O padrão é `0`, que mantém o intervalo do servidor de `15000` milissegundos.
+
+### `SPLEEN_OPENCODE_HEALTH_CACHE_MS`
+
+Tempo em milissegundos durante o qual o Spleen reutiliza o resultado de uma verificação de integridade do OpenCode gerenciado, incluindo falhas. O padrão é `750`.
+
+### `OPENCODE_BINARY`
+
+Caminho para o executável `opencode` que o Spleen deve usar.
+
+### `OPENCODE_CONFIG`
+
+Caminho para um arquivo de configuração específico do OpenCode.
+
+### `OPENCODE_CONFIG_DIR`
+
+Caminho para o diretório de configuração do OpenCode para agents, skills, snippets e descoberta de config.
+
+### `OPENCODE_DATA_DIR`
+
+Diretório de dados personalizado para o servidor OpenCode gerenciado.
+
+### `OPENCODE_JWT_SECRET`
+
+Segredo usado para assinar tokens de autenticação da UI. Em serviços persistentes, use um valor longo e aleatório.
+
+## Terminal e Git
+
+### `SPLEEN_TERMINAL_SHELL`
+
+Executável de shell usado nas sessões de terminal do Spleen.
+
+### `SPLEEN_GIT_BINARY`
+
+Executável do Git usado pelos recursos Git do Spleen.
+
+### `GIT_BINARY`
+
+Override alternativo para o executável do Git. Para configuração específica do Spleen, prefira `SPLEEN_GIT_BINARY`.
+
+### `SPLEEN_GIT_READ_CACHE_TTL_MS`
+
+TTL, em milissegundos, para leituras de arquivos em cache baseadas em Git. Use `0` para desativar o cache durante depuração.
+
+## Voz e túneis
+
+### `OPENAI_API_KEY`
+
+API key usada pelos recursos de voz do Spleen quando chamam a própria OpenAI. Ela nunca é enviada a um servidor próprio compatível com OpenAI: dê a esse servidor uma chave própria nas Configurações.
+
+### `SPLEEN_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
+
+Permite base URLs remotas compatíveis com OpenAI para recursos de voz quando definido como `true` ou `1`.
+
+### `NGROK_AUTHTOKEN`
+
+Token de autenticação do ngrok usado pelos comandos de túnel do Spleen. Você também pode configurar com `ngrok config add-authtoken <token>`.
+
+## Auxiliares de runtime
+
+### `BUN_BINARY`
+
+Executável do Bun que o Spleen deve usar ao iniciar processos daemon.
+
+### `BUN_INSTALL`
+
+Raiz da instalação do Bun. O Spleen usa isso para encontrar `bin/bun` ao iniciar daemons e atualizar.
+
+### `VITE_OPENCODE_URL`
+
+API base URL de build-time para a web app criada com Vite. A maioria dos usuários não deve usar isso no CLI ou desktop normal.

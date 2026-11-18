@@ -1,0 +1,51 @@
+---
+title: Install
+description: Install Spleen on desktop, web, VS Code, or your phone.
+---
+
+# Install
+
+Pick the app that fits how you work:
+
+- desktop app for macOS, Windows, and Linux
+- web app run by the CLI, which you can install like a phone app (a PWA)
+- VS Code extension, also for Cursor, Windsurf, and Trae
+- mobile apps for iPhone and Android, in public beta
+
+## Desktop
+
+Download the latest build from the [download page](https://spleen.invalid/download/) or [GitHub Releases](https://github.com/spleen/spleen/releases/latest), then open it. Linux builds come as `.deb`, `.rpm`, and AppImage.
+
+The desktop app brings its own copy of [OpenCode](https://opencode.ai) (the AI coding agent Spleen runs on), so there is nothing else to install.
+
+## Web + PWA
+
+The web app needs [OpenCode](https://opencode.ai) and Node.js 24.14 or newer on the machine that runs it.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/spleen/spleen/main/scripts/install.sh | bash
+spleen --ui-password be-creative-here
+```
+
+Open the URL the CLI prints (usually `http://localhost:3000`). You should see the Spleen session list. To keep it handy, use your browser's "Install" option in the address bar to add it as an app.
+
+## VS Code
+
+Install Spleen from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.spleen). Cursor, Windsurf, and Trae install it from [Open VSX](https://open-vsx.org/extension/FedaykinDev/spleen). The extension needs [OpenCode](https://opencode.ai) installed; the Spleen view then opens in the sidebar.
+
+## Mobile
+
+Install the iPhone app through TestFlight or the Android app from the latest release, then pair it with your computer. [Mobile Apps](/mobile/) walks through both.
+
+## Nix
+
+On NixOS, or any Linux with Nix, the flake in the Spleen repository builds the same apps:
+
+```bash
+nix run github:spleen/spleen        # web server on http://localhost:3000
+nix run github:spleen/spleen#gui    # desktop app
+```
+
+The flake also exposes `packages.spleen` and `packages.spleen-desktop`, and a `nixosModules.spleen` systemd module with `host`, `port`, `openFirewall` and `uiPasswordFile`. The password file is read through systemd's `LoadCredential`, so a root-owned 0400 secret works with the default dynamic user.
+
+Updates go through the flake. The packaged OpenCode CLI has its in-app updater turned off, because a Nix store path cannot update itself, so pull the flake and rebuild to update.

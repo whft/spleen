@@ -1,0 +1,331 @@
+{
+  "name": "spleen",
+  "displayName": "Spleen",
+  "description": "%extension.description%",
+  "version": "2.7.2",
+  "publisher": "fedaykindev",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spleen/spleen.git"
+  },
+  "qna": "https://discord.gg/ZYRSdnwwKA",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "claude",
+    "gpt",
+    "agent",
+    "coding",
+    "chatgpt",
+    "groq",
+    "assistant",
+    "opencode",
+    "spleen"
+  ],
+  "icon": "assets/app-icon.png",
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onCommand:spleen.openSidebar",
+    "onCommand:spleen.attachExplorerToChat",
+    "onCommand:spleen.generateCommitMessage",
+    "onView:spleen.chatView"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "spleen",
+          "title": "Spleen",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "spleen": [
+        {
+          "type": "webview",
+          "id": "spleen.chatView",
+          "name": "%views.chat.name%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "spleen.openSidebar",
+        "category": "Spleen",
+        "title": "%command.openSidebar.title%",
+        "icon": {
+          "light": "assets/icon.svg",
+          "dark": "assets/icon-titlebar.svg"
+        }
+      },
+      {
+        "command": "spleen.focusChat",
+        "category": "Spleen",
+        "title": "%command.focusChat.title%"
+      },
+      {
+        "command": "spleen.restartApi",
+        "category": "Spleen",
+        "title": "%command.restartApi.title%"
+      },
+      {
+        "command": "spleen.showOpenCodeStatus",
+        "category": "Spleen",
+        "title": "%command.showOpenCodeStatus.title%"
+      },
+      {
+        "command": "spleen.openAgentManager",
+        "category": "Spleen",
+        "title": "%command.openAgentManager.title%",
+        "icon": "$(repo-forked)"
+      },
+      {
+        "command": "spleen.openActiveSessionInEditor",
+        "category": "Spleen",
+        "title": "%command.openActiveSessionInEditor.title%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "spleen.openNewSessionInEditor",
+        "category": "Spleen",
+        "title": "%command.openNewSessionInEditor.title%",
+        "icon": {
+          "light": "assets/icon.svg",
+          "dark": "assets/icon-titlebar.svg"
+        }
+      },
+      {
+        "command": "spleen.openCurrentOrNewSessionInEditor",
+        "category": "Spleen",
+        "title": "%command.openCurrentOrNewSessionInEditor.title%",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "spleen.addToContext",
+        "category": "Spleen",
+        "title": "%command.addToContext.title%"
+      },
+      {
+        "command": "spleen.addLineComment",
+        "category": "Spleen",
+        "title": "%command.addLineComment.title%"
+      },
+      {
+        "command": "spleen.submitLineComment",
+        "category": "Spleen",
+        "title": "%command.submitLineComment.title%"
+      },
+      {
+        "command": "spleen.removeLineComment",
+        "category": "Spleen",
+        "title": "%command.removeLineComment.title%",
+        "icon": "$(close)"
+      },
+      {
+        "command": "spleen.explain",
+        "category": "Spleen",
+        "title": "%command.explain.title%"
+      },
+      {
+        "command": "spleen.improveCode",
+        "category": "Spleen",
+        "title": "%command.improveCode.title%"
+      },
+      {
+        "command": "spleen.newSession",
+        "category": "Spleen",
+        "title": "%command.newSession.title%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "spleen.showSettings",
+        "category": "Spleen",
+        "title": "%command.showSettings.title%",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "spleen.attachExplorerToChat",
+        "category": "Spleen",
+        "title": "%command.attachExplorerToChat.title%"
+      },
+      {
+        "command": "spleen.generateCommitMessage",
+        "category": "Spleen",
+        "title": "%command.generateCommitMessage.title%",
+        "icon": {
+          "light": "assets/icon.svg",
+          "dark": "assets/icon-scm-titlebar.svg"
+        }
+      }
+    ],
+    "submenus": [
+      {
+        "id": "spleen.submenu",
+        "label": "Spleen"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "spleen.showSettings",
+        "key": "ctrl+,",
+        "mac": "cmd+,",
+        "when": "spleen.settingsShortcutTarget == chat && !inQuickOpen"
+      },
+      {
+        "command": "spleen.closeSettings",
+        "key": "ctrl+,",
+        "mac": "cmd+,",
+        "when": "spleen.settingsShortcutTarget == settings && !inQuickOpen"
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "spleen.generateCommitMessage",
+          "when": "scmProvider == git",
+          "group": "navigation@0"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "spleen.submitLineComment",
+          "group": "inline",
+          "when": "commentController == spleen.inlineComments"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "spleen.removeLineComment",
+          "group": "navigation",
+          "when": "commentController == spleen.inlineComments && commentThread == spleenAttached"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "spleen.submitLineComment",
+          "when": "false"
+        },
+        {
+          "command": "spleen.removeLineComment",
+          "when": "false"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "spleen.submenu",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "spleen.attachExplorerToChat",
+          "when": "resourceScheme == file && explorerResourceIsFolder == false",
+          "group": "navigation@50"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "spleen.openNewSessionInEditor",
+          "group": "navigation@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "spleen.newSession",
+          "when": "view == spleen.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "spleen.openCurrentOrNewSessionInEditor",
+          "when": "view == spleen.chatView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "spleen.openAgentManager",
+          "when": "view == spleen.chatView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "spleen.showSettings",
+          "when": "view == spleen.chatView",
+          "group": "navigation@4"
+        }
+      ],
+      "spleen.submenu": [
+        {
+          "command": "spleen.explain"
+        },
+        {
+          "command": "spleen.improveCode"
+        },
+        {
+          "command": "spleen.addToContext"
+        },
+        {
+          "command": "spleen.addLineComment"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Spleen",
+      "properties": {
+        "spleen.apiUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "%configuration.apiUrl.description%"
+        },
+        "spleen.opencodeBinary": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "%configuration.opencodeBinary.description%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "bun run build",
+    "build": "bun run build:extension && bun run build:webview",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --main-fields=module,main",
+    "build:webview": "VITE_OPENCODE_URL=/api vite build",
+    "dev": "concurrently -n \"ext,web\" -c \"cyan,magenta\" \"bun run watch:extension\" \"bun run dev:webview\"",
+    "dev:webview": "vite --host localhost --port 5173 --strictPort",
+    "watch:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch --sourcemap --main-fields=module,main",
+    "watch:webview": "vite build --watch",
+    "type-check": "bun check -p tsconfig.json && bun check -b -p tsconfig.webview.json",
+    "lint": "oxlint -c ../../oxlint.config.ts --report-unused-disable-directives src webview",
+    "test": "node ../../scripts/run-isolated-tests.mjs src webview",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@vscode/vsce": "^4.0.0",
+    "concurrently": "^10.0.0",
+    "esbuild": "^0.28.0",
+    "typescript": "~7.0.2",
+    "vite": "^7.3.2"
+  },
+  "dependencies": {
+    "@spleen/ui": "workspace:*",
+    "@opencode/client": "2.3.0",
+    "adm-zip": "^0.6.0",
+    "jsonc-parser": "^3.3.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "yaml": "^2.8.1",
+    "zod": "^4.3.6"
+  }
+}

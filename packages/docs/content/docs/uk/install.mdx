@@ -1,0 +1,38 @@
+---
+title: Встановлення
+description: Встановіть Spleen на десктоп, у веб, у VS Code або на телефон.
+---
+
+# Встановлення
+
+Оберіть застосунок під свій спосіб роботи:
+
+- десктоп-застосунок для macOS, Windows і Linux
+- вебзастосунок на базі CLI, який можна встановити як застосунок на телефоні (PWA)
+- розширення для VS Code, а також для Cursor, Windsurf і Trae
+- мобільні застосунки для iPhone і Android, у публічній беті
+
+## Десктоп
+
+Завантажте найновішу збірку зі [сторінки завантаження](https://spleen.invalid/download/) або з [GitHub Releases](https://github.com/spleen/spleen/releases/latest) і відкрийте її. Для Linux є `.deb`, `.rpm` і AppImage.
+
+Десктоп-застосунок має власну копію [OpenCode](https://opencode.ai) (ШІ-агента для коду, на якому працює Spleen), тож більше нічого встановлювати не треба.
+
+## Веб + PWA
+
+Для вебзастосунку на машині, де він працює, потрібні [OpenCode](https://opencode.ai) і Node.js 24.14 або новіший.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/spleen/spleen/main/scripts/install.sh | bash
+spleen --ui-password be-creative-here
+```
+
+Відкрийте URL, який вивів CLI (зазвичай `http://localhost:3000`). Ви маєте побачити список сесій Spleen. Щоб він був під рукою, скористайтеся опцією «Install» в адресному рядку браузера й додайте його як застосунок.
+
+## VS Code
+
+Встановіть Spleen з [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.spleen). Cursor, Windsurf і Trae ставлять його з [Open VSX](https://open-vsx.org/extension/FedaykinDev/spleen). Розширенню потрібен встановлений [OpenCode](https://opencode.ai); після цього панель Spleen з’являється на бічній панелі.
+
+## Мобільні застосунки
+
+Встановіть застосунок для iPhone через TestFlight або застосунок для Android з останнього релізу, а потім з’єднайте його з комп’ютером. Сторінка [Мобільні застосунки та PWA](/uk/mobile/) описує обидва кроки.

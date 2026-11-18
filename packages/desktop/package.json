@@ -1,0 +1,25 @@
+{
+  "name": "@spleen/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spleen Windows desktop host (Rust + Tauri 2)",
+  "type": "module",
+  "opencodeCli": {
+    "version": "2.3.0"
+  },
+  "scripts": {
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "build": "node ./scripts/build-desktop.mjs",
+    "build:sidecar": "node ./scripts/build-sidecar.mjs",
+    "build:web-assets": "node ./scripts/stage-web-assets.mjs",
+    "prepare:opencode-cli": "node ./scripts/prepare-opencode-cli.mjs",
+    "type-check": "node --check ./scripts/build-desktop.mjs && node --check ./scripts/build-sidecar.mjs && node --check ./scripts/stage-web-assets.mjs && node --check ./scripts/prepare-opencode-cli.mjs",
+    "lint": "node -e \"process.exit(0)\"",
+    "test": "node --test ./test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.1"
+  }
+}

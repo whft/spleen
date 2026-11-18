@@ -1,0 +1,38 @@
+---
+title: Instalación
+description: Instala Spleen en escritorio, web, VS Code o tu teléfono.
+---
+
+# Instalación
+
+Elige la app que encaje con tu forma de trabajar:
+
+- app de escritorio para macOS, Windows y Linux
+- app web que ejecuta la CLI, que puedes instalar como una app de teléfono (una PWA)
+- extensión para VS Code, también para Cursor, Windsurf y Trae
+- apps móviles para iPhone y Android, en beta pública
+
+## Escritorio
+
+Descarga la última versión desde la [página de descarga](https://spleen.invalid/download/) o desde [GitHub Releases](https://github.com/spleen/spleen/releases/latest) y ábrela. Para Linux hay `.deb`, `.rpm` y AppImage.
+
+La app de escritorio trae su propia copia de [OpenCode](https://opencode.ai) (el agente de IA para código sobre el que funciona Spleen), así que no hay que instalar nada más.
+
+## Web + PWA
+
+La app web necesita [OpenCode](https://opencode.ai) y Node.js 24.14 o posterior en la máquina donde se ejecuta.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/spleen/spleen/main/scripts/install.sh | bash
+spleen --ui-password be-creative-here
+```
+
+Abre la URL que muestra la CLI (normalmente `http://localhost:3000`). Deberías ver la lista de sesiones de Spleen. Para tenerla a mano, usa la opción «Instalar» de la barra de direcciones del navegador y añádela como app.
+
+## VS Code
+
+Instala Spleen desde el [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.spleen). Cursor, Windsurf y Trae lo instalan desde [Open VSX](https://open-vsx.org/extension/FedaykinDev/spleen). La extensión necesita [OpenCode](https://opencode.ai) instalado; después, la vista de Spleen se abre en la barra lateral.
+
+## Móvil
+
+Instala la app de iPhone con TestFlight o la app de Android desde la última versión, y luego emparéjala con tu ordenador. [Apps móviles y PWA](/es/mobile/) explica ambos pasos.

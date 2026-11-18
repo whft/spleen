@@ -1,0 +1,138 @@
+---
+title: Tunnels
+description: Maak Spleen veilig bereikbaar op afstand en vanaf uw telefoon.
+---
+
+# Tunnels
+
+Een tunnel geeft uw Spleen een link, zodat u de app vanuit een gewone browser op een ander netwerk kunt bereiken of, met Tailscale Serve, vanaf elk apparaat in uw tailnet. Gebruik `spleen tunnel` om een tunnel voor een draaiende instantie te maken.
+
+> Voor uw **eigen apparaten**, zoals de mobiele app of een andere desktop, is meestal geen tunnel nodig. [Koppel ze](/nl/connect-devices/) en gebruik de end-to-endversleutelde [Privérelay](/nl/private-relay/) voor toegang buitenshuis, zonder extra instellingen.
+
+## Vooraf
+
+Spleen start de CLI van de tunnelprovider op uw computer. Installeer eerst de gewenste provider:
+
+```bash
+brew install cloudflared
+brew install ngrok
+```
+
+Voor Tailscale installeert u de [Tailscale-app](https://tailscale.com/download) en meldt u zich aan. Op een Mac is de app genoeg: Spleen vindt de opdrachtregeltool in de app.
+
+Snelle Cloudflare-tunnels gebruiken `cloudflared`. Ngrok vereist een ngrok-account en een authtoken uit het ngrok-dashboard:
+
+```bash
+ngrok config add-authtoken <your-ngrok-token>
+```
+
+## Snel beginnen
+
+1. Start Spleen:
+
+```bash
+spleen
+```
+
+Slaat u dit over, dan kan `spleen tunnel start` zelf een CLI-server starten. Daarbij kunt u serveropties meegeven zoals `--port`, `--host`, `--lan`, `--ui-password` en `--api-only`.
+
+2. Start een Cloudflare-tunnel:
+
+```bash
+spleen tunnel start --provider cloudflare --mode quick
+```
+
+Of start een Ngrok-tunnel:
+
+```bash
+spleen tunnel start --provider ngrok --mode quick
+```
+
+Of deel het via Tailscale Serve met de apparaten in uw tailnet:
+
+```bash
+spleen tunnel start --provider tailscale --mode serve
+```
+
+3. Controleer de status:
+
+```bash
+spleen tunnel status
+```
+
+Als de tunnel werkt, toont `status` een openbare URL. Open die of scan de QR-code om Spleen overal te bereiken.
+
+In interactieve TTY-sessies toont Spleen standaard een QR-code. Gebruik `--qr` om die altijd te tonen of `--no-qr` om haar te verbergen.
+
+## Providers
+
+- `cloudflare`: snelle tunnels en de modi managed remote en managed local
+- `ngrok`: snelle tunnels
+- `tailscale`: serve, alleen bereikbaar vanaf apparaten in uw tailnet, en funnel, bereikbaar vanaf het hele internet
+
+## Tailscale
+
+Beide modi gebruiken het tailnet-adres van uw computer, zoals `https://laptop.example.ts.net`. Kies de poort met `--https-port`: 443 (standaard), 8443 of 10000. Wijzig hem als Tailscale op 443 al iets anders deelt.
+
+De eerste keer vraagt Tailscale u HTTPS (voor Serve) of Funnel voor uw tailnet aan te zetten. Spleen stopt en toont de link van Tailscale: open hem, keur goed en start de tunnel opnieuw. Op Linux mogen alleen root of de operator van Tailscale poorten delen; maak uzelf eenmalig operator met `sudo tailscale set --operator=$USER`.
+
+Als u de tunnel stopt, verdwijnt wat Spleen via Tailscale deelde en blijft de rest van uw Tailscale-instellingen ongewijzigd.
+
+## Beheerde modi
+
+### Managed remote
+
+Gebruik een token en hostnaam die door Cloudflare worden beheerd:
+
+```bash
+spleen tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
+```
+
+### Managed local
+
+Gebruik een lokale `cloudflared`-configuratie:
+
+```bash
+spleen tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
+```
+
+## Profielen voor managed-remote
+
+Bewaar een herbruikbaar profiel:
+
+```bash
+spleen tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
+```
+
+Start met het opgeslagen profiel:
+
+```bash
+spleen tunnel start --profile prod-main
+```
+
+## Handige opdrachten
+
+```bash
+spleen tunnel providers
+spleen tunnel ready --provider cloudflare
+spleen tunnel ready --provider ngrok
+spleen tunnel doctor --provider cloudflare
+spleen tunnel doctor --provider ngrok
+spleen tunnel doctor --provider tailscale
+spleen tunnel stop --port 3000
+```
+
+## Gedrag om rekening mee te houden
+
+- per Spleen-instantie, dus per poort, kan één tunnel actief zijn
+- een nieuwe modus of provider op dezelfde instantie vervangt de vorige tunnel
+- een nieuwe verbindingslink trekt de vorige ongebruikte link in
+- automatisch starten via een tunnel bewaart serveropties zoals `--ui-password` en `--api-only` in de instantie-instellingen die bij herstarts en updates worden hergebruikt
+
+## Zie ook
+
+- [Een apparaat verbinden](/nl/connect-devices/) om eigen apparaten zonder openbare URL te koppelen
+- [Beveiliging](/nl/security/) om de interface vooraf te beschermen
+- [Desktoptunnels](/nl/desktop-tunnels/) om vanuit de desktopapp zonder CLI te starten
+- [PWA en mobiel](/nl/mobile/) voor toegang vanaf uw telefoon
+- [Problemen oplossen](/nl/troubleshooting/) als de tunnellink niet werkt

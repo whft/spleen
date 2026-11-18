@@ -1,0 +1,33 @@
+services:
+  spleen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spleen
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data/spleen:/home/spleen/.config/spleen
+      - ./data/opencode/share:/home/spleen/.local/share/opencode
+      - ./data/opencode/state:/home/spleen/.local/state/opencode
+      - ./data/opencode/config:/home/spleen/.config/opencode
+      - ./data/ssh:/home/spleen/.ssh
+      - ./workspaces:/home/spleen/workspaces
+    environment:
+      # Docker binds Spleen to 0.0.0.0 for port mapping, so UI auth is required.
+      # Set this before starting, for example:
+      #   SPLEEN_UI_PASSWORD="$(openssl rand -base64 24)" docker compose up -d
+      SPLEEN_UI_PASSWORD: ${SPLEEN_UI_PASSWORD:?Set SPLEEN_UI_PASSWORD before exposing Spleen through Docker}
+    # SPLEEN_HOST: 0.0.0.0  # Bind address (default in Docker entrypoint: 0.0.0.0)
+    # SPLEEN_TUNNEL_PROVIDER: cloudflare
+    # SPLEEN_TUNNEL_MODE: quick  # quick | managed-remote | managed-local
+    # SPLEEN_TUNNEL_HOSTNAME: app.example.com  # required for managed-remote
+    # SPLEEN_TUNNEL_TOKEN: your_cloudflare_token  # required for managed-remote
+    # SPLEEN_TUNNEL_CONFIG: /home/spleen/.cloudflared/config.yml  # optional for managed-local
+    # OH_MY_OPENCODE: true # enable oh-my-opencode
+    # OPENCODE_HOST: http://172.17.0.1:4096 # Connect to external OpenCode server
+    # OPENCODE_SKIP_START: true # skip start opencode
+    # SPLEEN_OPENCODE_HOSTNAME: 0.0.0.0 # Bind OpenCode to all interfaces
+    restart: unless-stopped

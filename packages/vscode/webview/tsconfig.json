@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.webview.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["../../ui/src/*"],
+      "@vscode/*": ["./*"],
+      "@spleen/ui/*": ["../../ui/src/*"]
+    }
+  },
+  "include": ["**/*"]
+}

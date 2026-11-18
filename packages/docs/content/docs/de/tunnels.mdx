@@ -1,0 +1,138 @@
+---
+title: Tunnel
+description: Stelle Spleen sicher für Remote- und Mobilzugriff bereit.
+---
+
+# Tunnel
+
+Ein Tunnel ist ein Link zu deinem Spleen, damit du ihn von einem normalen Browser in einem anderen Netzwerk aus erreichst oder, mit Tailscale Serve, von jedem Gerät in deinem Tailnet. Nutze `spleen tunnel`, um einen für eine laufende Instanz zu erstellen.
+
+> Wenn du **deine eigenen Geräte** verbindest (die Mobile App, einen anderen Desktop), brauchst du normalerweise keinen Tunnel — [kopple sie](/connect-devices/) stattdessen und lass das Ende-zu-Ende-verschlüsselte [Private Relay](/private-relay/) den Zugriff von unterwegs ohne zusätzliche Einrichtung übernehmen.
+
+## Voraussetzungen
+
+Spleen startet das CLI des Tunnel-Anbieters auf deinem Rechner. Installiere zuerst den Anbieter, den du verwenden möchtest:
+
+```bash
+brew install cloudflared
+brew install ngrok
+```
+
+Für Tailscale installiere die [Tailscale-App](https://tailscale.com/download) und melde dich an. Auf dem Mac reicht die App: Spleen findet das Kommandozeilen-Tool in der App.
+
+Cloudflare Quick Tunnels können mit `cloudflared` laufen. Ngrok benötigt ein ngrok-Konto und ein Authtoken aus dem ngrok-Dashboard:
+
+```bash
+ngrok config add-authtoken <your-ngrok-token>
+```
+
+## Schnellstart
+
+1. Starte Spleen:
+
+```bash
+spleen
+```
+
+Wenn du diesen Schritt überspringst, kann `spleen tunnel start` automatisch einen CLI-Server starten. Beim automatischen Start kannst du Serveroptionen wie `--port`, `--host`, `--lan`, `--ui-password` und `--api-only` mitgeben.
+
+2. Starte einen Cloudflare-Tunnel:
+
+```bash
+spleen tunnel start --provider cloudflare --mode quick
+```
+
+Oder starte einen Ngrok-Tunnel:
+
+```bash
+spleen tunnel start --provider ngrok --mode quick
+```
+
+Oder teile es über Tailscale Serve mit den Geräten in deinem Tailnet:
+
+```bash
+spleen tunnel start --provider tailscale --mode serve
+```
+
+3. Status prüfen:
+
+```bash
+spleen tunnel status
+```
+
+Sobald der Tunnel aktiv ist, zeigt `status` eine öffentliche URL. Öffne sie oder scanne den QR-Code, um Spleen von überall aus zu erreichen.
+
+Standardmäßig druckt Spleen in interaktiven TTY-Sitzungen einen QR-Code. Mit `--qr` erzwingst du die QR-Ausgabe, mit `--no-qr` deaktivierst du sie.
+
+## Anbieter
+
+- `cloudflare`: Quick-, Managed-Remote- und Managed-Local-Modi
+- `ngrok`: Quick-Modus
+- `tailscale`: Serve-Modus, nur von Geräten in deinem Tailnet erreichbar, und Funnel-Modus, aus dem ganzen Internet erreichbar
+
+## Tailscale
+
+Beide Modi nutzen die Tailnet-Adresse deines Rechners, etwa `https://laptop.example.ts.net`. Den Port wählst du mit `--https-port`: 443 (Standard), 8443 oder 10000. Ändere ihn, wenn Tailscale auf 443 schon etwas anderes freigibt.
+
+Beim ersten Mal bittet Tailscale dich, HTTPS (für Serve) oder Funnel für dein Tailnet einzuschalten. Spleen hält an und zeigt den Link von Tailscale: Öffne ihn, bestätige und starte den Tunnel erneut. Unter Linux dürfen nur root oder der Operator von Tailscale Ports freigeben; mach dich einmal mit `sudo tailscale set --operator=$USER` zum Operator.
+
+Beim Stoppen des Tunnels entfernt Spleen, was es über Tailscale freigegeben hat, und lässt den Rest deiner Tailscale-Einrichtung unverändert.
+
+## Verwaltete Modi
+
+### Managed Remote
+
+Verwende ein von Cloudflare verwaltetes Token und einen Hostnamen:
+
+```bash
+spleen tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
+```
+
+### Managed Local
+
+Verwende eine lokale `cloudflared`-Konfiguration:
+
+```bash
+spleen tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
+```
+
+## Profile (managed-remote)
+
+Ein wiederverwendbares Profil speichern:
+
+```bash
+spleen tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
+```
+
+Mit dem gespeicherten Profil starten:
+
+```bash
+spleen tunnel start --profile prod-main
+```
+
+## Nützliche Befehle
+
+```bash
+spleen tunnel providers
+spleen tunnel ready --provider cloudflare
+spleen tunnel ready --provider ngrok
+spleen tunnel doctor --provider cloudflare
+spleen tunnel doctor --provider ngrok
+spleen tunnel doctor --provider tailscale
+spleen tunnel stop --port 3000
+```
+
+## Hinweise zum Verhalten
+
+- ein aktiver Tunnel pro Spleen-Instanz (Port)
+- wenn auf derselben Instanz ein neuer Modus oder Anbieter startet, ersetzt er den vorherigen Tunnel
+- das Erstellen eines neuen Verbindungslinks widerruft den vorherigen unbenutzten Link
+- das automatische Starten des Tunnels bewahrt Server-Flags wie `--ui-password` und `--api-only` in den Instanzeinstellungen auf, die von Neustart-/Update-Flows verwendet werden
+
+## Verwandt
+
+- [Connect a Device](/connect-devices/) — eigene Geräte ohne öffentliche URL koppeln
+- [Security](/security/) — die UI schützen, bevor du sie freigibst
+- [Desktop Tunnels](/desktop-tunnels/) — Tunnel-Einrichtung in der Desktop-App ohne CLI-Start
+- [PWA & Mobile](/mobile/) — Spleen vom Telefon aus erreichen
+- [Troubleshooting](/troubleshooting/) — wenn der Tunnel-Link nicht funktioniert
