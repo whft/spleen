@@ -51,6 +51,7 @@ const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesVi
 const GuestPanelContent = React.lazy(() => import('./GuestPanelContent').then((module) => ({ default: module.GuestPanelContent })));
 const TeamsPanel = lazyWithChunkRecovery(() => import('@/components/teams/TeamsPanel').then((m) => ({ default: m.TeamsPanel })));
 const DiscordPanel = lazyWithChunkRecovery(() => import('@/components/discord/DiscordPanel').then((m) => ({ default: m.DiscordPanel })));
+const UnknownCheatsPanel = lazyWithChunkRecovery(() => import('@/components/unknowncheats/UnknownCheatsPanel').then((m) => ({ default: m.UnknownCheatsPanel })));
 
 type PanelBrowserTab = {
   directory: string;
@@ -276,6 +277,7 @@ export const ContextSurfacePanes: React.FC = () => {
   const walkthroughZone = zoneFor('walkthrough');
   const teamsZone = zoneFor('teams');
   const discordZone = zoneFor('discord');
+  const unknowncheatsZone = zoneFor('unknowncheats');
 
   const [recentBrowserTabs, setRecentBrowserTabs] = React.useState<readonly string[]>([]);
   const browserTabLastUsed = React.useRef(new Map<string, number>());
@@ -471,6 +473,7 @@ export const ContextSurfacePanes: React.FC = () => {
   const walkthroughTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'walkthrough') ?? null, [tabs]);
   const teamsTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'teams') ?? null, [tabs]);
   const discordTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'discord') ?? null, [tabs]);
+  const unknowncheatsTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'unknowncheats') ?? null, [tabs]);
   const pluginTabs = React.useMemo(() => tabs.filter((tab) => isPluginContextPanelMode(tab.mode)), [tabs]);
   const pageTabs = React.useMemo(() => tabs.filter((tab) => tab.mode === 'pages' && tab.targetPath), [tabs]);
   const guests = useGuestsStore((state) => state.guests);
@@ -667,6 +670,21 @@ export const ContextSurfacePanes: React.FC = () => {
           <React.Suspense fallback={null}>
             <ContextPanelHeaderSlotProvider value={headerSlotFor(discordZone.zone, discordZone.activeTab?.mode === 'discord')}>
               <DiscordPanel visible={discordZone.isOpen && discordZone.activeTab?.mode === 'discord'} />
+            </ContextPanelHeaderSlotProvider>
+          </React.Suspense>
+        </ZonePane>
+      ) : null}
+      {unknowncheatsTab ? (
+        <ZonePane
+          zone={unknowncheatsZone.zone}
+          interactive={interactive[unknowncheatsZone.zone]}
+          isOpen={unknowncheatsZone.isOpen}
+          hidden={contentHidden(unknowncheatsZone.zone)}
+          className={cn('absolute inset-0', unknowncheatsZone.activeTab?.mode === 'unknowncheats' ? 'block' : 'hidden')}
+        >
+          <React.Suspense fallback={null}>
+            <ContextPanelHeaderSlotProvider value={headerSlotFor(unknowncheatsZone.zone, unknowncheatsZone.activeTab?.mode === 'unknowncheats')}>
+              <UnknownCheatsPanel visible={unknowncheatsZone.isOpen && unknowncheatsZone.activeTab?.mode === 'unknowncheats'} />
             </ContextPanelHeaderSlotProvider>
           </React.Suspense>
         </ZonePane>

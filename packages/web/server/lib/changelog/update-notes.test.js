@@ -92,17 +92,17 @@ describe('release sources', () => {
     expect(await fetchReleaseNotes('1.2.3', '1.2.1', compare, { fetch: fetchApi })).toEqual([
       { version: '1.2.3', date: '2026-03-03', title: 'From the API', intro: null, groups: [{ key: 'new', bullets: ['Api.'] }] },
     ]);
-    expect(urls).toEqual(['https://api.spleen.invalid/v1/changelog/full']);
+    expect(urls).toEqual(['https://github.com/whft/spleen/releases/latest/download/changelog.json']);
   });
 
   it('falls back to the index on GitHub when the API fails', async () => {
     const urls = [];
     const apiDown = async (url) => {
       urls.push(url);
-      return url.includes('api.spleen.invalid') ? { ok: false } : { ok: true, json: async () => index };
+      return url.includes('releases/latest/download/changelog.json') ? { ok: false } : { ok: true, json: async () => index };
     };
     expect((await fetchReleaseNotes('1.2.3', undefined, compare, { fetch: apiDown }))[0].title).toBe('Comments everywhere');
-    expect(urls).toEqual(['https://api.spleen.invalid/v1/changelog/full', 'https://raw.githubusercontent.com/whft/spleen/main/changelog/index.json']);
+    expect(urls).toEqual(['https://github.com/whft/spleen/releases/latest/download/changelog.json', 'https://raw.githubusercontent.com/whft/spleen/main/changelog/index.json']);
   });
 });
 
@@ -137,7 +137,7 @@ describe('fetchReleaseNotes', () => {
       date: '2026-10-31',
       title: null,
       intro: null,
-      groups: [{ key: 'new', bullets: ['**Chat:** remember thinking level [#5505](https://github.com/spleen/spleen/pull/5505)'] }],
+      groups: [{ key: 'new', bullets: ['**Chat:** remember thinking level [#5505](https://github.com/whft/spleen/pull/5505)'] }],
     }]);
   });
 });
@@ -154,7 +154,7 @@ describe('Canary notes', () => {
 
 ### New
 
-- **Chat:** remember thinking level per model [#5505](https://github.com/spleen/spleen/pull/5505)
+- **Chat:** remember thinking level per model [#5505](https://github.com/whft/spleen/pull/5505)
 
 ### Fixes
 
@@ -164,7 +164,7 @@ describe('Canary notes', () => {
 
 ### Fixes
 
-- Keep Chats one line [#5924](https://github.com/spleen/spleen/pull/5924)`);
+- Keep Chats one line [#5924](https://github.com/whft/spleen/pull/5924)`);
   });
 
   it('shows every kept night to a release build and none on the way back to Stable', () => {
@@ -181,8 +181,8 @@ describe('Canary notes', () => {
 
   it('falls back to the canary pre-release when the mirror fails', async () => {
     const urls = [];
-    const mirrorDown = async (url) => { urls.push(url); return url.includes('github.com/whft/spleen/releases') ? { ok: false } : { ok: true, json: async () => nights }; };
+    const mirrorDown = async (url) => { urls.push(url); return url.includes('releases/download/desktop/canary') ? { ok: false } : { ok: true, json: async () => nights }; };
     expect(await fetchUpdateNotes('2.5.4-canary.20261030.4', '2.5.4-canary.20261031.5', compareVersions, { fetch: mirrorDown })).toMatch(/^## \[2\.5\.4-canary\.20261031\.5\]/);
-    expect(urls.at(-1)).toBe('https://github.com/spleen/spleen/releases/download/canary/canary-notes.json');
+    expect(urls.at(-1)).toBe('https://github.com/whft/spleen/releases/download/canary/canary-notes.json');
   });
 });

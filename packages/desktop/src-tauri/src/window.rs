@@ -99,3 +99,26 @@ pub fn focus_main(app: &AppHandle) {
         let _ = window.set_focus();
     }
 }
+
+pub fn open_local_window(
+    app: &AppHandle,
+    label: &str,
+    url: url::Url,
+    title: &str,
+    width: f64,
+    height: f64,
+    bootstrap: &Bootstrap,
+) -> Result<(), String> {
+    let script = init_script(bootstrap);
+    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
+        .title(title)
+        .inner_size(width, height)
+        .min_inner_size(480.0, 360.0)
+        .decorations(false)
+        .initialization_script(&script)
+        .build()
+        .map_err(|e| e.to_string())?;
+    let _ = window.show();
+    let _ = window.set_focus();
+    Ok(())
+}

@@ -136,7 +136,7 @@ export function getWebviewHtml(options: WebviewHtmlOptions): string {
   <!-- Initial loading screen with the Spleen logo -->
   <div id="initial-loading">
     <svg class="logo" width="70" height="70" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#D9503F"/><!-- brand:flat-logo:end -->
+      <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#959D9C"/><!-- brand:flat-logo:end -->
     </svg>
     <!-- Status text stays empty while things are fine; populated only on error. -->
     <div class="status-text" id="loading-status"></div>

@@ -1,6 +1,6 @@
 {
   "name": "spleen-monorepo",
-  "version": "2.7.2",
+  "version": "1.0.0",
   "description": "Spleen monorepo workspace for web, ui, and desktop runtimes",
   "private": true,
   "type": "module",

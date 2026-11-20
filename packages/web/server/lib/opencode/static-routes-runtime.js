@@ -79,22 +79,22 @@ export const createStaticRoutesRuntime = (dependencies) => {
   <style>
     :root {
       color-scheme: dark;
-      --surface-background: #0B0F14;
-      --surface-elevated: #121821;
-      --surface-foreground: #F3EFE7;
-      --surface-muted-foreground: #8C98A4;
-      --interactive-border: rgba(44,55,67,.72);
-      --primary-base: #D9503F;
+      --surface-background: #08090A;
+      --surface-elevated: #111416;
+      --surface-foreground: #F1F2EF;
+      --surface-muted-foreground: #959D9C;
+      --interactive-border: rgba(40,45,48,.85);
+      --primary-base: #E5E8E3;
     }
     @media (prefers-color-scheme: light) {
       :root {
         color-scheme: light;
-        --surface-background: #FBF9F5;
+        --surface-background: #F4F5F2;
         --surface-elevated: #FFFFFF;
-        --surface-foreground: #12161C;
-        --surface-muted-foreground: #5B6570;
-        --interactive-border: rgba(217,210,198,.72);
-        --primary-base: #C2463A;
+        --surface-foreground: #0B0D0F;
+        --surface-muted-foreground: #5E6665;
+        --interactive-border: rgba(213,216,212,.85);
+        --primary-base: #111416;
       }
     }
     * { box-sizing: border-box; }
@@ -178,7 +178,7 @@ export const createStaticRoutesRuntime = (dependencies) => {
 <body>
   <main>
     <svg class="logo" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Spleen logo">
-      <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#D9503F"/><!-- brand:flat-logo:end -->
+      <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#959D9C"/><!-- brand:flat-logo:end -->
     </svg>
     <h1>Spleen is running in headless mode</h1>
     <p>This server is ready. Open it from the Spleen desktop or mobile app to use it.</p>

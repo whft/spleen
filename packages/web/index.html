@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
     <link rel="icon" type="image/png" href="/favicon-16.png" sizes="16x16" />
-    <link rel="mask-icon" href="/favicon.svg" color="#D9503F" />
+    <link rel="mask-icon" href="/favicon.svg" color="#F1F2EF" />
 
     <!-- Apple touch icon - PNG format required for iOS PWA support -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
@@ -232,8 +232,8 @@
           display: 'standalone',
           display_override: ['window-controls-overlay'],
           ...(manifestOrientation ? { orientation: manifestOrientation } : {}),
-          background_color: '#0B0F14',
-          theme_color: '#D9503F',
+          background_color: '#08090A',
+          theme_color: '#08090A',
           icons: [
             { src: `${baseUrl}/pwa-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
             { src: `${baseUrl}/pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -416,8 +416,8 @@
     </script>
 
     <!-- Theme color - Safari iOS 26+ prioritizes CSS background-color over this, but keep as fallback -->
-    <meta name="theme-color" content="#0B0F14" />
-    <meta name="theme-color" content="#0B0F14" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#08090A" />
+    <meta name="theme-color" content="#08090A" media="(prefers-color-scheme: dark)" />
 
     <!-- iOS Safari PWA styling -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -434,10 +434,10 @@
          never from a CDN. -->
     <style>
       :root {
-        --splash-background-dark: #0B0F14;
-        --splash-stroke-dark: #F3EFE7;
-        --splash-background-light: #F3EFE7;
-        --splash-stroke-light: #0B0F14;
+        --splash-background-dark: #08090A;
+        --splash-stroke-dark: #F1F2EF;
+        --splash-background-light: #F4F5F2;
+        --splash-stroke-light: #0B0D0F;
 
         --splash-background: var(--splash-background-dark);
         --splash-stroke: var(--splash-stroke-dark);
@@ -481,7 +481,7 @@
       <div id="initial-loading">
         <div style="display: flex; align-items: center; justify-content: center;">
           <svg width="120" height="120" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Spleen loading icon">
-            <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#D9503F"/><!-- brand:flat-logo:end -->
+            <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#959D9C"/><!-- brand:flat-logo:end -->
           </svg>
         </div>
       </div>

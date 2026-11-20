@@ -68,6 +68,7 @@ import { subagentsI18n } from './subagents.i18n';
 import { recoveryI18n } from './recovery.i18n';
 import { teamsI18n } from './teams.i18n';
 import { discordI18n } from './discord.i18n';
+import { unknowncheatsI18n } from './unknowncheats.i18n';
 import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { tooltipsDiffI18n } from './tooltips-diff.i18n';
@@ -262,6 +263,7 @@ export const dict: Record<I18nKey, string> = {
   ...recoveryI18n['pl'],
   ...teamsI18n['pl'],
   ...discordI18n['pl'],
+  ...unknowncheatsI18n['pl'],
   ...sessionReferencesI18n['pl'],
   ...guestStatusViewI18n['pl'],
   ...tooltipsDiffI18n['pl'],

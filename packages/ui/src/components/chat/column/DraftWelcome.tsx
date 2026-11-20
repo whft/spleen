@@ -1,6 +1,7 @@
 import React from 'react';
 import { RiTeamLine } from '@remixicon/react';
 import { SpleenLogo } from '@/components/ui/SpleenLogo';
+import { SpleenMonolith3D } from '@/components/ui/SpleenMonolith3D';
 import { DraftProjectName } from '@/components/chat/DraftProjectName';
 import { DraftPresetChips } from '../DraftPresetChips';
 import { useI18n } from '@/lib/i18n';
@@ -55,7 +56,7 @@ export const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false 
             'oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
             exiting && 'pointer-events-none opacity-0',
         )}>
-            <SpleenLogo width={40} height={40} className="mb-5 opacity-90" />
+            <SpleenMonolith3D size={80} className="mb-3" />
             <h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
                 {renderDraftTitle(draftHeading, projectLabel)}
             </h1>

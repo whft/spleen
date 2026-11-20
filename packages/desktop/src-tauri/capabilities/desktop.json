@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "desktop",
   "description": "Spleen desktop window capability",
-  "windows": ["main", "splash"],
+  "windows": ["main", "splash", "spleen-*", "mini-chat-*"],
   "remote": {
     "urls": ["http://127.0.0.1:*/*", "http://localhost:*/*"]
   },

@@ -8,9 +8,10 @@ by hand.
 ## Mark
 
 Three interlocking sculpted S-shaped blades on a 1000-unit canvas: upper and
-lower alabaster-bone blades framing a central diagonal vermilion core ribbon.
-The app icon sets the mark on a near-black beveled squircle tile with corner
-radius 217/1000.
+lower alabaster-bone (`#F1F2EF`) blades framing a central diagonal brushed-titanium
+(`#959D9C`) core ribbon.
+The app icon sets the mark on an obsidian squircle tile (`#08090A`, border `#282D30`)
+with corner radius 217/1000.
 
 | Variant | Source | Use |
 |---|---|---|
@@ -26,32 +27,29 @@ radius 217/1000.
 
 | Token | Value | Theme role |
 |---|---|---|
-| Canvas | `#080B0F` | dark `surface.muted`, sidebar, splash |
-| Tile | `#0B0F14` | dark `surface.background`, chat canvas |
-| Raised | `#121821` | dark `surface.elevated` |
-| Panel | `#1A222D` | dark `surface.subtle`, popovers |
-| Border | `#2C3743` | dark `interactive.border` |
-| Bone | `#F3EFE7` | dark `surface.foreground` |
-| Secondary | `#B0BAC4` | reference for muted text; the theme uses `#8C98A4` to keep secondary text near 5:1 on raised surfaces |
-| Muted | `#798793` | icons, tertiary text |
-| Accent | `#D9503F` | `primary.base`, brand node |
-| Accent hover | `#E56858` | `primary.hover` |
-| Accent soft | `#381B1D` | user message bubble |
-| Success | `#76BE9D` | `status.success` |
-| Warning | `#E6BA74` | `status.warning` |
-| Danger | `#E46D68` | `status.error` |
-| Focus | `#83A7DC` | `interactive.focusRing`, dark links |
+| Canvas | `#08090A` | dark `surface.background`, chat canvas |
+| Sidebar / Recess | `#0B0D0F` | dark `surface.muted`, sidebar, splash |
+| Raised | `#111416` | dark `surface.elevated`, menus, panels |
+| Subtle | `#171B1D` | dark `surface.subtle`, hover, bubbles |
+| Border | `#282D30` | dark `interactive.border` |
+| Bone | `#F1F2EF` | dark `surface.foreground` |
+| Secondary / Titanium | `#959D9C` | `surface.mutedForeground`, center blade |
+| Primary Action | `#E5E8E3` | monochrome `primary.base` (`#08090A` ink) |
+| Micro-Accent | `#C8FA62` | surgical focus glint & live dots only |
+| Success | `#829E4B` | `status.success` |
+| Warning | `#C9A45C` | `status.warning` |
+| Danger | `#C46B6B` | `status.error` |
+| Focus | `#C8FA6244` | `interactive.focusRing` |
 
-The default `spleen-dark` theme uses these roles. `spleen-light` is the daylight
-counterpart: paper `#FBF9F5`, ink `#12161C`, a darker vermilion `#C2463A` for
-contrast, and the same status hues tuned for light surfaces.
+The default `spleen-dark` theme uses these Obsidian Monochrome roles. `spleen-light`
+is the neutral daylight counterpart (`#F7F8F6` background, `#111416` ink) with zero red/blue saturation.
 
 ## Geometry and type
 
 - UI icon grid: 24x24, 1.85 stroke, round caps and joins.
-- Control radii: 6, 10, 14 px; spacing basis 4 px.
-- UI font stack: Inter, Segoe UI Variable, Segoe UI, system-ui, sans-serif.
-- Mono stack: JetBrains Mono, Cascadia Code, Consolas, monospace.
+- Control radii: 4, 6, 9, 12 px; spacing basis 4 px.
+- UI font stack: Geist Variable, Geist, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif.
+- Mono stack: Geist Mono Variable, Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace.
 - No gradients, glows, glass panels or decorative shadows in brand artwork.
 - The existing component layout, keyboard navigation and density stay as they
   are. Branding changes the mark, icons and palette, not the information
@@ -62,7 +60,7 @@ contrast, and the same status hues tuned for light surfaces.
 - Transparent exports keep their alpha. Tray and splash artwork never carry a
   baked background.
 - The tray uses the monochrome glyph, never the rounded app tile.
-- The vermilion dot belongs to the brand mark. Utility icons do not get a dot.
+- The titanium core belongs to the brand mark and the app icon. Utility icons do not get a dot.
 - Light surfaces use the ink symbol or light tile. Never place bone artwork on
   white.
 - Generic UI icons stay on the existing Remixicon `Icon` component. The kit's

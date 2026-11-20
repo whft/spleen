@@ -71,7 +71,7 @@ const CodeBlock: React.FC<{
             onClick={copy}
             className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] hover:bg-background/80"
           >
-            {copied ? <RiCheckLine className="h-3 w-3 text-emerald-400" /> : <RiFileCopyLine className="h-3 w-3" />}
+            {copied ? <RiCheckLine className="h-3 w-3 text-[var(--spleen-accent,#C8FA62)]" /> : <RiFileCopyLine className="h-3 w-3" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
@@ -116,13 +116,13 @@ const renderInlineTokens = (
       );
     } else if (m[8]) {
       const label = mentionNames?.get(m[9]) ?? m[9];
-      out.push(<span key={key} className="rounded bg-[#5865F2]/20 px-1 py-0.5 font-medium text-[#7289da]">@{label}</span>);
+      out.push(<span key={key} className="rounded border border-border/70 bg-foreground/10 px-1 py-0.5 font-medium text-foreground">@{label}</span>);
     } else if (m[10]) {
       const label = channelNames?.get(m[11]) ?? m[11];
-      out.push(<span key={key} className="rounded bg-[#5865F2]/20 px-1 py-0.5 font-medium text-[#7289da]">#{label}</span>);
+      out.push(<span key={key} className="rounded border border-border/70 bg-foreground/10 px-1 py-0.5 font-medium text-foreground">#{label}</span>);
     } else if (m[12]) {
       const label = roleNames?.get(m[13]) ?? 'role';
-      out.push(<span key={key} className="rounded bg-primary/15 px-1 py-0.5 font-medium text-primary">@{label}</span>);
+      out.push(<span key={key} className="rounded border border-border/70 bg-secondary px-1 py-0.5 font-medium text-foreground">@{label}</span>);
     } else if (m[14]) {
       out.push(<Spoiler key={key}>{m[15]}</Spoiler>);
     } else if (m[16]) {
@@ -139,7 +139,7 @@ const renderInlineTokens = (
       out.push(<del key={key}>{m[27]}</del>);
     } else if (m[28]) {
       out.push(
-        <a key={key} href={m[28]} target="_blank" rel="noreferrer" className="text-sky-400 underline break-all hover:opacity-80">
+        <a key={key} href={m[28]} target="_blank" rel="noreferrer" className="text-foreground underline decoration-muted-foreground/60 break-all hover:decoration-foreground">
           {m[28]}
         </a>,
       );

@@ -1,0 +1,27 @@
+[
+  {
+    "version": "1.0.0",
+    "date": "2026-11-20",
+    "title": "Spleen 1.0.0 — Obsidian Edition",
+    "intro": "Initial stable Windows desktop release of Spleen featuring the Obsidian dark monochrome design system, sculptural 3D monolith identity, live session-recovery & limit failover, AI Teams DAG orchestrator, full in-app AI control, Discord reader/client, and UnknownCheats reader.",
+    "app": {
+      "new": [
+        "**Design:** Complete Obsidian dark monochrome UI overhaul with self-hosted Geist & Geist Mono typography, precision 3-blade brand mark, and lazy-loaded Three.js 3D monolith on Welcome and About screens",
+        "**AI Teams:** Multi-agent DAG orchestrator with planner/coder/reviewer/tester presets and live execution panel",
+        "**AI Control:** Full in-app `spleen-control` skill allowing Spleen AI to inspect and control settings, UI surfaces, session recovery, AI Teams, Discord, and UnknownCheats",
+        "**Discord:** Integrated Discord reader and live Gateway client with guild/channel browser, thread viewer, search, and one-click Send to Spleen AI",
+        "**UnknownCheats:** Integrated UnknownCheats forum and code-block reader with Tauri verification window bridge, bookmarks, search, and Send to Spleen AI",
+        "**Recovery:** Automatic usage-limit failover, stall watchdog, exponential backoff auto-continue, and in-chat recovery status banner"
+      ],
+      "improvements": [
+        "**Desktop:** Signed Windows NSIS installer and GitHub Releases updater integration for `whft/spleen`",
+        "**Browser:** Native window popout support in the embedded browser panel"
+      ],
+      "fixes": [
+        "**Status:** Cleaned up work-status usage copy and removed legacy red/blue surface accents"
+      ],
+      "misc": []
+    },
+    "vscode": null
+  }
+]

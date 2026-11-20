@@ -31,9 +31,9 @@ test('the installer stays a current-user NSIS install with the Spleen identity',
 test('the bundled icon set is the approved Spleen mark', () => {
   assert.ok(config.bundle.icon.includes('icons/icon.ico'));
   const svg = fs.readFileSync(path.join(desktopRoot, 'src-tauri', 'icons', 'app-icon.svg'), 'utf8');
-  assert.match(svg, /fill="#0B0F14"/);
-  assert.match(svg, /fill="#F3EFE7"/);
-  assert.match(svg, /fill="#D9503F"/);
+  assert.match(svg, /fill="#08090A"/);
+  assert.match(svg, /fill="#F1F2EF"/);
+  assert.match(svg, /fill="#959D9C"/);
 });
 
 test('the updater points at the Spleen-owned feed', () => {

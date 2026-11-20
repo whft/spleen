@@ -305,8 +305,10 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
           type="button"
           title={t('discord.directMessages')}
           onClick={() => setSelectedGuildId('__dms__')}
-          className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
-            selectedGuildId === '__dms__' ? 'bg-[#5865F2] text-white' : 'bg-muted text-muted-foreground hover:text-foreground'
+          className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
+            selectedGuildId === '__dms__'
+              ? 'border-foreground/40 bg-primary text-primary-foreground'
+              : 'border-border/60 bg-card text-muted-foreground hover:border-border hover:text-foreground'
           }`}
         >
           <RiMessage2Line className="h-4 w-4" />
@@ -345,7 +347,13 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
       <div className="hidden w-44 shrink-0 flex-col border-r border-border/60 bg-card/20 sm:flex">
         <div className="flex items-center justify-between border-b border-border/60 px-2.5 py-2 text-xs font-semibold">
           <span className="truncate">{selectedGuildId === '__dms__' ? t('discord.directMessages') : (activeGuild?.name ?? 'Server')}</span>
-          <RiDiscordLine className={`h-3.5 w-3.5 shrink-0 ${status.gatewayConnected ? 'text-emerald-400' : 'text-muted-foreground'}`} />
+          <span className="flex items-center gap-1.5 shrink-0">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${status.gatewayConnected ? 'bg-[var(--spleen-accent,#C8FA62)]' : 'bg-muted-foreground/40'}`}
+              title={status.gatewayConnected ? 'Gateway connected' : 'Gateway disconnected'}
+            />
+            <RiDiscordLine className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
         </div>
         <div className="min-h-0 flex-1">
           {selectedGuildId === '__dms__' ? (
@@ -648,7 +656,7 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
                   />
                   <button
                     type="submit"
-                    className="rounded-md bg-[#5865F2] px-2.5 py-1.5 text-white hover:opacity-90"
+                    className="rounded-md bg-primary px-2.5 py-1.5 text-primary-foreground transition hover:opacity-90"
                   >
                     <RiSendPlaneLine className="h-4 w-4" />
                   </button>

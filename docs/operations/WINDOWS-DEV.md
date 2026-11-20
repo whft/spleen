@@ -9,7 +9,7 @@ rustc 1.98.1.
 ## Install and check
 
 ```powershell
-cd C:\Users\Admin\Documents\Spleen
+cd %USERPROFILE%\Documents\Spleen
 bun install
 bun run type-check:ui
 bun run type-check:web
@@ -53,7 +53,7 @@ POST /api/spleen/sessions
 ## Packaging
 
 ```powershell
-cd C:\Users\Admin\Documents\Spleen
+cd %USERPROFILE%\Documents\Spleen
 bun run desktop:build          # tauri build, NSIS current-user installer
 bun run desktop:build:unsigned # same without updater signing; works before the keypair exists
 ```

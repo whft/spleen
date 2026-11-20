@@ -16,13 +16,13 @@ const __dirname = path.dirname(__filename);
 const PACKAGE_NAME = '@spleen/web';
 const PACKAGE_PATH_SEGMENTS = PACKAGE_NAME.split('/');
 const GITHUB_RELEASES_URL = 'https://github.com/whft/spleen/releases';
-const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/spleen/spleen/releases';
+const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/whft/spleen/releases';
 let cachedDetection = null;
 
 function getSpawnSyncBaseOptions() {
   return process.platform === 'win32' ? { windowsHide: true } : {};
 }
-const UPDATE_CHECK_URL = process.env.SPLEEN_UPDATE_API_URL || 'https://api.spleen.invalid/v1/update/check';
+const UPDATE_CHECK_URL = process.env.SPLEEN_UPDATE_API_URL || 'https://api.github.com/repos/whft/spleen/releases/latest';
 
 function getSpleenConfigDir() {
   if (process.platform === 'win32') {
@@ -144,31 +144,59 @@ async function checkForUpdatesFromApi(currentVersion, options = {}) {
       reportUsage,
     };
 
-    const response = await fetch(UPDATE_CHECK_URL, {
+    let response = await fetch(UPDATE_CHECK_URL, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        'User-Agent': 'spleen-update-check',
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(10000),
     });
 
+    if (!response.ok && (response.status === 404 || response.status === 405) && UPDATE_CHECK_URL.includes('api.github.com/')) {
+      response = await fetch(UPDATE_CHECK_URL, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'spleen-update-check',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+    }
+
     if (!response.ok) return null;
     const data = await response.json();
-    if (typeof data?.latestVersion !== 'string') return null;
+    const rawVersion = typeof data?.latestVersion === 'string'
+      ? data.latestVersion
+      : typeof data?.tag_name === 'string'
+        ? data.tag_name.replace(/^v/, '')
+        : null;
+    if (!rawVersion) return null;
 
-    const versionComparison = compareVersions(data.latestVersion, currentVersion);
+    const versionComparison = compareVersions(rawVersion, currentVersion);
     if (versionComparison < 0) return null;
 
-    const releaseUrl = `${GITHUB_RELEASES_URL}/tag/v${data.latestVersion}`;
-    const updateAvailable = Boolean(data.updateAvailable) && versionComparison > 0;
+    const releaseUrl = `${GITHUB_RELEASES_URL}/tag/v${rawVersion}`;
+    const hasExplicitFlag = typeof data?.updateAvailable === 'boolean';
+    const updateAvailable = (hasExplicitFlag ? Boolean(data.updateAvailable) : true) && versionComparison > 0;
+    const notesText = typeof data?.releaseNotes === 'string'
+      ? data.releaseNotes
+      : typeof data?.body === 'string'
+        ? data.body
+        : undefined;
+    const notesUrl = typeof data?.releaseNotesUrl === 'string'
+      ? data.releaseNotesUrl
+      : typeof data?.html_url === 'string'
+        ? data.html_url
+        : releaseUrl;
     return {
       available: updateAvailable,
-      version: data.latestVersion,
+      version: rawVersion,
       currentVersion,
-      body: typeof data.releaseNotes === 'string' ? data.releaseNotes : undefined,
-      releaseUrl: typeof data.releaseNotesUrl === 'string' ? data.releaseNotesUrl : releaseUrl,
+      body: notesText,
+      releaseUrl: notesUrl,
       nextSuggestedCheckInSec:
         typeof data.nextSuggestedCheckInSec === 'number' && Number.isFinite(data.nextSuggestedCheckInSec)
           ? data.nextSuggestedCheckInSec

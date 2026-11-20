@@ -26,7 +26,7 @@ export const DiscordIntegrationCard: React.FC = () => {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/50 p-3.5 text-xs">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#5865F2]/15 text-[#5865F2]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/80 bg-secondary text-foreground">
           <RiDiscordLine className="h-5 w-5" />
         </div>
         <div>

@@ -50,10 +50,14 @@ export const RecoveryStatusBanner: React.FC<{ sessionId?: string | null }> = ({ 
     <div
       role="status"
       data-recovery-banner={entry.state}
-      className="mx-auto mb-2 flex w-full max-w-3xl items-center justify-between gap-3 rounded-lg border border-border/70 bg-card/90 px-3 py-2 text-xs shadow-sm backdrop-blur-sm"
+      className="mx-auto mb-2 flex w-full max-w-3xl items-center justify-between gap-3 rounded-lg border border-border/85 bg-card px-3 py-2 text-xs shadow-sm"
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <RiTimeLine className={isWarning ? 'h-4 w-4 shrink-0 text-amber-500' : 'h-4 w-4 shrink-0 text-primary'} />
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className={isWarning ? 'h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--status-warning,#C9A45C)]' : 'h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--spleen-accent,#C8FA62)]'}
+        />
+        <RiTimeLine className="h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
           <div className="truncate font-medium text-foreground">{title}</div>
           {entry.reason ? (

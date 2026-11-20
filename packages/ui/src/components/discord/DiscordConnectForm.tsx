@@ -27,21 +27,21 @@ export const DiscordConnectForm: React.FC<{ onConnected: (status: DiscordStatus)
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="mx-auto flex w-full max-w-sm flex-col gap-3 rounded-xl border border-border bg-card/70 p-4 text-xs">
+    <form onSubmit={(e) => void handleSubmit(e)} className="mx-auto flex w-full max-w-sm flex-col gap-3 rounded-xl border border-border/80 bg-card p-4 text-xs">
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <RiDiscordLine className="h-5 w-5 text-[#5865F2]" />
+        <RiDiscordLine className="h-5 w-5 text-foreground" />
         <span>{t('discord.connect.title')}</span>
       </div>
       <p className="text-[11px] leading-relaxed text-muted-foreground">{t('discord.connect.subtitle')}</p>
 
-      <div className="flex gap-1.5 rounded-lg bg-muted/60 p-1">
+      <div className="flex gap-1.5 rounded-lg bg-muted p-1">
         {(['user', 'bot'] as const).map((kind) => (
           <button
             key={kind}
             type="button"
             onClick={() => setTokenType(kind)}
             className={`flex-1 rounded-md py-1 text-[11px] font-medium transition ${
-              tokenType === kind ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              tokenType === kind ? 'bg-secondary text-foreground shadow-sm border border-border/70' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {kind === 'user' ? t('discord.connect.tokenTypeUser') : t('discord.connect.tokenTypeBot')}
@@ -55,7 +55,7 @@ export const DiscordConnectForm: React.FC<{ onConnected: (status: DiscordStatus)
         value={token}
         onChange={(e) => setToken(e.target.value)}
         placeholder={t('discord.connect.tokenPlaceholder')}
-        className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground outline-none focus:border-primary"
+        className="rounded-md border border-border bg-background px-2.5 py-2 text-xs text-foreground outline-none focus:border-foreground/40"
       />
 
       {error ? <div className="rounded bg-destructive/15 px-2 py-1.5 text-[11px] text-destructive">{error}</div> : null}
@@ -63,7 +63,7 @@ export const DiscordConnectForm: React.FC<{ onConnected: (status: DiscordStatus)
       <button
         type="submit"
         disabled={loading || !token.trim()}
-        className="rounded-md bg-[#5865F2] py-2 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+        className="rounded-md bg-primary py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
       >
         {loading ? '...' : t('discord.connect.connect')}
       </button>

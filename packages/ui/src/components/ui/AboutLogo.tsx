@@ -1,6 +1,7 @@
 import React from 'react';
 import { useReducedMotion } from 'motion/react';
 import { SpleenLogo } from '@/components/ui/SpleenLogo';
+import { SpleenMonolith3D } from '@/components/ui/SpleenMonolith3D';
 import { LevitatingLogo } from '@/components/ui/LevitatingLogo';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 
@@ -22,9 +23,10 @@ export const AboutLogo: React.FC<{ size?: number }> = ({ size = 64 }) => {
     if (count >= TAPS_TO_LEVITATE) setLevitating(true);
   };
 
+  const monolithSize = Math.max(size, 84);
   return (
     <div className="relative select-none" onClick={handleTap}>
-      <SpleenLogo width={size} height={size} className={levitating ? 'invisible' : undefined} />
+      <SpleenMonolith3D size={monolithSize} className={levitating ? 'invisible' : undefined} />
       {levitating ? (
         <LevitatingLogo size={size} color={currentTheme.colors.surface.foreground} onDone={stopLevitating} />
       ) : null}

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Spleen",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "dev.spleen.desktop",
   "build": {
     "frontendDist": "../splash"
@@ -45,14 +45,14 @@
         "sidebarImage": "icons/installer-sidebar.bmp"
       }
     },
-    "createUpdaterArtifacts": "v1Compatible"
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
       "endpoints": [
         "https://github.com/whft/spleen/releases/latest/download/latest.json"
       ],
-      "pubkey": "REPLACE_WITH_SPLEEN_UPDATER_PUBKEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBOEY5RUM0QTg2RTA0OEEKUldTS0JHNm94SjZQcXFrbVRMVFlnSDVTVjgvSG5pd3ZZM041Z09BeUNSTXhSZWIvb3FMYk1aWEgK",
       "windows": {
         "installMode": "passive"
       }

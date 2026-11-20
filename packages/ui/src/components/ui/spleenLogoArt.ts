@@ -4,5 +4,5 @@ export const SPLEEN_LOGO_ART = {
     'M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z',
   ],
   core: 'M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z',
-  accent: '#D9503F',
+  accent: '#959D9C',
 } as const;

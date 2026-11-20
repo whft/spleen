@@ -3,7 +3,7 @@ import { RiDownloadLine, RiFileTextLine } from '@remixicon/react';
 import type { DiscordAttachment, DiscordEmbed, DiscordMessage } from '@/lib/discord/api';
 
 const colorHex = (num?: number): string => {
-  if (typeof num !== 'number' || num <= 0) return 'var(--primary)';
+  if (typeof num !== 'number' || num <= 0) return 'var(--border)';
   return `#${num.toString(16).padStart(6, '0')}`;
 };
 
@@ -82,7 +82,7 @@ export const DiscordEmbedCard: React.FC<{
         ) : null}
         {embed.title ? (
           embed.url ? (
-            <a href={embed.url} target="_blank" rel="noreferrer" className="block font-semibold text-sky-400 hover:underline">
+            <a href={embed.url} target="_blank" rel="noreferrer" className="block font-semibold text-foreground underline decoration-muted-foreground/50 hover:decoration-foreground">
               {embed.title}
             </a>
           ) : (

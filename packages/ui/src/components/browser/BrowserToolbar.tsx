@@ -44,6 +44,7 @@ type BrowserToolbarProps = {
   onClearCache?: () => void;
   onToggleDeviceBar?: () => void;
   isDeviceBarOpen?: boolean;
+  onOpenNativeWindow?: () => void;
 };
 
 export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
@@ -74,6 +75,7 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
   onClearCache,
   onToggleDeviceBar,
   isDeviceBarOpen,
+  onOpenNativeWindow,
 }) => {
   const { t } = useI18n();
   const [isAddressFocused, setIsAddressFocused] = React.useState(false);
@@ -121,6 +123,7 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
   const shownAddress = isAddressFocused ? null : splitAddress(address);
 
   const rowActions: ToolbarGroup = [
+    onOpenNativeWindow ? { id: 'native-window', icon: 'external-link', label: 'Open in Native Window', onSelect: onOpenNativeWindow } : null,
     onToggleDeviceBar ? { id: 'device', icon: 'smartphone', label: t('contextPanel.browser.deviceToolbar'), onSelect: onToggleDeviceBar, pressed: isDeviceBarOpen } : null,
     onAnnotate ? { id: 'annotate', icon: 'markup', label: t('contextPanel.browser.annotate.toggle'), onSelect: onAnnotate, pressed: isAnnotating } : null,
   ];

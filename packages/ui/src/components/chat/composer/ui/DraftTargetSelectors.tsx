@@ -292,7 +292,7 @@ function DraftTargetSelectorsView(props: DraftTargetProps) {
                             variant="ghost"
                             size="sm"
                             aria-haspopup="dialog"
-                            className="h-7 min-w-0 w-fit max-w-[42vw] justify-start gap-1 overflow-hidden px-1.5 normal-case hover:bg-transparent data-[popup-open]:bg-transparent sm:max-w-[18rem]"
+                            className="h-7 min-w-0 w-fit max-w-[42vw] justify-start gap-1 overflow-hidden rounded-lg px-2 normal-case text-muted-foreground hover:bg-[var(--interactive-hover)] hover:text-foreground data-[popup-open]:bg-[var(--interactive-hover)] data-[popup-open]:text-foreground sm:max-w-[18rem]"
                             onPointerDownCapture={(event) => syncProjectPopupContainers(event.currentTarget)}
                             onFocusCapture={(event) => syncProjectPopupContainers(event.currentTarget)}
                         />

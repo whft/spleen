@@ -38,7 +38,7 @@ afterEach(async () => {
   jest.useRealTimers();
 });
 
-test('renders the Spleen monogram blades and vermilion core', async () => {
+test('renders the Spleen monogram blades and titanium core', async () => {
   await render(<SpleenLogo />);
   const paths = [...host.querySelectorAll('svg path')].map((path) => path.getAttribute('d'));
   expect(paths).toEqual([...ART.shell, ART.core]);

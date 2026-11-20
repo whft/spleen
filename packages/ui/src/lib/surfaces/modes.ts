@@ -12,6 +12,7 @@ const BUILT_IN_CONTEXT_PANEL_MODES = [
   'workflows',
   'teams',
   'discord',
+  'unknowncheats',
   'subagents',
   'pages',
 ] as const;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Spleen Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/btriapitsyn/spleen/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/whft/spleen/main/scripts/install.sh | bash
 
 set -euo pipefail
 

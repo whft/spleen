@@ -17,14 +17,14 @@ regenerate.
 - Every mark comes from `docs/brand/source/spleen-app-icon.svg`,
   `spleen-symbol-color-transparent.svg` or `spleen-tray-white.svg`. No module
   keeps a second copy of the path or the dot coordinates.
-- The app icon keeps the 217/1000 tile radius, `#0B0F14` tile, `#F3EFE7` bone
-  blades and `#D9503F` central vermilion blade.
+- The app icon keeps the 217/1000 tile radius, `#08090A` obsidian tile, `#F1F2EF`
+  blades, and `#959D9C` titanium central blade (pure monochrome).
 - Tray and splash images have an alpha channel and no baked background. The tray
   is the monochrome glyph; the rounded tile never goes in the tray.
 - The NSIS header and sidebar bitmaps are 24-bit BMPs built from the same tile,
-  bone blades and vermilion core. The installer and uninstaller use `icon.ico`.
-- The vermilion core belongs to the brand mark and the app icon. The tray glyph
-  and generic UI icons render monochrome.
+  bone blades and titanium core. The installer and uninstaller use `icon.ico`.
+- The titanium core belongs to the brand mark and the app icon. The tray glyph
+  and generic UI icons render single-color monochrome.
 - The four documents that render before React (`packages/desktop/splash/index.html`,
   `packages/web/index.html`, the VS Code loader in `webviewHtml.ts`, the headless
   server page in `static-routes-runtime.js`) and `SpleenLogo.tsx` draw the same

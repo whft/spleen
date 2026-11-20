@@ -65,9 +65,8 @@ export const UI_FONT_OPTIONS: FontOptionDefinition<UiFontOption>[] = [
     {
         id: 'geist-sans',
         label: 'Geist Sans',
-        description: 'Crisp sans-serif with a technical interface feel.',
-        stack: '"Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        source: { family: 'Geist Sans', packageName: '@fontsource-variable/geist', filePrefix: 'geist', weightRange: [100, 900] }
+        description: 'Crisp variable sans-serif bundled locally for Spleen Obsidian.',
+        stack: '"Geist Variable", "Geist Sans", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
     },
     {
         id: 'atkinson-hyperlegible',
@@ -137,9 +136,8 @@ export const CODE_FONT_OPTIONS: FontOptionDefinition<MonoFontOption>[] = [
     {
         id: 'geist-mono',
         label: 'Geist Mono',
-        description: 'Sharp monospace pair for Geist Sans.',
-        stack: '"Geist Mono", "SFMono-Regular", "Menlo", monospace',
-        source: { family: 'Geist Mono', packageName: '@fontsource-variable/geist-mono', filePrefix: 'geist-mono', weightRange: [100, 900] }
+        description: 'Sharp variable monospace bundled locally for code and terminal views.',
+        stack: '"Geist Mono Variable", "Geist Mono", "SFMono-Regular", "Menlo", monospace'
     },
     {
         id: 'commit-mono',
@@ -190,8 +188,8 @@ const buildFontMap = <T extends string>(options: FontOptionDefinition<T>[]) =>
 export const UI_FONT_OPTION_MAP = buildFontMap(UI_FONT_OPTIONS);
 export const CODE_FONT_OPTION_MAP = buildFontMap(CODE_FONT_OPTIONS);
 
-export const DEFAULT_UI_FONT: UiFontOption = 'system';
-export const DEFAULT_MONO_FONT: MonoFontOption = 'system-mono';
+export const DEFAULT_UI_FONT: UiFontOption = 'geist-sans';
+export const DEFAULT_MONO_FONT: MonoFontOption = 'geist-mono';
 
 export const CUSTOM_FONT_ID = 'custom';
 

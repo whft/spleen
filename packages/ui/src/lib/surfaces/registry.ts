@@ -18,6 +18,7 @@ type BuiltInContextSurfaceId =
   | 'workflows'
   | 'teams'
   | 'discord'
+  | 'unknowncheats'
   | 'subagents'
   | 'chat'
   | 'pages';
@@ -133,6 +134,14 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
   },
   {
+    id: 'unknowncheats',
+    descriptionKey: 'contextRail.surface.unknowncheats.description',
+    mode: 'unknowncheats',
+    icon: 'code-box',
+    labelKey: 'contextPanel.mode.unknowncheats',
+    availability: 'always',
+  },
+  {
     id: 'subagents',
     descriptionKey: 'contextRail.surface.subagents.description',
     mode: 'subagents',
@@ -175,6 +184,7 @@ const BUILT_IN_SURFACE_GROUPS = {
   workflows: 'workspace',
   teams: 'workspace',
   discord: 'workspace',
+  unknowncheats: 'workspace',
   subagents: 'workspace',
   chat: 'workspace',
   pages: 'workspace',

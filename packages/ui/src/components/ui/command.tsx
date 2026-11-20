@@ -20,7 +20,7 @@ function Command({
         ...style,
       }}
       className={cn(
-        "oc-surface-elevated flex h-full w-full flex-col overflow-hidden rounded-xl",
+        "bg-popover text-popover-foreground border border-border/80 flex h-full w-full flex-col overflow-hidden rounded-xl",
         className
       )}
       {...props}

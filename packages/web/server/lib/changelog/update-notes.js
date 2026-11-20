@@ -1,5 +1,5 @@
 
-const CHANGELOG_API_URL = 'https://api.spleen.invalid/v1/changelog/full';
+const CHANGELOG_API_URL = 'https://github.com/whft/spleen/releases/latest/download/changelog.json';
 const CHANGELOG_INDEX_URL = 'https://raw.githubusercontent.com/whft/spleen/main/changelog/index.json';
 const CANARY_NOTES_MIRROR_URL = 'https://github.com/whft/spleen/releases/download/desktop/canary/canary-notes.json';
 const CANARY_NOTES_URL = 'https://github.com/whft/spleen/releases/download/canary/canary-notes.json';

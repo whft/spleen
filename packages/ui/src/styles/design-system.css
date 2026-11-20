@@ -27,10 +27,10 @@
        leaves a faint sharp trace of text in Chromium (measured: 3 levels of
        contrast under a 92% fill, enough to read letters), so the fill is
        97%, where the trace drops to a single level. */
-    --oc-glass-popover-opacity: 97%;
-    --oc-glass-popover-blur: 40px;
-    --oc-glass-tooltip-opacity: 62%;
-    --oc-glass-saturation: 1.24;
+    --oc-glass-popover-opacity: 98%;
+    --oc-glass-popover-blur: 18px;
+    --oc-glass-tooltip-opacity: 92%;
+    --oc-glass-saturation: 1.04;
     /* Tone steps of flat tiles (.oc-tile and its inset and hover). Dark themes
        take smaller steps: the same mix of text colour reads about 1.6 times
        stronger near black (ΔL* 4 against 2.5 in light), so cards stood out
@@ -103,40 +103,42 @@
     --oc-motion-layout-duration: 294ms;
     --oc-motion-layout-easing: linear(0, 0.0344, 0.1145, 0.2151, 0.3209, 0.423, 0.5166, 0.5995, 0.6712, 0.7322, 0.7832, 0.8255, 0.8602, 0.8885, 0.9114, 0.9298, 0.9445, 0.9563, 0.9657, 0.9731, 0.9789, 0.9835, 0.9872, 0.99, 0.9922, 0.994, 0.9953, 0.9964, 0.9972, 0.9978, 0.9983, 0.9987, 1);
 
-    /* Default Light Theme */
-    --background: #FBF9F5; /* Spleen paper */
-    --foreground: #12161C; /* Spleen ink */
-    --card: #FFFFFF; /* Bright paper card */
-    --card-foreground: #12161C; /* Spleen ink */
-    --popover: #FFFFFF; /* Bright paper popover */
-    --popover-foreground: #12161C; /* Spleen ink */
-    --primary: #C2463A; /* Spleen vermilion for light surfaces */
-    --primary-foreground: #FFFFFF; /* Light text on primary */
-    --secondary: #F4F0E8; /* Bone surface */
-    --secondary-foreground: #12161C; /* Spleen ink */
-    --muted: #F4F0E8; /* Bone surface */
-    --muted-foreground: #5B6570; /* Secondary ink */
-    --accent: #F4F0E8; /* Bone accent */
-    --accent-foreground: #12161C; /* Spleen ink */
-    --destructive: #B7493F; /* Accessible red */
-    --destructive-foreground: #FFFFFF; /* Light text */
-    --border: #D9D2C6; /* Warm paper border */
-    --input: #F4F0E8; /* Input background */
-    --ring: #2F6FB0; /* Focus ring color */
+    /* Default Light Theme (Mineral Paper Monochrome) */
+    --background: #F7F8F6;
+    --foreground: #0B0D0F;
+    --card: #FFFFFF;
+    --card-foreground: #0B0D0F;
+    --popover: #FFFFFF;
+    --popover-foreground: #0B0D0F;
+    --primary: #171B1D;
+    --primary-foreground: #F4F5F2;
+    --secondary: #EFF1ED;
+    --secondary-foreground: #0B0D0F;
+    --muted: #EFF1ED;
+    --muted-foreground: #5E6665;
+    --accent: #E7EAE4;
+    --accent-foreground: #0B0D0F;
+    --destructive: #A84646;
+    --destructive-foreground: #FFFFFF;
+    --border: #D5D8D4;
+    --input: #EFF1ED;
+    --ring: #68706F;
+    --spleen-accent: #C8FA62;
+    --spleen-accent-muted: #829E4B;
     --radius: 0.5625rem;
-    --chart-1: oklch(0.58 0.15 230); /* Blue */
-    --chart-2: oklch(0.58 0.15 145); /* Oasis green */
-    --chart-3: #C2463A; /* Spleen vermilion */
-    --chart-4: oklch(0.55 0.18 30); /* Rose */
-    --chart-5: oklch(0.6 0.16 85); /* Golden sand */
-    --sidebar: #F4F0E8; /* Bone sidebar */
-    --sidebar-foreground: #12161C; /* Spleen ink */
-    --sidebar-primary: #C2463A; /* Spleen vermilion */
-    --sidebar-primary-foreground: #FFFFFF; /* Light text */
-    --sidebar-accent: #EFEAE0; /* Panel tone */
-    --sidebar-accent-foreground: #12161C; /* Spleen ink */
-    --sidebar-border: #D9D2C6; /* Warm paper border */
-    --sidebar-ring: #2F6FB0; /* Focus ring */
+    --chart-1: #3B4241;
+    --chart-2: #4D6B29;
+    --chart-3: #171B1D;
+    --chart-4: #A84646;
+    --chart-5: #8A6823;
+    --sidebar: #EFF1ED;
+    --sidebar-foreground: #0B0D0F;
+    --sidebar-primary: #171B1D;
+    --sidebar-primary-foreground: #F4F5F2;
+    --sidebar-accent: #E7EAE4;
+    --sidebar-accent-foreground: #0B0D0F;
+    --sidebar-border: #D5D8D4;
+    --sidebar-ring: #68706F;
   }
 
   /* Shortcuts read in the interface font, the way tooltips show them. The
@@ -149,65 +151,67 @@
     --oc-tile-tone: 3%;
     --oc-tile-inset-tone: 4.5%;
     --oc-tile-hover-tone: 5.5%;
-    --oc-elevation-ring: rgb(255 255 255 / 0.08);
+    --oc-elevation-ring: rgb(255 255 255 / 0.11);
     --oc-elevation-button:
       inset 0 1px 0 0 rgb(255 255 255 / 0.04),
       inset 0 0 0 0.5px var(--oc-elevation-ring),
-      0 0 0 0.5px rgb(0 0 0 / 0.55),
-      0 1px 2px 0 rgb(0 0 0 / 0.4);
+      0 0 0 0.5px rgb(0 0 0 / 0.7),
+      0 1px 2px 0 rgb(0 0 0 / 0.5);
     --oc-elevation-raised-shadow:
-      0 2px 4px 0 rgb(0 0 0 / 0.25),
-      0 1px 2px 0 rgb(0 0 0 / 0.25);
+      0 2px 4px 0 rgb(0 0 0 / 0.35),
+      0 1px 2px 0 rgb(0 0 0 / 0.35);
     --oc-elevation-raised:
       inset 0 1px 0 0 rgb(255 255 255 / 0.04),
       inset 0 0 0 0.5px var(--oc-elevation-ring),
-      0 0 0 0.5px rgb(0 0 0 / 0.55),
+      0 0 0 0.5px rgb(0 0 0 / 0.7),
       var(--oc-elevation-raised-shadow);
     --oc-elevation-floating:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
+      inset 0 1px 0 0 rgb(255 255 255 / 0.05),
       inset 0 0 0 0.5px var(--oc-elevation-ring),
-      0 0 0 0.5px rgb(0 0 0 / 0.55),
-      0 8px 16px 0 rgb(0 0 0 / 0.25),
-      0 4px 8px 0 rgb(0 0 0 / 0.25);
-    --oc-glass-blur: 26px;
-    --oc-glass-opacity: 50%;
-    --oc-glass-popover-opacity: 97%;
-    --oc-glass-popover-blur: 40px;
-    --oc-glass-tooltip-opacity: 64%;
-    --oc-glass-saturation: 1.16;
-    /* Default Dark Theme */
-    --background: #0B0F14; /* Spleen tile */
-    --foreground: #F3EFE7; /* Spleen bone */
-    --card: #121821; /* Raised tile */
-    --card-foreground: #F3EFE7; /* Spleen bone */
-    --popover: #1A222D; /* Floating tile */
-    --popover-foreground: #F3EFE7; /* Spleen bone */
-    --primary: #D9503F; /* Spleen vermilion */
-    --primary-foreground: #FFFFFF; /* Light text on primary */
-    --secondary: #1A222D; /* Panel tile */
-    --secondary-foreground: #F3EFE7; /* Spleen bone */
-    --muted: #1A222D; /* Panel tile */
-    --muted-foreground: #8C98A4; /* Secondary text */
-    --accent: #1A222D; /* Panel tile */
-    --accent-foreground: #F3EFE7; /* Spleen bone */
-    --destructive: #E46D68; /* Accessible red */
-    --destructive-foreground: #0B0F14; /* Dark text */
-    --border: #2C3743; /* Spleen border */
-    --input: #2C3743; /* Input edge */
-    --ring: #83A7DC; /* Focus ring color */
-    --chart-1: #5AA9D9; /* Blue */
-    --chart-2: #76BE9D; /* Green */
-    --chart-3: #D9503F; /* Vermilion */
-    --chart-4: #E46D68; /* Coral */
-    --chart-5: #E6BA74; /* Amber */
-    --sidebar: #080B0F; /* Canvas below the chat */
-    --sidebar-foreground: #F3EFE7; /* Spleen bone */
-    --sidebar-primary: #D9503F; /* Spleen vermilion */
-    --sidebar-primary-foreground: #FFFFFF; /* Light text */
-    --sidebar-accent: #1A222D; /* Panel tile */
-    --sidebar-accent-foreground: #F3EFE7; /* Spleen bone */
-    --sidebar-border: #2C3743; /* Spleen border */
-    --sidebar-ring: #83A7DC; /* Focus ring */
+      0 0 0 0.5px rgb(0 0 0 / 0.75),
+      0 12px 28px -4px rgb(0 0 0 / 0.65),
+      0 4px 10px -2px rgb(0 0 0 / 0.45);
+    --oc-glass-blur: 18px;
+    --oc-glass-opacity: 72%;
+    --oc-glass-popover-opacity: 98%;
+    --oc-glass-popover-blur: 18px;
+    --oc-glass-tooltip-opacity: 92%;
+    --oc-glass-saturation: 1.04;
+    /* Default Dark Theme (SPLEEN / OBSIDIAN MONOCHROME) */
+    --background: #08090A;
+    --foreground: #F1F2EF;
+    --card: #111416;
+    --card-foreground: #F1F2EF;
+    --popover: #0C0E10;
+    --popover-foreground: #F1F2EF;
+    --primary: #E5E8E3;
+    --primary-foreground: #08090A;
+    --secondary: #171B1D;
+    --secondary-foreground: #F1F2EF;
+    --muted: #0B0D0F;
+    --muted-foreground: #959D9C;
+    --accent: #171B1D;
+    --accent-foreground: #F1F2EF;
+    --destructive: #C46B6B;
+    --destructive-foreground: #F1F2EF;
+    --border: #282D30;
+    --input: #282D30;
+    --ring: #4A5257;
+    --spleen-accent: #C8FA62;
+    --spleen-accent-muted: #829E4B;
+    --chart-1: #959D9C;
+    --chart-2: #829E4B;
+    --chart-3: #E5E8E3;
+    --chart-4: #C46B6B;
+    --chart-5: #C9A45C;
+    --sidebar: #0B0D0F;
+    --sidebar-foreground: #F1F2EF;
+    --sidebar-primary: #E5E8E3;
+    --sidebar-primary-foreground: #08090A;
+    --sidebar-accent: #171B1D;
+    --sidebar-accent-foreground: #F1F2EF;
+    --sidebar-border: #282D30;
+    --sidebar-ring: #4A5257;
   }
 
   * {
@@ -224,7 +228,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    font-family: var(--font-sans, "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
     font-weight: var(--ui-regular-font-weight, 400);
   }
 
@@ -246,13 +250,13 @@
   }
 
   .font-sans {
-    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
+    font-family: var(--font-sans, "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
   }
 
   .font-mono,
   code,
   pre {
-    font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'Liberation Mono', Menlo, monospace) !important;
+    font-family: var(--font-mono, "Geist Mono Variable", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace) !important;
   }
 
   .markdown-content details {
@@ -439,13 +443,19 @@
 }
 
 .oc-glass-popover {
-  --oc-glass-color: var(--surface-elevated);
+  --oc-glass-color: var(--surface-overlay, var(--surface-elevated));
   --oc-glass-opacity: var(--oc-glass-popover-opacity);
   --oc-glass-blur: var(--oc-glass-popover-blur);
 }
 
+.dark .oc-glass-popover {
+  --oc-glass-color: var(--surface-overlay, #0C0E10);
+  --oc-glass-opacity: 98%;
+  --oc-glass-blur: 18px;
+}
+
 .oc-glass-tooltip {
-  --oc-glass-color: var(--surface-elevated);
+  --oc-glass-color: var(--surface-overlay, var(--surface-elevated));
   --oc-glass-opacity: var(--oc-glass-tooltip-opacity);
 }
 
@@ -1133,9 +1143,9 @@ html[data-glass-redraw-guard] body::before {
   --markdown-heading4-size: var(--text-markdown);
   --markdown-heading5-size: var(--text-markdown);
   --markdown-heading6-size: var(--text-markdown);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-heading: var(--font-sans);
-  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
+  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "SFMono-Regular", "Menlo", "Cascadia Mono", "Segoe UI Mono", monospace;
   --font-family-sans: var(--font-sans);
   --font-family-mono: var(--font-mono);
 }

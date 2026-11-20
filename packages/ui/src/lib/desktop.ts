@@ -659,6 +659,25 @@ export const getDesktopHomeDirectory = async (): Promise<string | null> => {
   return null;
 };
 
+const extractPickedDialogPath = (selected: unknown): string | null => {
+  if (typeof selected === 'string') {
+    return selected.trim() || null;
+  }
+  if (selected && typeof selected === 'object' && !Array.isArray(selected)) {
+    const record = selected as { canceled?: unknown; filePaths?: unknown; path?: unknown };
+    if (record.canceled === true) {
+      return null;
+    }
+    if (Array.isArray(record.filePaths) && typeof record.filePaths[0] === 'string') {
+      return record.filePaths[0].trim() || null;
+    }
+    if (typeof record.path === 'string') {
+      return record.path.trim() || null;
+    }
+  }
+  return null;
+};
+
 export const requestDirectoryAccess = async (
   directoryPath: string
 ): Promise<{ success: boolean; path?: string; projectId?: string; error?: string }> => {
@@ -670,10 +689,11 @@ export const requestDirectoryAccess = async (
         title: 'Select Working Directory',
         ...(directoryPath ? { defaultPath: directoryPath } : {}),
       });
-      if (!selected || typeof selected !== 'string') {
+      const resolvedPath = extractPickedDialogPath(selected);
+      if (!resolvedPath) {
         return { success: false, error: 'Directory selection cancelled' };
       }
-      return { success: true, path: selected };
+      return { success: true, path: resolvedPath };
     } catch (error) {
       console.warn('Failed to request directory access', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -705,13 +725,14 @@ export const requestFileAccess = async (
       if (!selected) {
         return { success: false, error: 'File selection cancelled' };
       }
+      const extracted = extractPickedDialogPath(selected);
       if (typeof selected === 'string') {
-        return { success: true, path: selected };
+        return extracted ? { success: true, path: extracted } : { success: false, error: 'File selection cancelled' };
       }
       if (!isDesktopFileGrantResult(selected)) {
         return { success: false, error: 'File selection cancelled' };
       }
-      const path = typeof selected.path === 'string' ? selected.path : '';
+      const path = extracted ?? '';
       if (!path) {
         return { success: false, error: 'File selection cancelled' };
       }
@@ -1036,5 +1057,78 @@ export const fetchDesktopInstalledApps = async (
   } catch (error) {
     console.warn('Failed to fetch installed apps', error);
     return { apps: [], success: false, hasCache: false, isCacheStale: false };
+  }
+};
+
+export type UcVerificationCookieResult = {
+  ok: boolean;
+  cookieHeader: string;
+  count: number;
+  error?: string;
+};
+
+export const openUcVerificationWindow = async (url?: string): Promise<boolean> => {
+  if (!hasDesktopInvoke() || !isDesktopLocalOriginActive()) {
+    return false;
+  }
+
+  try {
+    await invokeDesktop('desktop_uc_open_window', {
+      url: url?.trim() || 'https://www.unknowncheats.me/forum/',
+    });
+    return true;
+  } catch (error) {
+    console.warn('Failed to open UnknownCheats verification window', error);
+    return false;
+  }
+};
+
+export const readUcVerificationCookies = async (): Promise<UcVerificationCookieResult> => {
+  if (!hasDesktopInvoke() || !isDesktopLocalOriginActive()) {
+    return { ok: false, cookieHeader: '', count: 0, error: 'desktop_ipc_unavailable' };
+  }
+
+  try {
+    const result = await invokeDesktop<UcVerificationCookieResult>('desktop_uc_read_cookies');
+    if (!result || typeof result !== 'object') {
+      return { ok: false, cookieHeader: '', count: 0, error: 'invalid_response' };
+    }
+    return {
+      ok: result.ok === true,
+      cookieHeader: typeof result.cookieHeader === 'string' ? result.cookieHeader : '',
+      count: typeof result.count === 'number' ? result.count : 0,
+      error: typeof result.error === 'string' ? result.error : undefined,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      cookieHeader: '',
+      count: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
+export const openDesktopBrowserWindow = async (url: string, title?: string): Promise<boolean> => {
+  const trimmed = url?.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (!hasDesktopInvoke() || !isDesktopLocalOriginActive()) {
+    if (typeof window !== 'undefined') {
+      window.open(trimmed, '_blank', 'noopener,noreferrer');
+    }
+    return false;
+  }
+
+  try {
+    await invokeDesktop('desktop_open_browser_window', {
+      url: trimmed,
+      title: title?.trim() || undefined,
+    });
+    return true;
+  } catch (error) {
+    console.warn('Failed to open desktop browser window', error);
+    return false;
   }
 };

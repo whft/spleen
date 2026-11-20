@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { toast } from '@/components/ui';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { invokeDesktopCommand } from '@/lib/desktopNative';
+import { openDesktopBrowserWindow } from '@/lib/desktop';
 import { useI18n } from '@/lib/i18n';
 import { cn, isMacOS } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/url';
@@ -87,7 +88,7 @@ const subscribeDocumentVisibility = (onChange: () => void): (() => void) => {
 const isDocumentVisible = (): boolean => document.visibilityState === 'visible';
 
 const isChromiumHost = (): boolean => (
-  typeof window !== 'undefined' && Boolean(window.__SPLEEN_DESKTOP_RUNTIME__)
+  typeof document !== 'undefined' && 'executeJavaScript' in document.createElement('webview')
 );
 
 // external: https://www.electronjs.org/docs/latest/api/web-contents#contentssetzoomlevellevel Chromium maps zoom level to factor as 1.2 ^ level.
@@ -1320,6 +1321,7 @@ const IframeBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory: tabs
         onForward={() => goTo(historyIndex + 1)}
         onReload={reload}
         onOpenExternal={() => void openExternalUrl(loadedUrl || address)}
+        onOpenNativeWindow={() => void openDesktopBrowserWindow(loadedUrl || address)}
         addressMark={addressMarkOf(directory, address, spaceMark ?? t('contextPanel.browser.spaceAddress'))}
         canOpenExternal={!unreachableUrl && !tunnelFailedUrl && !(isCapacitorApp() && isRemoteWebLoopbackUrl(address, directory))}
         canGoBack={historyIndex > 0 || (showHome && historyIndex === 0)}

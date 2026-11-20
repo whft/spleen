@@ -21,16 +21,18 @@ import { TeamLauncher } from './TeamLauncher';
 type SubTab = 'roster' | 'board' | 'tasks';
 
 const STATUS_BADGE: Record<string, string> = {
-  active: 'bg-emerald-500/15 text-emerald-400',
-  running: 'bg-blue-500/15 text-blue-400',
-  working: 'bg-blue-500/15 text-blue-400',
-  completed: 'bg-emerald-500/15 text-emerald-400',
-  pending: 'bg-muted text-muted-foreground',
-  idle: 'bg-muted text-muted-foreground',
-  failed: 'bg-destructive/15 text-destructive',
-  stopped: 'bg-muted text-muted-foreground',
-  cancelled: 'bg-muted text-muted-foreground',
+  active: 'border border-border bg-secondary text-foreground',
+  running: 'border border-border bg-secondary text-foreground',
+  working: 'border border-border bg-secondary text-foreground',
+  completed: 'border border-border/80 bg-card text-muted-foreground',
+  pending: 'border border-border/60 bg-muted text-muted-foreground',
+  idle: 'border border-border/60 bg-muted text-muted-foreground',
+  failed: 'border border-destructive/30 bg-destructive/12 text-destructive',
+  stopped: 'border border-border/60 bg-muted text-muted-foreground',
+  cancelled: 'border border-border/60 bg-muted text-muted-foreground',
 };
+
+const isLiveStatus = (status: string): boolean => status === 'active' || status === 'running' || status === 'working';
 
 export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({ directory, visible = true }) => {
   const { t } = useI18n();
@@ -210,7 +212,8 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate font-semibold">{activeTeam.name}</span>
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[activeTeam.status] ?? 'bg-muted'}`}>
+                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[activeTeam.status] ?? 'bg-muted'}`}>
+                    {isLiveStatus(activeTeam.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--spleen-accent,#C8FA62)]" /> : null}
                     {activeTeam.status}
                   </span>
                   {activeTeam.dagSummary ? (
@@ -279,7 +282,8 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                       <div className="flex items-center gap-2 font-medium">
                         <span>{member.name}</span>
                         <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{member.role}</span>
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] ${STATUS_BADGE[member.status] ?? 'bg-muted'}`}>
+                        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${STATUS_BADGE[member.status] ?? 'bg-muted'}`}>
+                          {isLiveStatus(member.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--spleen-accent,#C8FA62)]" /> : null}
                           {member.status}
                         </span>
                       </div>
@@ -417,7 +421,8 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="font-medium">{task.title}</span>
                             <span className="font-mono text-[10px] text-muted-foreground">{task.id}</span>
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[task.status] ?? 'bg-muted'}`}>
+                            <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[task.status] ?? 'bg-muted'}`}>
+                              {isLiveStatus(task.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--spleen-accent,#C8FA62)]" /> : null}
                               {task.status}
                             </span>
                             {member ? (

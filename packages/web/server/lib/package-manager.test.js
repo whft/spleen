@@ -69,7 +69,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=true when both API and npm confirm a newer version', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({
           latestVersion: '1.10.0',
@@ -105,7 +105,7 @@ describe('checkForUpdates', () => {
     // Only the mirror is mocked. A stray call to registry.npmjs.org would reject,
     // drop npm cross-verification, and flip available to false.
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({
           latestVersion: '1.10.0',
@@ -146,7 +146,7 @@ describe('checkForUpdates', () => {
     process.env.npm_config_registry = '';
     process.env.NPM_CONFIG_REGISTRY = 'https://test-user:test-password@mirror.example.com/npm/';
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({ latestVersion: '1.10.0', updateAvailable: true }),
       })
@@ -175,7 +175,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=false when API claims update but npm has same version', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({
           latestVersion: '1.10.0',
@@ -197,7 +197,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=false when npm only has a prerelease of the current version', async () => {
     fetchMock
-      .when('api.spleen.invalid', Promise.reject(new Error('Network error')))
+      .when('api.github.com/repos/whft/spleen/releases/latest', Promise.reject(new Error('Network error')))
       .when('registry.npmjs.org', {
         ok: true,
         json: async () => ({
@@ -212,7 +212,7 @@ describe('checkForUpdates', () => {
 
   it('accepts electron desktop update claims without npm cross-checking', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({
           latestVersion: '1.10.0',
@@ -241,7 +241,7 @@ describe('checkForUpdates', () => {
 
   it('still checks for updates in enterprise mode but reports no usage', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({ latestVersion: '1.10.0', updateAvailable: true, releaseNotes: '' }),
       });
@@ -265,11 +265,11 @@ describe('checkForUpdates', () => {
 
   it('offers a Canary Android app the newest APK of the canary pre-release', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({ latestVersion: '2.5.3', updateAvailable: false }),
       })
-      .when('api.github.com/repos/spleen/spleen/releases/tags/canary', {
+      .when('api.github.com/repos/whft/spleen/releases/tags/canary', {
         ok: true,
         json: async () => ({
           assets: [
@@ -312,17 +312,17 @@ describe('checkForUpdates', () => {
 
   it('offers the Canary APK from the R2 mirror once the mirror has it', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({ latestVersion: '2.5.3', updateAvailable: false }),
       })
-      .when('api.github.com/repos/spleen/spleen/releases/tags/canary', {
+      .when('api.github.com/repos/whft/spleen/releases/tags/canary', {
         ok: true,
         json: async () => ({
           assets: [{ name: 'Spleen-2.5.4-canary.20261031.5-29858440-android.apk', browser_download_url: 'https://downloads.example/new.apk' }],
         }),
       })
-      .when('github.com/whft/spleen/releases/desktop/canary/Spleen-2.5.4-canary.20261031.5-29858440-android.apk', { ok: true });
+      .when('github.com/whft/spleen/releases/download/desktop/canary/Spleen-2.5.4-canary.20261031.5-29858440-android.apk', { ok: true });
 
     const result = await checkForUpdates({
       appType: 'mobile-capacitor',
@@ -334,11 +334,11 @@ describe('checkForUpdates', () => {
 
   it('reports an unreadable canary pre-release as an error for a Canary Android app', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({ latestVersion: '2.5.3', updateAvailable: false }),
       })
-      .when('api.github.com/repos/spleen/spleen/releases/tags/canary', { ok: false, status: 503 });
+      .when('api.github.com/repos/whft/spleen/releases/tags/canary', { ok: false, status: 503 });
 
     const result = await checkForUpdates({
       appType: 'mobile-capacitor',
@@ -352,7 +352,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=false when API claims update but npm is behind', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: true,
         json: async () => ({
           latestVersion: '1.10.0',
@@ -375,7 +375,7 @@ describe('checkForUpdates', () => {
   // --- Scenario: API says no update, npm agrees ---
 
   it('returns available=false when API says no update and versions match', async () => {
-    fetchMock.when('api.spleen.invalid', {
+    fetchMock.when('api.github.com/repos/whft/spleen/releases/latest', {
       ok: true,
       json: async () => ({
         latestVersion: '1.9.10',
@@ -392,7 +392,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=true from npm fallback when API is unreachable and npm has newer version', async () => {
     fetchMock
-      .when('api.spleen.invalid', Promise.reject(new Error('Network error')))
+      .when('api.github.com/repos/whft/spleen/releases/latest', Promise.reject(new Error('Network error')))
       .when('registry.npmjs.org', {
         ok: true,
         json: async () => ({
@@ -412,7 +412,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=false from npm fallback when API is unreachable and versions match', async () => {
     fetchMock
-      .when('api.spleen.invalid', Promise.reject(new Error('Network error')))
+      .when('api.github.com/repos/whft/spleen/releases/latest', Promise.reject(new Error('Network error')))
       .when('registry.npmjs.org', {
         ok: true,
         json: async () => ({
@@ -429,7 +429,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=false when API returns non-ok status and versions match on npm', async () => {
     fetchMock
-      .when('api.spleen.invalid', {
+      .when('api.github.com/repos/whft/spleen/releases/latest', {
         ok: false,
         status: 500,
         json: async () => ({}),
@@ -450,7 +450,7 @@ describe('checkForUpdates', () => {
 
   it('returns available=false when both sources are unreachable', async () => {
     fetchMock
-      .when('api.spleen.invalid', Promise.reject(new Error('Network error')))
+      .when('api.github.com/repos/whft/spleen/releases/latest', Promise.reject(new Error('Network error')))
       .when('registry.npmjs.org', Promise.reject(new Error('Registry unreachable')));
 
     const result = await checkForUpdates({ currentVersion: '1.9.10' });
@@ -470,7 +470,7 @@ describe('checkForUpdates on the update channels', () => {
   };
   const serveDistTags = (distTags) => {
     fetchMock
-      .when('api.spleen.invalid', { ok: true, json: async () => ({ latestVersion: '2.5.3', updateAvailable: true }) })
+      .when('api.github.com/repos/whft/spleen/releases/latest', { ok: true, json: async () => ({ latestVersion: '2.5.3', updateAvailable: true }) })
       .when('registry.npmjs.org', { ok: true, json: async () => ({ 'dist-tags': distTags }) });
   };
 
@@ -498,7 +498,7 @@ describe('checkForUpdates on the update channels', () => {
 
     expect(result).toMatchObject({ available: true, version: '2.5.4-canary.20261031.7', updateCommand: 'spleen update' });
     // The website still counts the check-in.
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('api.spleen.invalid'))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('api.github.com/repos/whft/spleen/releases/latest'))).toBe(true);
   });
 
   it('offers the next night and not the same or an earlier one', async () => {
@@ -523,7 +523,7 @@ describe('checkForUpdates on the update channels', () => {
   it('reports an unreadable registry as a failed check, not as up to date', async () => {
     pickChannel('canary');
     fetchMock
-      .when('api.spleen.invalid', { ok: true, json: async () => ({ latestVersion: '2.5.3', updateAvailable: false }) })
+      .when('api.github.com/repos/whft/spleen/releases/latest', { ok: true, json: async () => ({ latestVersion: '2.5.3', updateAvailable: false }) })
       .when('registry.npmjs.org', Promise.reject(new Error('Registry unreachable')));
 
     const result = await checkForUpdates({ currentVersion: '2.5.3' });

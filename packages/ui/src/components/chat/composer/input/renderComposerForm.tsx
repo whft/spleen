@@ -1,4 +1,5 @@
 import type { useI18n } from '@/lib/i18n';
+import { SpleenMonolith3D } from '@/components/ui/SpleenMonolith3D';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
@@ -226,7 +227,8 @@ export function renderComposerForm({
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
             {showDesktopDraftPresentation ? (
-                <div className={cn('chat-input-column mb-7 text-center', draftPresentationClassName)}>
+                <div className={cn('chat-input-column mb-7 flex flex-col items-center text-center', draftPresentationClassName)}>
+                    <SpleenMonolith3D size={104} className="mb-3" />
                     <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
                         {renderDraftTitle(draftHeading, draftProjectLabel)}
                     </h1>

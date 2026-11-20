@@ -280,8 +280,8 @@ function TooltipContent({
           <BaseTooltip.Popup
             data-slot="tooltip-content"
             className={cn(
-              surface === "card" ? "oc-glass-popover oc-glass-floating" : "oc-glass-tooltip border border-edge",
-              "text-[var(--surface-elevated-foreground)] oc-popup-motion data-[starting-style]:opacity-0 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[ending-style]:scale-95 data-[instant]:transition-none data-[instant]:duration-0 z-50 w-fit origin-[var(--transform-origin)] rounded-xl px-3 py-1.5 typography-meta text-balance",
+              surface === "card" ? "oc-glass-popover oc-glass-floating border border-border/80" : "oc-glass-tooltip border border-border/80",
+              "text-[var(--surface-elevated-foreground)] oc-popup-motion data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.97] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.97] data-[instant]:transition-none data-[instant]:duration-0 z-50 w-fit origin-[var(--transform-origin)] rounded-lg px-2.5 py-1 typography-meta text-balance",
               showArrow ? "overflow-visible" : "overflow-hidden",
               className
             )}

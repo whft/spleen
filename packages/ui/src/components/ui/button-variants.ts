@@ -44,7 +44,7 @@ const TINT_INFO = [
 export const buttonVariants = cva(
   [
     "group relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md typography-ui-label font-medium shrink-0 select-none",
-    "transition-[background-color,border-color,color,opacity] duration-150 ease-out outline-none",
+    "transition-[background-color,border-color,color,opacity,transform] duration-[130ms] ease-out outline-none active:scale-[0.985]",
     "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
     "disabled:pointer-events-none disabled:opacity-50",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",

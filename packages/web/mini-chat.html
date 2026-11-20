@@ -46,7 +46,7 @@
           // stylesheet's default background in between, a different colour
           // from the window's. Set on the root, as mobile.html does; the
           // theme system's own variables take over once it runs.
-          var background = isDark ? (splashBgDark || '#0B0F14') : (splashBgLight || '#F3EFE7');
+          var background = isDark ? (splashBgDark || '#08090A') : (splashBgLight || '#F4F5F2');
           document.documentElement.style.setProperty('--background', background);
           document.documentElement.style.backgroundColor = background;
         } catch (error) {
@@ -59,8 +59,8 @@
       /* The backdrop colour of the screens shown before the theme has applied
          (the sign-in check). */
       :root {
-        --splash-background-dark: #0B0F14;
-        --splash-background-light: #F3EFE7;
+        --splash-background-dark: #08090A;
+        --splash-background-light: #F4F5F2;
         --splash-background: var(--splash-background-dark);
       }
       html[data-splash-variant='light'] { --splash-background: var(--splash-background-light); }
