@@ -6,7 +6,7 @@ import { ReleaseNotesBody } from '@/components/update/ReleaseNotesBody';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { formatCanaryBuild, parseCanaryVersion } from '@/lib/updateChannel';
 
-const GITHUB_RELEASES_URL = 'https://github.com/spleen/spleen/releases';
+const GITHUB_RELEASES_URL = 'https://github.com/whft/spleen/releases';
 
 const TITLE_KEYS = {
   installed: {

@@ -7,7 +7,7 @@ import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createLimitFailoverRuntime } from './runtime.js';
-import { classifyLimitFailure, DEFAULT_EXHAUSTION_MS, parseLimitResetAt, parseModelSetting } from './policy.js';
+import { classifyLimitFailure, DEFAULT_EXHAUSTION_MS, isLimitError, parseLimitResetAt, parseModelSetting } from './policy.js';
 
 const NOW = Date.parse('2026-10-20T10:00:00.000Z');
 const ACCOUNT_A = { id: 'cred_a', label: 'Work' };
@@ -63,7 +63,7 @@ describe('limit failure classification', () => {
   });
 
   it('counts OpenCode free-tier exhaustion and Console spend limits as quota errors', () => {
-    for (const type of ['provider.free-limit', 'provider.budget-limit', 'provider.model-budget-limit']) {
+    for (const type of ['provider.free-limit', 'provider.budget-limit', 'provider.model-budget-limit', 'provider.go-limit', 'provider.chatgpt-limit']) {
       const report = quotaReport({ providerID: 'opencode', error: { type, message: '', body: null } });
       expect(classifyLimitFailure(report, NOW)).toEqual({ resetAt: NOW + DEFAULT_EXHAUSTION_MS });
     }
@@ -419,5 +419,45 @@ describe('limit failover plugin', () => {
       expect(failed.decision).toEqual({ retry: false });
       expect(ctx.credential.activate).not.toHaveBeenCalled();
     });
+  });
+
+  it('detects HTTP 429 APIErrors, natural-language reset durations, and invokes onFailoverApplied', async () => {
+    expect(isLimitError({ type: 'APIError', status: 429, message: 'Too many requests' })).toBe(true);
+    expect(isLimitError({ type: 'APIError', message: 'You hit the usage limit, try again in 4 minutes' })).toBe(true);
+    expect(isLimitError({ type: 'provider.auth', status: 401, message: 'rate limit? no invalid_api_key' })).toBe(false);
+    expect(isLimitError({ type: 'provider.internal', message: 'socket hang up' })).toBe(false);
+
+    expect(parseLimitResetAt({ message: 'Try again in 4 minutes' }, NOW)).toBe(NOW + 4 * 60_000);
+    expect(parseLimitResetAt({ message: 'Quota exhausted. Resets in 2h 15m.' }, NOW)).toBe(NOW + (2 * 60 + 15) * 60_000);
+    expect(parseLimitResetAt({ message: 'Please wait 90 seconds before retrying' }, NOW)).toBe(NOW + 90_000);
+    expect(parseLimitResetAt({ message: 'Rate limit exceeded, retry after 45s' }, NOW)).toBe(NOW + 45_000);
+    expect(parseLimitResetAt({ message: 'Resets at 2026-10-20T11:30:00Z' }, NOW)).toBe(Date.parse('2026-10-20T11:30:00Z'));
+
+    const generic429 = classifyLimitFailure({
+      sessionID: 'ses_2',
+      providerID: 'anthropic',
+      modelID: 'claude-opus',
+      error: { type: 'APIError', status: 429, message: 'Usage limit reached, try again in 10 minutes' },
+      proposed: { retry: false },
+      credentials: [],
+    }, NOW);
+    expect(generic429).toEqual({ resetAt: NOW + 10 * 60_000 });
+
+    const onFailoverApplied = vi.fn();
+    const runtime = createLimitFailoverRuntime({
+      fsPromises: fs,
+      path,
+      instanceDir: os.tmpdir(),
+      readSettings: async () => ({ accountSwitchProviders: ['anthropic'] }),
+      authorizeRequest: () => true,
+      broadcastUiEvent: vi.fn(),
+      onFailoverApplied,
+      now: () => NOW,
+    });
+    const decision = await runtime.decide(quotaReport());
+    expect(decision.action).toBe('activate-credential');
+    expect(runtime.settle(decision.ticket, true)).toBe(true);
+    expect(onFailoverApplied).toHaveBeenCalledTimes(1);
+    expect(onFailoverApplied.mock.calls[0][0]).toMatchObject({ kind: 'account', sessionId: 'ses_1' });
   });
 });

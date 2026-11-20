@@ -20,6 +20,20 @@ import { isListedAsChild, listedSession } from './listed-session.js';
 import { isPinnedMetadata, userStatePatch } from '../session-work/state.js';
 import { z } from 'zod';
 import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploads.js';
+import settingsRegistry from '../opencode/settings-registry.json' with { type: 'json' };
+
+const UI_CONTROL_COMMANDS = new Set([
+  'open_surface',
+  'close_surface',
+  'open_settings',
+  'close_settings',
+  'focus_session',
+  'toggle_sidebar',
+  'set_theme',
+  'notify',
+]);
+
+const isSecretRegistryKey = (key, spec) => Boolean(spec?.secret || /password|token/i.test(key));
 
 const dialogAnswerSchema = z.object({ accept: z.boolean(), value: z.string().optional() });
 
@@ -304,6 +318,13 @@ export const createSpleenControlService = (dependencies) => {
     sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
     now = Date.now,
     isHiddenSession = () => false,
+    persistSettings = null,
+    broadcastUiEvent = () => {},
+    teamsService = null,
+    sessionRecoveryRuntime = null,
+    getSessionRecoveryRuntime = null,
+    getDiscordClient = () => null,
+    getUnknownCheatsClient = () => null,
   } = dependencies;
 
   const wait = (duration, signal) => {
@@ -1174,6 +1195,172 @@ export const createSpleenControlService = (dependencies) => {
           directory: asNonEmptyString(input.directory) || asNonEmptyString(contextDirectory),
           sessionId: asNonEmptyString(options.contextSessionId),
         });
+      }
+      if (action === 'session.stop') {
+        const explicitSessionID = asNonEmptyString(input.sessionId);
+        const targetSessionID = explicitSessionID || asNonEmptyString(options.contextSessionId);
+        if (!targetSessionID) throw new SpleenControlError('sessionId is required', 400);
+        await stopSession(targetSessionID);
+        return { stopped: true, sessionId: targetSessionID };
+      }
+      if (action === 'settings.list') {
+        const current = (await Promise.resolve(readSettingsFromDiskMigrated()).catch(() => ({}))) ?? {};
+        const fields = settingsRegistry?.fields ?? {};
+        const entries = Object.entries(fields)
+          .filter(([key, spec]) => !isSecretRegistryKey(key, spec))
+          .map(([key, spec]) => ({
+            key,
+            scope: spec.scope,
+            perSurface: spec.perSurface === true,
+            computed: spec.computed === true,
+            derived: spec.derived === true,
+            value: Object.hasOwn(current, key) ? current[key] : undefined,
+          }));
+        return { count: entries.length, settings: entries };
+      }
+      if (action === 'settings.read') {
+        const current = (await Promise.resolve(readSettingsFromDiskMigrated()).catch(() => ({}))) ?? {};
+        const fields = settingsRegistry?.fields ?? {};
+        const requested = Array.isArray(input.keys) ? input.keys.map((k) => asNonEmptyString(k)).filter(Boolean) : null;
+        const result = {};
+        if (requested && requested.length > 0) {
+          for (const key of requested) {
+            if (isSecretRegistryKey(key, fields[key])) continue;
+            if (Object.hasOwn(current, key)) result[key] = current[key];
+          }
+        } else {
+          for (const [key, value] of Object.entries(current)) {
+            if (isSecretRegistryKey(key, fields[key])) continue;
+            result[key] = value;
+          }
+        }
+        return { settings: result };
+      }
+      if (action === 'settings.update') {
+        if (!persistSettings) throw new SpleenControlError('Settings persistence is unavailable on this server', 503);
+        const changes = input.changes && typeof input.changes === 'object' && !Array.isArray(input.changes) ? input.changes : null;
+        if (!changes || Object.keys(changes).length === 0) {
+          throw new SpleenControlError('changes object with at least one setting key is required', 400);
+        }
+        const fields = settingsRegistry?.fields ?? {};
+        for (const key of Object.keys(changes)) {
+          const spec = fields[key];
+          if (!spec) throw new SpleenControlError(`Unknown setting: ${key}`, 400);
+          if (isSecretRegistryKey(key, spec) || spec.computed === true || spec.derived === true) {
+            throw new SpleenControlError(`Setting "${key}" cannot be modified by an agent`, 403);
+          }
+        }
+        const saved = await persistSettings(changes);
+        const sanitized = {};
+        for (const key of Object.keys(changes)) {
+          if (!isSecretRegistryKey(key, fields[key]) && saved && Object.hasOwn(saved, key)) {
+            sanitized[key] = saved[key];
+          }
+        }
+        broadcastUiEvent({ type: 'spleen:settings-changed', properties: { keys: Object.keys(changes) } });
+        return { updated: Object.keys(changes), settings: sanitized };
+      }
+      if (action === 'ui.control') {
+        const command = asNonEmptyString(input.command);
+        if (!command || !UI_CONTROL_COMMANDS.has(command)) {
+          throw new SpleenControlError(`command must be one of: ${Array.from(UI_CONTROL_COMMANDS).join(', ')}`, 400);
+        }
+        const payload = {
+          command,
+          ...(asNonEmptyString(input.surface) ? { surface: input.surface.trim() } : {}),
+          ...(asNonEmptyString(input.section) ? { section: input.section.trim() } : {}),
+          ...(asNonEmptyString(input.sessionId) ? { sessionId: input.sessionId.trim() } : {}),
+          ...(asNonEmptyString(input.themeId) ? { themeId: input.themeId.trim() } : {}),
+          ...(asNonEmptyString(input.title) ? { title: input.title.trim() } : {}),
+          ...(asNonEmptyString(input.message) ? { message: input.message.trim() } : {}),
+          ...(asNonEmptyString(input.level) ? { level: input.level.trim() } : {}),
+        };
+        broadcastUiEvent({ type: 'spleen:ui-control', properties: payload });
+        return { dispatched: true, ...payload };
+      }
+      if (action.startsWith('recovery.')) {
+        const recovery = getSessionRecoveryRuntime?.() ?? sessionRecoveryRuntime;
+        if (!recovery) throw new SpleenControlError('Session recovery runtime is unavailable', 503);
+        if (action === 'recovery.status') return recovery.status();
+        if (action === 'recovery.wake') return recovery.wakeWaitingProvider();
+        const sid = asNonEmptyString(input.sessionId) || asNonEmptyString(options.contextSessionId);
+        if (!sid) throw new SpleenControlError('sessionId is required', 400);
+        if (action === 'recovery.resume') return recovery.resumeNow(sid);
+        if (action === 'recovery.dismiss') return recovery.dismiss(sid);
+      }
+      if (action.startsWith('chat.')) {
+        if (!teamsService) throw new SpleenControlError('Connected chats service is unavailable', 503);
+        if (action === 'chat.link') {
+          const sourceSessionId = asNonEmptyString(input.sourceSessionId) || asNonEmptyString(options.contextSessionId);
+          return await teamsService.linkSessions({
+            sourceSessionId,
+            targetSessionId: asNonEmptyString(input.targetSessionId) || asNonEmptyString(input.sessionId),
+            relation: asNonEmptyString(input.relation) || 'reference',
+            note: asNonEmptyString(input.note) || '',
+          });
+        }
+        if (action === 'chat.links') {
+          return { links: await teamsService.listLinks(asNonEmptyString(input.sessionId) || asNonEmptyString(options.contextSessionId)) };
+        }
+        if (action === 'chat.unlink') {
+          return await teamsService.unlinkSessions(asNonEmptyString(input.linkId));
+        }
+      }
+      if (action.startsWith('team.')) {
+        if (!teamsService) throw new SpleenControlError('AI Teams service is unavailable', 503);
+        if (action === 'team.list') return { teams: await teamsService.listTeams(), presets: Object.keys(teamsService.presets) };
+        if (action === 'team.create') {
+          const directory = asNonEmptyString(input.directory) || asNonEmptyString(contextDirectory);
+          const goal = asNonEmptyString(input.teamGoal) || asNonEmptyString(input.goal) || '';
+          return await teamsService.createTeam({ ...input, goal, directory });
+        }
+        const teamId = asNonEmptyString(input.teamId);
+        if (!teamId) throw new SpleenControlError('teamId is required', 400);
+        if (action === 'team.get') return await teamsService.getTeam(teamId);
+        if (action === 'team.stop') return await teamsService.stopTeam(teamId);
+        if (action === 'team.addMember') return await teamsService.addMember(teamId, input);
+        if (action === 'team.post') {
+          return await teamsService.postBoardMessage({
+            teamId,
+            author: asNonEmptyString(input.author) || asNonEmptyString(options.contextSessionId) || 'orchestrator',
+            body: asNonEmptyString(input.body) || asNonEmptyString(input.message),
+            mentions: Array.isArray(input.mentions) ? input.mentions : undefined,
+          });
+        }
+        if (action === 'team.addTask') return await teamsService.addTask(teamId, input);
+        const taskId = asNonEmptyString(input.taskId);
+        if (!taskId) throw new SpleenControlError('taskId is required', 400);
+        if (action === 'team.retryTask') return await teamsService.retryTask(teamId, taskId);
+        if (action === 'team.cancelTask') return await teamsService.cancelTask(teamId, taskId);
+      }
+      if (action.startsWith('discord.')) {
+        const discord = await Promise.resolve(getDiscordClient());
+        if (!discord) throw new SpleenControlError('Discord reader is unavailable', 503);
+        if (action === 'discord.status') return await discord.getStatus();
+        if (action === 'discord.guilds') return { guilds: await discord.listGuilds() };
+        if (action === 'discord.channels') {
+          const guildId = asNonEmptyString(input.guildId);
+          return { channels: guildId ? await discord.listGuildChannels(guildId) : await discord.listDms() };
+        }
+        const channelId = asNonEmptyString(input.channelId);
+        if (!channelId) throw new SpleenControlError('channelId is required', 400);
+        if (action === 'discord.messages') {
+          return { messages: await discord.getMessages(channelId, { limit: input.limit, before: input.before }) };
+        }
+        if (action === 'discord.send') {
+          return await discord.sendMessage(channelId, {
+            content: asNonEmptyString(input.content) || asNonEmptyString(input.message) || asNonEmptyString(input.body),
+            replyToMessageId: asNonEmptyString(input.replyToMessageId) || undefined,
+          });
+        }
+      }
+      if (action.startsWith('uc.')) {
+        const uc = await Promise.resolve(getUnknownCheatsClient());
+        if (!uc) throw new SpleenControlError('UnknownCheats reader is unavailable', 503);
+        if (action === 'uc.home') return await uc.getHome();
+        if (action === 'uc.forum') return await uc.getForum({ url: asNonEmptyString(input.url), fid: input.fid, page: input.page });
+        if (action === 'uc.thread') return await uc.getThread({ url: asNonEmptyString(input.url), tid: input.tid, page: input.page });
+        if (action === 'uc.search') return await uc.search({ query: asNonEmptyString(input.query), page: input.page });
       }
       if (action === 'projects.list') return { projects: await projects() };
       if (action === 'models.list') return models();

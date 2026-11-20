@@ -28,7 +28,8 @@ same token.
 2. For `provider.quota`, `provider.free-limit` (OpenCode's own free tier, a
    separate type since OpenCode 2.1.2), `provider.budget-limit` and
    `provider.model-budget-limit` (an OpenCode Console spend limit of the
-   workspace or of one model, separate types since 2.2) and
+   workspace or of one model, separate types since 2.2), `provider.go-limit`
+   and `provider.chatgpt-limit` (the Go and ChatGPT subscription windows) and
    `provider.rate-limit` the plugin
    posts the error with OpenCode's `retryAfterMs`,
    OpenCode's proposed decision, the provider's stored accounts and the active

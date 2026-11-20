@@ -104,6 +104,26 @@ export const appendManagedSkills = (rawConfig, directories) => {
 };
 
 /**
+ * Append instruction files to the `instructions` list of an
+ * `OPENCODE_CONFIG_CONTENT` value, the fallback twin of the managed config
+ * file's `instructions`. The user's files keep their place, and Spleen's file
+ * is not added twice across restarts.
+ *
+ * @param {string | undefined} rawConfig the current `OPENCODE_CONFIG_CONTENT`, JSONC or unset
+ * @param {string[]} files absolute file paths
+ * @returns {string} the merged config as JSON
+ */
+export const appendManagedInstructions = (rawConfig, files) => {
+  const parsed = parseConfigContent(rawConfig, 'managed instructions');
+  if (parsed.instructions !== undefined && !Array.isArray(parsed.instructions)) {
+    throw new Error('OPENCODE_CONFIG_CONTENT instructions must be an array before Spleen can inject its managed instructions');
+  }
+  const configured = Array.isArray(parsed.instructions) ? parsed.instructions : [];
+  parsed.instructions = [...configured.filter((existing) => !files.includes(existing)), ...files];
+  return JSON.stringify(parsed);
+};
+
+/**
  * Add one command to the `commands` map of an `OPENCODE_CONFIG_CONTENT` value,
  * the fallback twin of the managed config file's `commands`. A command the
  * user defined under the same name stays theirs.

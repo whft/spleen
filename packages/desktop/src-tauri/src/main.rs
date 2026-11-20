@@ -167,7 +167,8 @@ fn main() {
             let quit = MenuItemBuilder::with_id("quit", "Quit Spleen").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
             TrayIconBuilder::with_id("spleen-tray")
-                .icon(app.default_window_icon().cloned().ok_or("missing app icon")?)
+                .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
+                .icon_as_template(true)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {

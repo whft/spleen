@@ -4,8 +4,8 @@
 
 Every pull request links an issue, and which issue depends on the change.
 
-- **Bug fix.** Open a [bug report](https://github.com/spleen/spleen/issues/new?template=bug_report.yml), or find the existing one, and put `Fixes #N` in the PR description. You don't need to wait for anyone.
-- **New feature or a change to how something behaves.** Open a [feature request](https://github.com/spleen/spleen/issues/new?template=feature_request.yml) and wait. Building starts after the maintainer marks it `accepted`. Write it in a few sentences of your own: what you were trying to do, what got in your way, what you'd want instead. A long generated write-up with headings, implementation plans and file lists isn't read.
+- **Bug fix.** Open a [bug report](https://github.com/whft/spleen/issues/new?template=bug_report.yml), or find the existing one, and put `Fixes #N` in the PR description. You don't need to wait for anyone.
+- **New feature or a change to how something behaves.** Open a [feature request](https://github.com/whft/spleen/issues/new?template=feature_request.yml) and wait. Building starts after the maintainer marks it `accepted`. Write it in a few sentences of your own: what you were trying to do, what got in your way, what you'd want instead. A long generated write-up with headings, implementation plans and file lists isn't read.
 
 A pull request without a linked bug report or accepted feature request is closed automatically with the `needs-accepted-issue` label. It reopens on its own once its description links one (`Fixes #N`, or `Part of #N` for one piece of a larger feature), or once the linked feature request gets `accepted`. Pull requests that only change documentation or tests don't need an issue. An issue labeled `in-house` is one I'm building myself, so a pull request from outside the core team that links it is closed too.
 
@@ -36,7 +36,7 @@ a PR that mixes unrelated fixes waits for the largest of them.
 ## Getting Started
 
 ```bash
-git clone https://github.com/spleen/spleen.git
+git clone https://github.com/whft/spleen.git
 cd spleen
 bun install
 ```
@@ -389,9 +389,9 @@ You can still help:
 
 - Report bugs. Even "this felt confusing" is useful. Write issues in English (machine translation is fine); reports in other languages wait until someone translates them
 - Test on different devices, browsers, or OS versions
-- Suggest features with a [feature request](https://github.com/spleen/spleen/issues/new?template=feature_request.yml)
-- Answer questions in [Q&A discussions](https://github.com/spleen/spleen/discussions/categories/q-a)
+- Suggest features with a [feature request](https://github.com/whft/spleen/issues/new?template=feature_request.yml)
+- Answer questions in [Q&A discussions](https://github.com/whft/spleen/discussions/categories/q-a)
 
 ## Questions?
 
-Open a [Q&A discussion](https://github.com/spleen/spleen/discussions/categories/q-a).
+Open a [Q&A discussion](https://github.com/whft/spleen/discussions/categories/q-a).

@@ -218,6 +218,41 @@ const notificationPropertiesSchema = z.object({
   toastOnly: z.boolean().optional(),
 });
 
+export const recoverySessionSchema = z.object({
+  sessionID: z.string().min(1),
+  parentSessionID: z.string().nullable().optional().catch(null),
+  directory: z.string().nullable().optional().catch(null),
+  state: z.string().min(1),
+  attempts: z.number().catch(0),
+  providerWaits: z.number().catch(0),
+  nextWakeAt: z.number().nullable().optional().catch(null),
+  resumedAt: z.number().nullable().optional().catch(null),
+  updatedAt: z.number().nullable().optional().catch(null),
+  reason: z.string().nullable().optional().catch(null),
+});
+export const recoveryStatusSchema = z.object({
+  coordinator: z.boolean().catch(false),
+  counts: z.record(z.string(), z.number()).catch({}),
+  sessions: z.array(recoverySessionSchema).catch([]),
+});
+export type RecoveryStatusPayload = z.infer<typeof recoveryStatusSchema>;
+
+const uiControlSchema = z.object({
+  command: z.string().min(1),
+  surface: z.string().optional(),
+  section: z.string().optional(),
+  sessionId: z.string().optional(),
+  themeId: z.string().optional(),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  level: z.enum(['info', 'success', 'warning', 'error']).optional(),
+});
+export type UiControlPayload = z.infer<typeof uiControlSchema>;
+
+const settingsChangedSchema = z.object({
+  keys: z.array(z.string()).catch([]),
+});
+
 type SpleenEvent =
   | { type: 'terminal-sessions-changed' }
   | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
@@ -254,6 +289,10 @@ type SpleenEvent =
   | GuestServiceEvent
   | ThemesChangedEvent
   | LimitFailoverEvent
+  | { type: 'recovery'; payload: RecoveryStatusPayload }
+  | { type: 'settings-changed'; keys: string[] }
+  | { type: 'ui-control'; payload: UiControlPayload }
+  | { type: 'teams-updated'; payload: Record<string, unknown> }
   | ProjectContextChangedEvent
   | SharePageChangedEvent
   | ReceivedPageChangedEvent
@@ -628,6 +667,31 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   if (envelope.type === 'spleen:limit-failover') {
     const parsed = limitFailoverSchema.safeParse(envelope.properties);
     if (parsed.success) for (const listener of listeners) listener({ type: 'limit-failover', failover: parsed.data });
+    return;
+  }
+
+  if (envelope.type === 'spleen:recovery') {
+    const parsed = recoveryStatusSchema.safeParse(envelope.properties);
+    if (parsed.success) for (const listener of listeners) listener({ type: 'recovery', payload: parsed.data });
+    return;
+  }
+
+  if (envelope.type === 'spleen:settings-changed') {
+    const parsed = settingsChangedSchema.safeParse(envelope.properties);
+    const keys = parsed.success ? parsed.data.keys : [];
+    for (const listener of listeners) listener({ type: 'settings-changed', keys });
+    return;
+  }
+
+  if (envelope.type === 'spleen:ui-control') {
+    const parsed = uiControlSchema.safeParse(envelope.properties);
+    if (parsed.success) for (const listener of listeners) listener({ type: 'ui-control', payload: parsed.data });
+    return;
+  }
+
+  if (envelope.type === 'spleen:teams-updated') {
+    const properties = getEventProperties(envelope.properties) ?? {};
+    for (const listener of listeners) listener({ type: 'teams-updated', payload: properties });
     return;
   }
 

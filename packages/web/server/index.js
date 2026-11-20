@@ -81,6 +81,17 @@ import { registerSpleenRoutes } from './lib/opencode/spleen-routes.js';
 import { createSessionRecoveryRuntime } from './lib/session-recovery/runtime.js';
 import { createRecoveryStore } from './lib/session-recovery/store.js';
 import { createRecoveryOpenCodeFetch } from './lib/session-recovery/opencode-fetch.js';
+import { createTeamsStore } from './lib/teams/store.js';
+import { createTeamsService } from './lib/teams/service.js';
+import { createTeamsRuntime } from './lib/teams/runtime.js';
+import { registerTeamsRoutes } from './lib/teams/routes.js';
+import { createDiscordStore } from './lib/discord/store.js';
+import { createDiscordClient } from './lib/discord/client.js';
+import { createDiscordGateway } from './lib/discord/gateway.js';
+import { registerDiscordRoutes } from './lib/discord/routes.js';
+import { createUnknownCheatsStore } from './lib/unknowncheats/store.js';
+import { createUnknownCheatsClient } from './lib/unknowncheats/client.js';
+import { registerUnknownCheatsRoutes } from './lib/unknowncheats/routes.js';
 import { createServerUtilsRuntime } from './lib/opencode/server-utils-runtime.js';
 import { createMcpOAuthSignIn } from './lib/opencode/mcp-oauth.js';
 import { getMcpConfig, listMcpConfigs, updateMcpConfig } from './lib/opencode/mcp.js';
@@ -757,6 +768,9 @@ let exitOnShutdown = true;
 let uiAuthController = null;
 let sessionRecoveryRuntime = null;
 let recoveryStore = null;
+let teamsRuntime = null;
+let discordClientRuntime = null;
+let unknownCheatsRuntime = null;
 let spacesHost = null;
 let activeTunnelController = null;
 let globalWatcherStartPromise = null;
@@ -1667,6 +1681,7 @@ const featureRoutesRuntime = createFeatureRoutesRuntime({
       ? managedConfigRuntime.refreshManagedConfigFile()
       : { updated: false, reason: 'no-managed-opencode' }
   ),
+  onQuotaRefreshed: () => sessionRecoveryRuntime?.wakeWaitingProvider?.(),
 });
 const bootstrapRuntime = createBootstrapRuntime({
   createUiAuth,
@@ -2128,6 +2143,47 @@ const serviceHostApi = createServiceHostApi({
 });
 serviceHostApi.register();
 
+const teamsStore = createTeamsStore({ filePath: path.join(SPLEEN_DATA_DIR, 'teams.json') });
+const readTeamSessionOpenCodeFetch = async (urlPath, directory) => {
+  await waitForOpenCodeReady?.(5_000, 200).catch(() => {});
+  const target = new URL(buildOpenCodeUrl(urlPath, ''));
+  const response = await fetch(target.href, {
+    headers: {
+      ...getOpenCodeAuthHeaders(),
+      ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
+    },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) return null;
+  return response.json().catch(() => null);
+};
+const teamsService = createTeamsService({
+  store: teamsStore,
+  sessionService: spleenSessionService,
+  readSessionStatus: async (sessionId, directory) => {
+    const active = await readTeamSessionOpenCodeFetch('/api/session/active', directory);
+    return active?.[sessionId] ? { type: 'busy' } : { type: 'idle' };
+  },
+  readLastAssistantMessage: async (sessionId, directory) => {
+    const page = await readTeamSessionOpenCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/message?limit=15`, directory);
+    const list = Array.isArray(page?.data) ? page.data : (Array.isArray(page) ? page : []);
+    const lastAssistant = [...list].reverse().find((m) => m?.type === 'assistant');
+    if (!lastAssistant) return null;
+    const text = (Array.isArray(lastAssistant.content) ? lastAssistant.content : [])
+      .filter((p) => p?.type === 'text' && typeof p.text === 'string')
+      .map((p) => p.text)
+      .join('')
+      .trim();
+    const completedAt = Number(lastAssistant?.time?.completed) || Number(lastAssistant?.time?.created) || 0;
+    return completedAt > 0 ? { completedAt, text } : null;
+  },
+  broadcastEvent: (event) => broadcastSpleenUiEvent(event),
+});
+teamsRuntime = createTeamsRuntime({
+  service: teamsService,
+  globalEventHub: globalMessageStreamHub,
+});
+
 const browserUploadStore = createUploadStore();
 const spleenControlService = createSpleenControlService({
   isHiddenSession: (sessionID, record) => hiddenSessions.has(sessionID, record),
@@ -2138,6 +2194,12 @@ const spleenControlService = createSpleenControlService({
   readPendingRequests: () => sessionRuntime.getPendingBlockingRequestsSnapshot(),
   isPermissionAutoAnswered: (sessionId, directory, permissionId) => permissionAutoAcceptRuntime.isPermissionAutoAnswered(sessionId, directory, permissionId),
   readSettingsFromDiskMigrated,
+  persistSettings: (changes) => persistSettings(changes),
+  broadcastUiEvent: (event) => broadcastSpleenUiEvent(event),
+  teamsService: teamsRuntime,
+  getSessionRecoveryRuntime: () => sessionRecoveryRuntime,
+  getDiscordClient: () => discordClientRuntime,
+  getUnknownCheatsClient: () => unknownCheatsRuntime,
   sanitizeProjects,
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
@@ -2373,6 +2435,7 @@ async function main(options = {}) {
     readSettings: () => readSettingsFromDiskMigrated(),
     authorizeRequest: (req) => agentToolRuntime.authorizeRequest(req),
     broadcastUiEvent: (event) => broadcastSpleenUiEvent(event),
+    onFailoverApplied: () => sessionRecoveryRuntime?.wakeWaitingProvider?.(),
   });
   managedConfigRuntime = createManagedConfigRuntime({
     fsPromises,
@@ -2749,6 +2812,60 @@ async function main(options = {}) {
       return;
     }
     res.json(sessionRecoveryRuntime?.status() ?? { coordinator: false, counts: {}, sessions: [] });
+  });
+  app.post('/api/recovery/:sessionId/resume', async (req, res) => {
+    const authorized = await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
+    if (!authorized) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const result = await sessionRecoveryRuntime?.resumeNow?.(req.params.sessionId);
+    if (!result?.ok) {
+      res.status(result?.reason === 'not_found' ? 404 : 400).json(result ?? { ok: false, error: 'Recovery runtime unavailable' });
+      return;
+    }
+    res.json(result);
+  });
+  app.post('/api/recovery/:sessionId/dismiss', async (req, res) => {
+    const authorized = await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
+    if (!authorized) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const result = sessionRecoveryRuntime?.dismiss?.(req.params.sessionId);
+    if (!result?.ok) {
+      res.status(result?.reason === 'not_found' ? 404 : 400).json(result ?? { ok: false, error: 'Recovery runtime unavailable' });
+      return;
+    }
+    res.json(result);
+  });
+  app.post('/api/recovery/wake', async (req, res) => {
+    const authorized = await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
+    if (!authorized) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    res.json(sessionRecoveryRuntime?.wakeWaitingProvider?.() ?? { ok: false, updated: 0 });
+  });
+  registerTeamsRoutes(app, {
+    service: teamsRuntime,
+    requireAuthorized: (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }),
+  });
+  teamsRuntime.start();
+  const discordStore = createDiscordStore({ filePath: path.join(SPLEEN_DATA_DIR, 'discord.json') });
+  discordClientRuntime = createDiscordClient({ store: discordStore });
+  const discordGateway = createDiscordGateway({ store: discordStore });
+  registerDiscordRoutes(app, {
+    client: discordClientRuntime,
+    gateway: discordGateway,
+    requireAuthorized: (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }),
+  });
+  const unknownCheatsStore = createUnknownCheatsStore({ filePath: path.join(SPLEEN_DATA_DIR, 'unknowncheats.json') });
+  unknownCheatsRuntime = createUnknownCheatsClient({ store: unknownCheatsStore });
+  registerUnknownCheatsRoutes(app, {
+    client: unknownCheatsRuntime,
+    store: unknownCheatsStore,
+    requireAuthorized: (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }),
   });
   app.use(spaceArchive.guard);
   app.use((req, res, next) => (spacesHost ? spacesHost.middleware(req, res, next) : next()));

@@ -191,6 +191,38 @@ const ALL_PARAMETER_PROPERTIES = {
   label: { type: 'string', description: 'Option label for browser.select; otherwise the image name, such as before-fix' },
   tabId: { type: 'string', description: "From the tabs browser.snapshot lists. Default: the tab you last used; else the user's open tab, if they opened it in this project" },
   body: { type: 'string', description: 'At most 2000 characters; longer is rejected. Written to make sense without this conversation' },
+  keys: { type: 'array', items: { type: 'string' }, description: 'settings.read: optional list of non-secret setting keys to read' },
+  changes: { type: 'object', description: 'settings.update: key-value patch of non-secret settings to persist and apply live' },
+  command: { type: 'string', description: 'ui.control: open_surface|close_surface|open_settings|close_settings|focus_session|toggle_sidebar|set_theme|notify' },
+  surface: { type: 'string', description: 'ui.control: context surface id such as git|diff|editor|terminal|browser|teams|discord|unknowncheats|notes' },
+  section: { type: 'string', description: 'ui.control open_settings: settings section tab id' },
+  themeId: { type: 'string', description: 'ui.control set_theme: theme identifier' },
+  level: { type: 'string', enum: ['info', 'success', 'warning', 'error'], description: 'ui.control notify: toast level' },
+  teamId: { type: 'string', description: 'team.*: AI Team id' },
+  teamGoal: { type: 'string', description: 'team.create: overall objective for the AI Team' },
+  preset: { type: 'string', enum: ['full-stack', 'research-build', 'bug-hunt', 'multi-review', 'custom'], description: 'team.create: built-in role preset' },
+  members: { type: 'array', items: { type: 'object' }, description: 'team.create: optional custom member definitions [{ name, role, model, agent, description }]' },
+  maxParallel: { type: 'integer', minimum: 1, maximum: 8, description: 'team.create: maximum concurrent running tasks in the DAG (1-8)' },
+  useWorktrees: { type: 'boolean', description: 'team.create / team.addMember: isolate non-lead members into separate git worktrees' },
+  initialTasks: { type: 'array', items: { type: 'object' }, description: 'team.create: optional initial DAG tasks' },
+  assignee: { type: 'string', description: 'team.addTask: member id, role, or name' },
+  acceptance: { type: 'string', description: 'team.addTask: acceptance criteria checked before completion' },
+  idempotencyKey: { type: 'string', description: 'team.addTask: deduplication key' },
+  author: { type: 'string', description: 'team.post: sender name or member id' },
+  mentions: { type: 'array', items: { type: 'string' }, description: 'team.post: explicit member ids to notify' },
+  sourceSessionId: { type: 'string', description: 'chat.link: source session id (default this session)' },
+  targetSessionId: { type: 'string', description: 'chat.link: connected session id' },
+  relation: { type: 'string', enum: ['reference', 'supervise', 'delegate'], description: 'chat.link: connection kind' },
+  note: { type: 'string', description: 'chat.link: short note describing how the sessions relate' },
+  linkId: { type: 'string', description: 'chat.unlink: link id to remove' },
+  guildId: { type: 'string', description: 'discord.channels: Discord guild id' },
+  channelId: { type: 'string', description: 'discord.messages / discord.send: Discord channel id' },
+  content: { type: 'string', description: 'discord.send: message body text' },
+  replyToMessageId: { type: 'string', description: 'discord.send: optional message id to reply to' },
+  before: { type: 'string', description: 'discord.messages: fetch messages before this message id' },
+  fid: { type: 'integer', description: 'uc.forum: UnknownCheats forum id' },
+  tid: { type: 'integer', description: 'uc.thread: UnknownCheats thread id' },
+  page: { type: 'integer', minimum: 1, description: 'uc.*: 1-based page number' },
   memoryId: { type: 'string', description: 'From memory.list or memory.read; on save it rewrites that entry' },
   type: { type: 'string', enum: ['fact', 'preference', 'reference'], description: 'fact: something true. preference: how the user wants work done. reference: a resource hard to find again' },
 };
@@ -377,10 +409,11 @@ export const managedPermissionRules = ({ includeWorkflow = false } = {}) => (
   includeWorkflow ? [{ action: WORKFLOW_ANSWER_TOOL, resource: '*', effect: 'deny' }] : []
 );
 
-const CONTROL_TOOL_DESCRIPTION = "Spleen projects, sessions and worktrees. One action per call; projectId or directory scope it, default this session's directory. "
+const CONTROL_TOOL_DESCRIPTION = "Spleen projects, sessions, settings, UI control, AI Teams, recovery, Discord and UnknownCheats. One action per call; projectId or directory scope it, default this session's directory. "
+  + "You can inspect/update non-secret Spleen settings (settings.list, settings.read, settings.update), drive the desktop/web UI live (ui.control), stop sessions (session.stop), inspect/resume auto-continue recovery (recovery.*), connect sessions (chat.link/links/unlink), orchestrate multi-agent AI Teams with a shared board and DAG task scheduler (team.*), and read connected Discord channels or UnknownCheats threads (discord.*, uc.*). "
   + "A session you create, send to or fork belongs to the user, who follows and talks to it. Dispatch one when the user asks, even for work related to yours, with any agent, optionally in a new worktree. A session you start to get work done and collect its answer takes ownWork, also when the user told you to delegate; smaller pieces go to the subagent tool. A dispatch returns at once; returnResult brings its final answer back here as a message. session.send always starts a new prompt. "
   + "session.moveToWorktree moves this session into a new worktree on a new branch from the default branch, taking the changed files you name in carry. It can help when the checkout looks busy: someone's pull request branch, uncommitted changes, another session here, a branch changed between your messages. Whether that fits depends on how the user works: ask, unless the request already calls for separate work, such as a pull request of its own. Unlike git worktree add, the session moves along and the branch starts from the default branch. "
-  + "This tool cannot delete sessions or worktrees.";
+  + "This tool cannot delete sessions or worktrees, and cannot read or modify secret settings.";
 
 const SCHEDULE_TOOL_DESCRIPTION = "Scheduled tasks: prompts Spleen runs on a schedule, in a new session each run or in targetSessionId. A task is the user's; create or change one when the user asks. One action per call; projectId or directory scope it, default this session's directory.";
 

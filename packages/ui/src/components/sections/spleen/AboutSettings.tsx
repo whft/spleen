@@ -32,9 +32,7 @@ import {
   SETTINGS_BRAND_TITLE_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
-const GITHUB_URL = 'https://github.com/spleen/spleen';
-const DISCORD_URL = 'https://discord.gg/ZYRSdnwwKA';
-const X_URL = 'https://x.com/spleen_dev';
+const GITHUB_URL = 'https://github.com/whft/spleen';
 
 const MIN_CHECKING_DURATION = 800;
 
@@ -636,36 +634,14 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
         ))}
 
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex items-center justify-center gap-5">
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 typography-ui-label text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Icon name="github-fill" className="size-5" />
-              <span>GitHub</span>
-            </a>
-
-            <a
-              href={DISCORD_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 typography-ui-label text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Icon name="discord-fill" className="size-5" />
-              <span>Discord</span>
-            </a>
-          </div>
-
           <a
-            href={X_URL}
+            href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 typography-ui-label text-muted-foreground transition-colors hover:text-foreground"
           >
-            <Icon name="twitter-xfill" className="size-5" />
-            <span>@spleen_dev</span>
+            <Icon name="github-fill" className="size-5" />
+            <span>GitHub</span>
           </a>
         </div>
 
@@ -738,8 +714,6 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {[
                 { href: GITHUB_URL, icon: 'github-fill' as const, label: 'GitHub' },
-                { href: DISCORD_URL, icon: 'discord-fill' as const, label: 'Discord' },
-                { href: X_URL, icon: 'twitter-xfill' as const, label: '@spleen_dev' },
               ].map((link) => (
                 <a
                   key={link.href}

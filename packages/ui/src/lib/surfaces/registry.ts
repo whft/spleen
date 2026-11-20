@@ -16,6 +16,8 @@ type BuiltInContextSurfaceId =
   | 'context'
   | 'browser'
   | 'workflows'
+  | 'teams'
+  | 'discord'
   | 'subagents'
   | 'chat'
   | 'pages';
@@ -115,6 +117,22 @@ export const CONTEXT_SURFACES: readonly ContextSurfaceDescriptor[] = [
     availability: 'always',
   },
   {
+    id: 'teams',
+    descriptionKey: 'contextRail.surface.teams.description',
+    mode: 'teams',
+    icon: 'team',
+    labelKey: 'contextPanel.mode.teams',
+    availability: 'always',
+  },
+  {
+    id: 'discord',
+    descriptionKey: 'contextRail.surface.discord.description',
+    mode: 'discord',
+    icon: 'discuss',
+    labelKey: 'contextPanel.mode.discord',
+    availability: 'always',
+  },
+  {
     id: 'subagents',
     descriptionKey: 'contextRail.surface.subagents.description',
     mode: 'subagents',
@@ -155,6 +173,8 @@ const BUILT_IN_SURFACE_GROUPS = {
   browser: 'tools',
   notes: 'workspace',
   workflows: 'workspace',
+  teams: 'workspace',
+  discord: 'workspace',
   subagents: 'workspace',
   chat: 'workspace',
   pages: 'workspace',

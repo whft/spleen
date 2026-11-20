@@ -44,7 +44,7 @@ bunx spleen-guest-bundle panel/main.ts panel/main.js
 
 Then install the folder from Settings → Extensions → Add. Folder installs run from your folder, so edit, rebuild, and reload. A `.zip` or an https git or zip link is copied into Spleen's data folder instead; ship the built files only. Git installs can update from Settings → Extensions when the repository's `version` is newer than the installed one, so bump `version` to ship an update; `https://…/panel.git#v1` pins a tag or branch.
 
-A complete three-file example is on the [Build an extension](https://github.com/whft/spleen/tree/main/packages/docs/sdk/) page. Six examples are at [github.com/spleen/spleen/tree/main/packages/sdk/examples](https://github.com/spleen/spleen/tree/main/packages/sdk/examples).
+A complete three-file example is on the [Build an extension](https://github.com/whft/spleen/tree/main/packages/docs/sdk/) page. Six examples are at [github.com/whft/spleen/tree/main/packages/sdk/examples](https://github.com/whft/spleen/tree/main/packages/sdk/examples).
 
 ## Manifest
 

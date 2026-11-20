@@ -198,34 +198,14 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           )}
 
           <div className="flex flex-col items-center gap-2 pt-2">
-            <div className="flex items-center justify-center gap-4">
-              <a
-                href="https://github.com/spleen/spleen"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Icon name="github-fill" className="h-4 w-4" />
-                <span>GitHub</span>
-              </a>
-              <a
-                href="https://discord.gg/ZYRSdnwwKA"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Icon name="discord-fill" className="h-4 w-4" />
-                <span>Discord</span>
-              </a>
-            </div>
             <a
-              href="https://x.com/spleen_dev"
+              href="https://github.com/whft/spleen"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Icon name="twitter-xfill" className="h-4 w-4" />
-              <span>@spleen_dev</span>
+              <Icon name="github-fill" className="h-4 w-4" />
+              <span>GitHub</span>
             </a>
           </div>
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { DISPATCH_GUIDANCE, KNOWLEDGE_ENTRY_KEYS, RENDER_PAGE_GUIDANCE, REPLY_COMMAND_GUIDANCE, SECRET_REQUEST_GUIDANCE, SESSION_LINK_GUIDANCE, WORK_NAME_GUIDANCE, WORKFLOW_GUIDANCE, buildKnowledgeEntries, createSessionKnowledgeRuntime, directToolsGuidance } from './runtime.js';
+import { SPLEEN_BASE_RULES } from './base-rules.js';
 import { UI_BLOCKS_GUIDANCE } from './ui-blocks-guidance.js';
 
 const DIRECTORY = '/work/project';
@@ -8,6 +9,7 @@ const PROJECT_ID = 'path_project';
 const PINS = { notes: ['n1'], plans: ['p1'] };
 const NO_PINS = { notes: [], plans: [] };
 const {
+  base: BASE,
   checkout: CHECKOUT,
   pinned: PINNED,
   memory: MEMORY,
@@ -97,6 +99,7 @@ describe('writing the knowledge into a session', () => {
 
     expect(await runtime.sync('ses_a', DIRECTORY, 'Keep replies short.')).toBe(true);
 
+    expect(instructionEntries.held.get(BASE)).toBe(SPLEEN_BASE_RULES);
     expect(instructionEntries.held.get(PINNED)).toContain('Pinned note body.');
     expect(instructionEntries.held.get(PINNED)).toContain('Plan body.');
     expect(instructionEntries.held.get(MEMORY)).toContain('Uses bun');
@@ -442,13 +445,14 @@ describe('what the session carries', () => {
     expect(entries[PINNED]).toBe('');
   });
 
-  test('nothing pinned with memory off carries nothing', async () => {
+  test('nothing pinned with memory off carries only the app rules', async () => {
     const runtime = createRuntime({
       projectContextRuntime: { readContext: async () => ({ notes: [], todos: [], plans: [] }) },
       isMemoryToolAvailable: async () => false,
     });
     const entries = await entriesFor(runtime, NO_PINS);
-    expect(Object.values(entries).every((text) => text === '')).toBe(true);
+    expect(entries[BASE]).toBe(SPLEEN_BASE_RULES);
+    expect(Object.entries(entries).filter(([key]) => key !== BASE).every(([, text]) => text === '')).toBe(true);
   });
 
   test('an empty memory store still tells the session when to save', async () => {
@@ -587,6 +591,27 @@ describe('pins', () => {
 
   test('says so plainly when no metadata store is wired', async () => {
     await expect(createRuntime().setPin('ses_a', DIRECTORY, 'note', 'n1', true)).rejects.toThrow(/session metadata store/);
+  });
+});
+
+describe('house rules', () => {
+  test('every session starts with the app rules, with or without other knowledge', () => {
+    const bare = buildKnowledgeEntries({ notes: [], plans: [], memory: { global: [], project: [] } });
+
+    expect(bare[BASE]).toBe(SPLEEN_BASE_RULES);
+    expect(bare[BASE]).toContain('Platform safety rules still apply.');
+  });
+
+  test('a response style adds to the app rules and cannot replace them', () => {
+    const entries = buildKnowledgeEntries({
+      notes: [],
+      plans: [],
+      memory: { global: [], project: [] },
+      responseStyleInstruction: 'Use short sentences.',
+    });
+
+    expect(entries[BASE]).toBe(SPLEEN_BASE_RULES);
+    expect(entries[RESPONSE_STYLE]).toBe('Use short sentences.');
   });
 });
 

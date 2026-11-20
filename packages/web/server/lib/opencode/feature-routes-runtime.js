@@ -118,6 +118,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     pluginSwitchStore,
     isPluginSwitchAvailable,
     refreshPluginSwitches,
+    onQuotaRefreshed = () => {},
   } = dependencies;
   const gitRuntimeIdentity = Object.freeze({
     id: `server_${crypto.randomUUID()}`,
@@ -447,7 +448,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
 
     const { getProfiles, getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
 
-    registerQuotaRoutes(app, { getQuotaProviders });
+    registerQuotaRoutes(app, { getQuotaProviders, onQuotaRefreshed });
     registerSmallModelRoutes(app, { getSmallModelService });
     registerSessionGoalRoutes(app);
     const gitBinary = resolveGitBinaryForSpawn();

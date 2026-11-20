@@ -14,20 +14,19 @@ short version for operators.
   heartbeat); a crashed owner's lease expires and is taken over.
 - A resume carries `metadata.spleenRecovery`; seeing that user message again
   means the resume was delivered, so it is not sent twice.
-- Completed tool calls are listed in the continuation prompt as work not to
-  repeat; tools whose outcome is unknown are listed as "verify first".
+- The continuation prompt is a plain `Continue.`; the transcript carries the
+  rest.
 - Provider limits park the session as `waiting_provider` at the reset time
   without spending the resume budget.
 
 ## What is not guaranteed
 
 - Exactly-once **external** side effects. A tool could have succeeded without its
-  result reaching the transcript. The model is told to inspect before repeating;
-  a human decision is still required for destructive actions.
+  result reaching the transcript, and the continuation prompt does not warn about
+  it: a destructive action after a restart still needs a human check.
 - Session-level `outcome` is not per-turn. It is only used once the transcript
   has no unfinished turn.
-- Child sessions are resumed after their parent, never before; a parent resume
-  includes child states and summaries.
+- Child sessions are resumed after their parent, never before.
 - Recovery state lives on the local machine. Another device connected to the
   same server sees the result, not the coordinator.
 

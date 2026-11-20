@@ -1,8 +1,8 @@
-import React, { useId, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
-import { useWaitingPhase } from '@/hooks/useDurationTicker';
+import { useSpinnerPhase } from '@/hooks/useDurationTicker';
 import { SPLEEN_LOGO_ART as ART } from './spleenLogoArt';
 
 interface SpleenLogoProps {
@@ -22,10 +22,10 @@ export const SpleenLogo: React.FC<SpleenLogoProps> = ({
 }) => {
   const { t } = useI18n();
   const themeContext = useOptionalThemeSystem();
-  const gradientId = useId();
   const reducedMotion = useReducedMotion();
   const animated = isAnimated && !reducedMotion;
-  const litTier = useWaitingPhase(animated, ART.tiers.length);
+  const beat = useSpinnerPhase(animated, 8);
+  const dimmed = animated && beat >= 4;
 
   const color = useMemo(() => {
     if (variant === 'splash') {
@@ -44,50 +44,26 @@ export const SpleenLogo: React.FC<SpleenLogoProps> = ({
     return 'white';
   }, [themeContext, variant]);
 
-  const tierOpacity = (index: number) => {
-    if (!animated) return ART.tierOpacity[index];
-    return index === litTier ? ART.tierLit[index] : ART.tierRest[index];
-  };
-
   return (
     <svg
       width={width}
       height={height}
-      viewBox="-50 -50 100 100"
+      viewBox="0 0 1000 1000"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       role="img"
       aria-label={t('spleenLogo.aria.logo')}
     >
-      <defs>
-        {ART.walls.map(({ gradient }, index) => (
-          <linearGradient
-            key={index}
-            id={`${gradientId}-wall-${index}`}
-            gradientUnits="userSpaceOnUse"
-            x1={gradient.x1}
-            y1={gradient.y1}
-            x2={gradient.x2}
-            y2={gradient.y2}
-          >
-            {gradient.stops.map(([offset, opacity]) => (
-              <stop key={offset} offset={offset} stopColor={color} stopOpacity={opacity} />
-            ))}
-          </linearGradient>
-        ))}
-      </defs>
-      {ART.walls.map(({ path }, index) => (
-        <path key={index} d={path} fill={`url(#${gradientId}-wall-${index})`} />
-      ))}
-      <path d={ART.roof} fill={color} fillOpacity={ART.roofOpacity} />
-      {ART.tiers.map((path, index) => (
-        <path key={index} d={path} fill={color} fillOpacity={tierOpacity(index)} />
-      ))}
-      <g fill="none" stroke={color} strokeWidth={ART.stroke} strokeLinejoin="round" strokeLinecap="round">
-        {ART.shell.map((path) => (
-          <path key={path} d={path} />
-        ))}
+      <g
+        style={{ opacity: dimmed ? 0.55 : 1, transition: 'opacity 500ms ease-in-out' }}
+      >
+        <g fill={color}>
+          {ART.shell.map((path) => (
+            <path key={path} d={path} />
+          ))}
+        </g>
+        <path d={ART.core} fill={ART.accent} />
       </g>
     </svg>
   );

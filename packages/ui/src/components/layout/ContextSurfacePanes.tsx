@@ -49,6 +49,8 @@ const WalkthroughView = lazyWithChunkRecovery(() => import('@/components/views/w
 const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then((m) => ({ default: m.DiffView })));
 const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then((m) => ({ default: m.FilesView })));
 const GuestPanelContent = React.lazy(() => import('./GuestPanelContent').then((module) => ({ default: module.GuestPanelContent })));
+const TeamsPanel = lazyWithChunkRecovery(() => import('@/components/teams/TeamsPanel').then((m) => ({ default: m.TeamsPanel })));
+const DiscordPanel = lazyWithChunkRecovery(() => import('@/components/discord/DiscordPanel').then((m) => ({ default: m.DiscordPanel })));
 
 type PanelBrowserTab = {
   directory: string;
@@ -272,6 +274,8 @@ export const ContextSurfacePanes: React.FC = () => {
   const diffZone = zoneFor('diff');
   const terminalZone = zoneFor('terminal');
   const walkthroughZone = zoneFor('walkthrough');
+  const teamsZone = zoneFor('teams');
+  const discordZone = zoneFor('discord');
 
   const [recentBrowserTabs, setRecentBrowserTabs] = React.useState<readonly string[]>([]);
   const browserTabLastUsed = React.useRef(new Map<string, number>());
@@ -465,6 +469,8 @@ export const ContextSurfacePanes: React.FC = () => {
     [tabs],
   );
   const walkthroughTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'walkthrough') ?? null, [tabs]);
+  const teamsTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'teams') ?? null, [tabs]);
+  const discordTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'discord') ?? null, [tabs]);
   const pluginTabs = React.useMemo(() => tabs.filter((tab) => isPluginContextPanelMode(tab.mode)), [tabs]);
   const pageTabs = React.useMemo(() => tabs.filter((tab) => tab.mode === 'pages' && tab.targetPath), [tabs]);
   const guests = useGuestsStore((state) => state.guests);
@@ -631,6 +637,36 @@ export const ContextSurfacePanes: React.FC = () => {
           <React.Suspense fallback={null}>
             <ContextPanelHeaderSlotProvider value={headerSlotFor(walkthroughZone.zone, walkthroughZone.activeTab?.mode === 'walkthrough')}>
               <WalkthroughView directory={walkthroughTab.targetDirectory ?? effectiveDirectory} visible={walkthroughZone.isOpen && walkthroughZone.activeTab?.mode === 'walkthrough'} />
+            </ContextPanelHeaderSlotProvider>
+          </React.Suspense>
+        </ZonePane>
+      ) : null}
+      {teamsTab ? (
+        <ZonePane
+          zone={teamsZone.zone}
+          interactive={interactive[teamsZone.zone]}
+          isOpen={teamsZone.isOpen}
+          hidden={contentHidden(teamsZone.zone)}
+          className={cn('absolute inset-0', teamsZone.activeTab?.mode === 'teams' ? 'block' : 'hidden')}
+        >
+          <React.Suspense fallback={null}>
+            <ContextPanelHeaderSlotProvider value={headerSlotFor(teamsZone.zone, teamsZone.activeTab?.mode === 'teams')}>
+              <TeamsPanel directory={effectiveDirectory} visible={teamsZone.isOpen && teamsZone.activeTab?.mode === 'teams'} />
+            </ContextPanelHeaderSlotProvider>
+          </React.Suspense>
+        </ZonePane>
+      ) : null}
+      {discordTab ? (
+        <ZonePane
+          zone={discordZone.zone}
+          interactive={interactive[discordZone.zone]}
+          isOpen={discordZone.isOpen}
+          hidden={contentHidden(discordZone.zone)}
+          className={cn('absolute inset-0', discordZone.activeTab?.mode === 'discord' ? 'block' : 'hidden')}
+        >
+          <React.Suspense fallback={null}>
+            <ContextPanelHeaderSlotProvider value={headerSlotFor(discordZone.zone, discordZone.activeTab?.mode === 'discord')}>
+              <DiscordPanel visible={discordZone.isOpen && discordZone.activeTab?.mode === 'discord'} />
             </ContextPanelHeaderSlotProvider>
           </React.Suspense>
         </ZonePane>

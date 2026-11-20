@@ -30,7 +30,7 @@ const userMessage = (id, text, metadata = undefined) => ({
   time: { created: 1 },
 });
 
-const assistantMessage = (id, tools = [], { completed = false } = {}) => ({
+const assistantMessage = (id, tools = [], { completed = false, completedAt = 2, error = null } = {}) => ({
   id,
   type: 'assistant',
   content: tools.map((tool) => ({
@@ -40,7 +40,8 @@ const assistantMessage = (id, tools = [], { completed = false } = {}) => ({
     executed: tool.executed !== false,
     state: { status: tool.status, input: tool.input ?? {} },
   })),
-  time: completed ? { created: 1, completed: 2 } : { created: 1 },
+  ...(error ? { error } : null),
+  time: completed ? { created: 1, completed: completedAt } : { created: 1 },
 });
 
 const fakeBackend = ({ sessions, active = {}, promptError = null }) => {
@@ -129,6 +130,154 @@ describe('decideRecovery', () => {
     expect(decideRecovery({ row, session: { id: 'ses_x', outcome: 'failed' }, messages: completedMessages }).state).toBe('failed');
   });
 
+  it('parks a completed turn a usage limit stopped, then resumes it after the reset', () => {
+    const failedAt = 5_000;
+    const error = {
+      type: 'provider.go-limit',
+      message: 'OpenCode Go 5 hour usage limit reached.',
+      status: 429,
+      retryAfterMs: 60_000,
+    };
+    const messages = [userMessage('u1', 'do work'), assistantMessage('a1', [], { completed: true, completedAt: failedAt, error })];
+    const session = { id: 'ses_x', outcome: 'failed' };
+    const parked = decideRecovery({ row, session, messages, now: failedAt });
+    expect(parked).toMatchObject({ action: 'park', state: 'waiting_provider', nextWakeAt: failedAt + 60_000 });
+
+    const waiting = { ...row, state: 'waiting_provider', next_wake_at: failedAt + 60_000 };
+    expect(decideRecovery({ row: waiting, session, messages, now: failedAt + 59_000 })).toMatchObject({ action: 'wait', state: 'waiting_provider' });
+    expect(decideRecovery({ row: waiting, session, messages, now: failedAt + 60_000 })).toMatchObject({
+      action: 'resume',
+      attempt: 0,
+      afterLimit: true,
+    });
+  });
+
+  it('continues after a reset even when the crash budget is spent', () => {
+    const messages = [
+      userMessage('u1', 'do work'),
+      assistantMessage('a1', [], {
+        completed: true,
+        completedAt: 1,
+        error: { type: 'provider.quota', message: 'usage limit reached', status: 429, retryAfterMs: 500 },
+      }),
+    ];
+    const waiting = { ...row, state: 'waiting_provider', attempts: 2, next_wake_at: 501 };
+    const decision = decideRecovery({ row: waiting, session: { id: 'ses_x', outcome: 'failed' }, messages, now: 501 });
+    expect(decision).toMatchObject({ action: 'resume', afterLimit: true, attempt: 2 });
+  });
+
+  it('probes a seven-day reset instead of resuming early', () => {
+    const resetMs = 7 * 24 * 60 * 60_000;
+    const messages = [
+      userMessage('u1', 'do work'),
+      assistantMessage('a1', [], {
+        completed: true,
+        completedAt: 1_000,
+        error: { type: 'provider.quota', message: 'usage limit reached', status: 429, retryAfterMs: resetMs },
+      }),
+    ];
+    const waiting = { ...row, state: 'waiting_provider', next_wake_at: 2_000 };
+    const decision = decideRecovery({ row: waiting, session: { id: 'ses_x', outcome: 'failed' }, messages, now: 3_000 });
+    expect(decision).toMatchObject({ action: 'wait', state: 'waiting_provider', nextWakeAt: 1_000 + 5 * 60_000 });
+  });
+
+  it('never retries a short reset sooner than the limit backoff', () => {
+    const messages = [
+      userMessage('u1', 'do work'),
+      assistantMessage('a1', [], {
+        completed: true,
+        completedAt: 1_000,
+        error: { type: 'provider.quota', message: 'usage limit reached', status: 429, retryAfterMs: 300_000 },
+      }),
+    ];
+    const waiting = { ...row, state: 'waiting_provider', provider_waits: 1, next_wake_at: 301_000 };
+    const decision = decideRecovery({ row: waiting, session: { id: 'ses_x', outcome: 'failed' }, messages, now: 301_000 });
+    expect(decision).toMatchObject({ action: 'wait', state: 'waiting_provider', nextWakeAt: 1_000 + 60 * 60_000 });
+  });
+
+  it('waits out an accepted continuation that is not in the transcript yet', () => {
+    const messages = [
+      userMessage('u1', 'do work'),
+      assistantMessage('a1', [], {
+        completed: true,
+        completedAt: 1_000,
+        error: { type: 'provider.quota', message: 'usage limit reached', status: 429, retryAfterMs: 5_000 },
+      }),
+    ];
+    const sent = { ...row, state: 'recovering', provider_waits: 1, resumed_at: 30_000, resume_message_id: 'inbox-1' };
+    const session = { id: 'ses_x', outcome: 'failed' };
+    expect(decideRecovery({ row: sent, session, messages, now: 31_000 })).toMatchObject({
+      action: 'wait',
+      state: 'recovering',
+      nextWakeAt: 61_000,
+    });
+    expect(decideRecovery({ row: sent, session, messages, now: 30_000 + 10 * 60_000 + 1 })).toMatchObject({
+      action: 'needs_review',
+      reason: 'resume delivered but not in transcript',
+    });
+  });
+
+  it('measures the resume settle window from the resume, not the first start', () => {
+    const messages = [
+      userMessage('u1', 'do work'),
+      userMessage('r1', 'Continue.', { spleenRecovery: { sessionID: 'ses_x', executionSeq: 1, attempt: 0 } }),
+    ];
+    const sent = { ...row, started_at: 1, state: 'recovering', resumed_at: 50_000 };
+    expect(decideRecovery({ row: sent, session: interrupted, messages, now: 51_000 })).toMatchObject({
+      action: 'wait',
+      state: 'recovering',
+      nextWakeAt: 81_000,
+    });
+    expect(decideRecovery({ row: sent, session: interrupted, messages, now: 50_000 + 10 * 60_000 + 1 }).action).toBe('needs_review');
+  });
+
+  it('probes a long free-limit reset after five minutes', () => {
+    const messages = [
+      userMessage('u1', 'do work'),
+      assistantMessage('a1', [], {
+        completed: true,
+        completedAt: 1_000,
+        error: { type: 'provider.free-limit', message: 'Free usage limit reached.', status: 429, retryAfterMs: 39_375_000 },
+      }),
+    ];
+    const session = { id: 'ses_x', outcome: 'failed' };
+    expect(decideRecovery({ row, session, messages, now: 1_000 })).toMatchObject({
+      action: 'park',
+      nextWakeAt: 1_000 + 5 * 60_000,
+    });
+    expect(decideRecovery({ row: { ...row, provider_waits: 1 }, session, messages, now: 301_000 })).toMatchObject({
+      action: 'park',
+      nextWakeAt: 1_000 + 39_375_000,
+    });
+  });
+
+  it('backs off an hour, then doubles, when a quota names no reset', () => {
+    const messages = [
+      userMessage('u1', 'do work'),
+      assistantMessage('a1', [], {
+        completed: true,
+        completedAt: 1_000,
+        error: { type: 'provider.quota', message: 'usage limit reached', status: 429 },
+      }),
+    ];
+    const session = { id: 'ses_x', outcome: 'failed' };
+    expect(decideRecovery({ row, session, messages, now: 2_000 }).nextWakeAt).toBe(1_000 + 60 * 60_000);
+    expect(decideRecovery({ row: { ...row, provider_waits: 2 }, session, messages, now: 2_000 }).nextWakeAt).toBe(1_000 + 2 * 60 * 60_000);
+  });
+
+  it('waits out a rate limit that already outlived OpenCode retries', () => {
+    const messages = [
+      userMessage('u1', 'do work'),
+      assistantMessage('a1', [], {
+        completed: true,
+        completedAt: 1_000,
+        error: { type: 'provider.rate-limit', message: 'slow down', status: 429, retryAfterMs: 8_000 },
+      }),
+    ];
+    const decision = decideRecovery({ row, session: { id: 'ses_x', outcome: 'failed' }, messages, now: 2_000 });
+    expect(decision).toMatchObject({ action: 'park', state: 'waiting_provider', nextWakeAt: 1_000 + 60 * 60_000 });
+  });
+
   it('trusts an unfinished transcript over a stale succeeded outcome', () => {
     const decision = decideRecovery({ row, session: { id: 'ses_x', outcome: 'succeeded' }, messages: pendingMessages, now: 10 });
     expect(decision.action).toBe('resume');
@@ -175,21 +324,9 @@ describe('summarizeTail', () => {
 });
 
 describe('buildResumePrompt', () => {
-  it('names completed tools and unknown side effects', () => {
-    const prompt = buildResumePrompt({
-      sessionID: 'ses_x',
-      executionSeq: 4,
-      attempt: 1,
-      tail: {
-        lastUser: { text: 'ship it' },
-        completedTools: [{ id: 't1', name: 'bash' }],
-        unknownTools: [{ id: 't2', name: 'git' }],
-      },
-      childResults: [{ sessionID: 'ses_child', state: 'succeeded', summary: 'tests pass' }],
-    });
-    expect(prompt.text).toContain('do not run them again: bash (t1)');
-    expect(prompt.text).toContain('Inspect the workspace');
-    expect(prompt.text).toContain('Child session ses_child is succeeded');
+  it('reads as a plain continue', () => {
+    const prompt = buildResumePrompt({ sessionID: 'ses_x', executionSeq: 4, attempt: 1 });
+    expect(prompt.text).toBe('Continue.');
     expect(prompt.metadata.spleenRecovery).toMatchObject({ sessionID: 'ses_x', executionSeq: 4, attempt: 1 });
   });
 });
@@ -269,6 +406,225 @@ describe('recovery runtime', () => {
     runtime.stop();
   });
 
+  it('parks an execution stopped by a usage limit until its reset', () => {
+    const store = openStore(tempDb());
+    store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 1, at: 1_000 });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: async () => { throw new Error('no backend calls in this case'); },
+      now: () => 10_000,
+      owner: 'limit-event',
+    });
+    runtime.handleEvent({
+      type: 'session.execution.failed',
+      data: {
+        sessionID: 'ses_limit',
+        error: { type: 'provider.quota', message: 'usage limit reached', status: 429, retryAfterMs: 120_000 },
+      },
+    });
+    const row = store.get('ses_limit');
+    expect(row.state).toBe('waiting_provider');
+    expect(row.next_wake_at).toBe(130_000);
+    expect(row.attempts).toBe(0);
+    runtime.stop();
+  });
+
+  it('probes a free limit that names a reset many hours away', () => {
+    const store = openStore(tempDb());
+    store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 1, at: 1_000 });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: async () => { throw new Error('no backend calls in this case'); },
+      now: () => 10_000,
+      owner: 'limit-probe',
+    });
+    runtime.handleEvent({
+      type: 'session.execution.failed',
+      data: {
+        sessionID: 'ses_limit',
+        error: { type: 'provider.free-limit', message: 'Free usage limit reached.', status: 429, retryAfterMs: 39_375_000 },
+      },
+    });
+    const row = store.get('ses_limit');
+    expect(row.state).toBe('waiting_provider');
+    expect(row.next_wake_at).toBe(10_000 + 5 * 60_000);
+    runtime.stop();
+  });
+
+  it('continues a chat after its usage reset even though the failed turn is complete', async () => {
+    const store = openStore(tempDb());
+    const limitError = { type: 'provider.quota', message: 'usage limit reached', status: 429 };
+    const sessions = new Map([['ses_limit', {
+      info: { id: 'ses_limit', outcome: 'failed', time: { created: 1, updated: 2 } },
+      messages: [
+        userMessage('u1', 'finish the feature'),
+        assistantMessage('a1', [{ id: 't1', name: 'bash', status: 'completed' }], {
+          completed: true,
+          completedAt: 1_000,
+          error: limitError,
+        }),
+      ],
+    }]]);
+    store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 1, at: 500 });
+    store.schedule('ses_limit', { state: 'waiting_provider', attempts: 0, nextWakeAt: 2_000, error: 'provider limit', at: 600 });
+    const backend = fakeBackend({ sessions });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => 3_602_000,
+      owner: 'limit-resume',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+    expect(backend.prompts).toHaveLength(1);
+    expect(backend.prompts[0].body.text).toBe('Continue.');
+    expect(backend.prompts[0].body.metadata.spleenRecovery.attempt).toBe(0);
+    expect(store.get('ses_limit').state).toBe('recovering');
+    runtime.stop();
+  });
+
+  it('counts a 429 on the continuation prompt as a provider wait', async () => {
+    const store = openStore(tempDb());
+    const limitError = { type: 'provider.quota', message: 'usage limit reached', status: 429, retryAfterMs: 5_000 };
+    const sessions = new Map([['ses_limit', {
+      info: { id: 'ses_limit', outcome: 'interrupted', time: { created: 1, updated: 2 } },
+      messages: [
+        userMessage('u1', 'finish the feature'),
+        assistantMessage('a1', [], { completed: true, completedAt: 1_000, error: limitError }),
+      ],
+    }]]);
+    store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 1, at: 500 });
+    store.schedule('ses_limit', { state: 'waiting_provider', attempts: 0, nextWakeAt: 6_000, error: 'provider limit', at: 1_000 });
+    const promptError = Object.assign(new Error('slow down'), {
+      type: 'provider.rate-limit',
+      status: 429,
+      retryAfterMs: 5_000,
+    });
+    const backend = fakeBackend({ sessions, promptError });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => 6_000,
+      owner: 'limit-send',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+    const row = store.get('ses_limit');
+    expect(row.state).toBe('waiting_provider');
+    expect(row.provider_waits).toBe(1);
+    expect(row.next_wake_at).toBe(6_000 + 60 * 60_000);
+    runtime.stop();
+  });
+
+  it('revives a chat an earlier build marked failed by a usage limit', async () => {
+    const store = openStore(tempDb());
+    const limitError = { type: 'provider.quota', message: 'usage limit reached', status: 429 };
+    const sessions = new Map([['ses_limit', {
+      info: { id: 'ses_limit', outcome: 'failed', time: { created: 1, updated: 2 } },
+      messages: [
+        userMessage('u1', 'finish the feature'),
+        assistantMessage('a1', [], { completed: true, completedAt: 1_000, error: limitError }),
+      ],
+    }]]);
+    store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 1, at: 500 });
+    store.finish('ses_limit', 'failed', { at: 2_000, error: 'provider.quota' });
+    const backend = fakeBackend({ sessions });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => 3_602_000,
+      owner: 'limit-revive',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+    expect(backend.prompts).toHaveLength(1);
+    expect(backend.prompts[0].body.metadata.spleenRecovery.attempt).toBe(0);
+    runtime.stop();
+  });
+
+  it('keeps a parked chat when the backend cannot be read yet', async () => {
+    const store = openStore(tempDb());
+    store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 1, at: 1 });
+    store.schedule('ses_limit', { state: 'waiting_provider', attempts: 0, nextWakeAt: 2_000, error: 'provider limit', at: 600 });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: async (fetchPath) => {
+        if (fetchPath === '/api/session/active') return {};
+        throw Object.assign(new Error('bad gateway'), { status: 502 });
+      },
+      now: () => 3_000,
+      owner: 'limit-transient',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+    const row = store.get('ses_limit');
+    expect(row.state).toBe('waiting_provider');
+    expect(row.next_wake_at).toBe(2_000);
+    runtime.stop();
+  });
+
+  it('leaves an actively running child attached to its parent', async () => {
+    const store = openStore(tempDb());
+    const sessions = new Map([
+      ['ses_child', {
+        info: { id: 'ses_child', parentID: 'ses_parent', outcome: 'interrupted', time: { created: 1, updated: 2 } },
+        messages: [userMessage('cu', 'child work'), assistantMessage('ca', [{ id: 'c1', name: 'bash', status: 'running' }])],
+      }],
+    ]);
+    store.beginExecution({ sessionID: 'ses_parent', directory: 'C:/work', seq: 1, at: 1 });
+    store.beginExecution({ sessionID: 'ses_child', directory: 'C:/work', seq: 1, at: 1 });
+    store.noteParent('ses_child', 'ses_parent', 1);
+    store.schedule('ses_parent', { state: 'waiting_provider', attempts: 0, nextWakeAt: 999_999, error: 'provider limit', at: 2 });
+    const backend = fakeBackend({ sessions, active: { ses_child: {} } });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => 10,
+      owner: 'active-child',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+    expect(store.get('ses_child').state).toBe('running');
+    runtime.stop();
+  });
+
+  it('links a subagent from its session info and waits for its parent', async () => {
+    const store = openStore(tempDb());
+    const sessions = new Map([
+      ['ses_parent', {
+        info: { id: 'ses_parent', outcome: 'interrupted', time: { created: 1, updated: 2 } },
+        messages: [userMessage('pu', 'parent work'), assistantMessage('pa', [{ id: 'p1', name: 'bash', status: 'running' }])],
+      }],
+      ['ses_child', {
+        info: { id: 'ses_child', parentID: 'ses_parent', outcome: 'interrupted', time: { created: 1, updated: 2 } },
+        messages: [userMessage('cu', 'child work'), assistantMessage('ca', [{ id: 'c1', name: 'bash', status: 'running' }])],
+      }],
+    ]);
+    store.beginExecution({ sessionID: 'ses_parent', directory: 'C:/work', seq: 1, at: 1 });
+    store.beginExecution({ sessionID: 'ses_child', directory: 'C:/work', seq: 1, at: 1 });
+    store.schedule('ses_parent', { state: 'waiting_provider', attempts: 0, nextWakeAt: 999_999, error: 'provider limit', at: 2 });
+    const backend = fakeBackend({ sessions });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => 10,
+      owner: 'parent-link',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+    expect(store.get('ses_child').parent_session_id).toBe('ses_parent');
+    expect(store.get('ses_child').state).toBe('waiting_parent');
+    expect(store.get('ses_child').next_wake_at).toBe(300_010);
+    expect(backend.prompts).toHaveLength(0);
+    runtime.stop();
+  });
+
   it('lets only one coordinator run against one ledger', async () => {
     const dbPath = tempDb();
     const sessions = seedInterruptedSessions(1);
@@ -283,5 +639,54 @@ describe('recovery runtime', () => {
     expect(backend.prompts).toHaveLength(0);
     runtimeA.stop();
     runtimeB.stop();
+  });
+
+  it('resumes elapsed waiting_provider rows even when last assistant turn has no error object, and supports resumeNow/dismiss/wakeWaitingProvider', async () => {
+    const store = openStore(tempDb());
+    const sessions = new Map([['ses_no_err', {
+      info: { id: 'ses_no_err', outcome: 'failed', time: { created: 1, updated: 2 } },
+      messages: [
+        userMessage('u1', 'keep coding'),
+        assistantMessage('a1', [{ id: 't1', name: 'bash', status: 'completed' }], { completed: true, completedAt: 500 }),
+      ],
+    }]]);
+    store.beginExecution({ sessionID: 'ses_no_err', directory: 'C:/work', seq: 1, at: 400 });
+    store.schedule('ses_no_err', { state: 'waiting_provider', attempts: 0, nextWakeAt: 1_000, error: 'provider limit', at: 600 });
+    const backend = fakeBackend({ sessions });
+    const events = [];
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => 2_000,
+      owner: 'resume-fix',
+      startGraceMs: 60_000,
+      broadcastEvent: (evt) => events.push(evt),
+    });
+    runtime.start();
+
+    await runtime.resumeNow('ses_no_err');
+    expect(backend.prompts).toHaveLength(1);
+    expect(backend.prompts[0].body.text).toBe('Continue.');
+
+    runtime.handleEvent({
+      type: 'session.error',
+      directory: 'C:/work',
+      data: {
+        sessionID: 'ses_err_evt',
+        error: { type: 'APIError', status: 429, message: 'Usage limit reached, try again in 3 minutes' },
+      },
+    });
+    expect(store.get('ses_err_evt').state).toBe('waiting_provider');
+    expect(store.get('ses_err_evt').next_wake_at).toBe(2_000 + 3 * 60_000);
+
+    const woken = runtime.wakeWaitingProvider();
+    expect(woken).toEqual({ ok: true, updated: 1 });
+    expect(store.get('ses_err_evt').next_wake_at).toBe(2_000);
+
+    const dismissed = runtime.dismiss('ses_err_evt');
+    expect(dismissed).toEqual({ ok: true, sessionID: 'ses_err_evt' });
+    expect(store.get('ses_err_evt').state).toBe('completed');
+    expect(events.some((e) => e.type === 'spleen:recovery')).toBe(true);
+    runtime.stop();
   });
 });

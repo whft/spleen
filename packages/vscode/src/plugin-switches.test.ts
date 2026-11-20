@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { pluginPolicyResource, pluginSwitchState } from '../../web/server/lib/opencode/plugin-switches.js';
+import { CORE_INSTRUCTIONS_FILE_NAME, SPLEEN_BASE_RULES } from '../../web/server/lib/session-knowledge/base-rules.js';
 import { applyPluginSwitchPolicies, readPluginSwitches, setPluginSwitch } from './plugin-switches';
 
 const directories: string[] = [];
@@ -60,7 +61,9 @@ describe('managed OpenCode layer', () => {
     assert.ok(configPath);
     assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')), {
       policies: [{ action: 'integration.use', resource: 'plugin:opencode-wakatime', effect: 'deny' }],
+      instructions: [path.join(directory, CORE_INSTRUCTIONS_FILE_NAME)],
     });
+    assert.equal(fs.readFileSync(path.join(directory, CORE_INSTRUCTIONS_FILE_NAME), 'utf8'), `${SPLEEN_BASE_RULES}\n`);
   });
 
   test('rewrites its own managed file even after it set OPENCODE_CONFIG', () => {
@@ -74,6 +77,7 @@ describe('managed OpenCode layer', () => {
     assert.ok(configPath);
     assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')), {
       policies: [{ action: 'integration.use', resource: 'plugin:opencode-wakatime', effect: 'deny' }],
+      instructions: [path.join(directory, CORE_INSTRUCTIONS_FILE_NAME)],
     });
   });
 
@@ -91,6 +95,7 @@ describe('managed OpenCode layer', () => {
     assert.ok(content);
     assert.deepEqual(JSON.parse(content), {
       theme: 'spleen',
+      instructions: [path.join(directory, CORE_INSTRUCTIONS_FILE_NAME)],
       policies: [{ action: 'integration.use', resource: 'plugin:opencode-wakatime', effect: 'deny' }],
     });
   });
@@ -115,17 +120,17 @@ describe('managed OpenCode layer', () => {
 
     const env: NodeJS.ProcessEnv = {};
     applyPluginSwitchPolicies(env, directory, { userOwnsConfig: false });
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(directory, 'opencode.managed.json'), 'utf8')), { policies: [] });
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(directory, 'opencode.managed.json'), 'utf8')), {
+      policies: [],
+      instructions: [path.join(directory, CORE_INSTRUCTIONS_FILE_NAME)],
+    });
     assert.equal(env.OPENCODE_CONFIG, path.join(directory, 'opencode.managed.json'));
   });
 
-  test('fails a launch when denials cannot merge into OPENCODE_CONFIG_CONTENT, and leaves it alone without denials', () => {
+  test('fails a launch when the rules or denials cannot merge into OPENCODE_CONFIG_CONTENT', () => {
     const directory = temporaryDirectory();
     const env: NodeJS.ProcessEnv = { OPENCODE_CONFIG_CONTENT: 'not json' };
-    assert.deepEqual(applyPluginSwitchPolicies(env, directory, { userOwnsConfig: true }), { updated: false, requiresManualRestart: true });
-    assert.equal(env.OPENCODE_CONFIG_CONTENT, 'not json');
-
-    setPluginSwitch(directory, 'plugin:opencode-wakatime', false);
     assert.throws(() => applyPluginSwitchPolicies(env, directory, { userOwnsConfig: true }));
+    assert.equal(env.OPENCODE_CONFIG_CONTENT, 'not json');
   });
 });

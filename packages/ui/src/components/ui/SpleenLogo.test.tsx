@@ -22,11 +22,8 @@ const render = (element: React.ReactElement) => act(async () => {
 const advance = (ms: number) => act(async () => {
   jest.advanceTimersByTime(ms);
 });
-const tierOpacities = (logo = 0) => {
-  const svg = host.querySelectorAll('svg')[logo];
-  return ART.tiers.map((path) => Number(svg.querySelector(`path[d="${path}"]`)?.getAttribute('fill-opacity')));
-};
-const litPattern = (lit: number) => ART.tiers.map((_, index) => (index === lit ? ART.tierLit[index] : ART.tierRest[index]));
+const mark = () => host.querySelector<SVGGElement>('svg > g');
+const opacity = () => Number(mark()?.style.opacity);
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -41,33 +38,29 @@ afterEach(async () => {
   jest.useRealTimers();
 });
 
-test('a still logo shows its tiers at their resting opacity', async () => {
+test('renders the Spleen monogram blades and vermilion core', async () => {
   await render(<SpleenLogo />);
-  expect(tierOpacities()).toEqual([...ART.tierOpacity]);
-
-  await advance(3000);
-  expect(tierOpacities()).toEqual([...ART.tierOpacity]);
+  const paths = [...host.querySelectorAll('svg path')].map((path) => path.getAttribute('d'));
+  expect(paths).toEqual([...ART.shell, ART.core]);
+  const core = host.querySelector('svg > g > path');
+  expect(core?.getAttribute('d')).toBe(ART.core);
+  expect(core?.getAttribute('fill')).toBe(ART.accent);
+  expect(opacity()).toBe(1);
 });
 
-test('a loading logo lights one tier at a time, outer to core, once a second', async () => {
+test('a loading logo breathes without touching its geometry', async () => {
   await render(<SpleenLogo isAnimated />);
-  const first = tierOpacities().findIndex((opacity, index) => opacity !== ART.tierRest[index]);
-  expect(tierOpacities()).toEqual(litPattern(first));
+  const paths = [...host.querySelectorAll('svg path')].map((path) => path.getAttribute('d'));
 
-  for (let step = 1; step <= ART.tiers.length; step += 1) {
-    await advance(1000);
-    expect(tierOpacities()).toEqual(litPattern((first + step) % ART.tiers.length));
-  }
+  await advance(1000);
+  expect(opacity()).toBe(0.55);
+  await advance(1000);
+  expect(opacity()).toBe(1);
+  expect([...host.querySelectorAll('svg path')].map((path) => path.getAttribute('d'))).toEqual(paths);
 });
 
-test('two logos on one page keep their own wall gradients', async () => {
-  await render(<><SpleenLogo /><SpleenLogo /></>);
-  const gradientIds = [...host.querySelectorAll('linearGradient')].map((gradient) => gradient.getAttribute('id'));
-  expect(new Set(gradientIds).size).toBe(gradientIds.length);
-  for (const svg of host.querySelectorAll('svg')) {
-    for (const path of svg.querySelectorAll('path[fill^="url(#"]')) {
-      const id = path.getAttribute('fill')?.slice(5, -1) ?? '';
-      expect(svg.querySelector(`linearGradient[id="${id}"]`)).not.toBeNull();
-    }
-  }
+test('a still logo never dims', async () => {
+  await render(<SpleenLogo />);
+  await advance(3000);
+  expect(opacity()).toBe(1);
 });

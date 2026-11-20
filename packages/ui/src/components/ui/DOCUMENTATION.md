@@ -144,7 +144,7 @@ Both version rows occupy space from the first frame so asynchronous lookups leav
 
 ### Why the logo shares generated geometry with startup splashes
 
-`scripts/brand/generate.mjs` derives `spleenLogoArt.ts` from `scripts/brand/geometry.mjs` and also writes the pre-React splashes, keeping the handoff's pose identical. Levitation starts and ends in that pose, uses the logo's isometric projection and a larger canvas for lifted plates, and startup variants keep the pre-paint palette while the theme hydrates.
+`scripts/brand/generate.mjs` derives `spleenLogoArt.ts` from `scripts/brand/geometry.mjs` and also writes the pre-React splashes, keeping the handoff's pose identical. Levitation is a 1.8 s `y` keyframe on `SpleenLogo` that starts and ends in that pose; the animated variant's breathing comes from `useSpinnerPhase`. The mark's node sits outside the shell's stroked group in both the component and the generated assets, so it keeps its fill at every size.
 
 ### Why celebrations keep their own colours and deterministic spread
 

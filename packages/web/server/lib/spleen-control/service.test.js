@@ -2354,3 +2354,48 @@ describe('browser upload', () => {
     }
   });
 });
+
+describe('agent settings, ui control, recovery, and team control actions', () => {
+  it('reads non-secret settings, refuses secret/derived updates with 403, persists valid updates, and broadcasts events', async () => {
+    const persisted = [];
+    const broadcastUiEvent = vi.fn();
+    let stored = { themeId: 'spleen-dark', locale: 'en', desktopUiPassword: 'top-secret-password' };
+    const service = createSpleenControlService({
+      readSettingsFromDiskMigrated: async () => stored,
+      persistSettings: async (changes) => {
+        persisted.push(changes);
+        stored = { ...stored, ...changes };
+        return stored;
+      },
+      broadcastUiEvent,
+      sanitizeProjects: (p) => p,
+      buildOpenCodeUrl: (u) => `http://127.0.0.1:4096${u}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      sessionService: { create: vi.fn(), send: vi.fn(), fork: vi.fn(), moveToWorktree: vi.fn(), list: vi.fn(), abort: vi.fn() },
+      scheduledTaskService: { status: vi.fn(), list: vi.fn(), upsert: vi.fn(), remove: vi.fn(), run: vi.fn(), setEnabled: vi.fn(), resolveProjectID: vi.fn() },
+    });
+
+    const readRes = await service.execute('settings.read', {});
+    expect(readRes.settings.themeId).toBe('spleen-dark');
+    expect(readRes.settings.desktopUiPassword).toBeUndefined();
+
+    await expect(service.execute('settings.update', { changes: { desktopUiPassword: 'hacked' } }))
+      .rejects.toMatchObject({ statusCode: 403 });
+    expect(persisted).toHaveLength(0);
+
+    const updateRes = await service.execute('settings.update', { changes: { themeId: 'spleen-light' } });
+    expect(updateRes.updated).toEqual(['themeId']);
+    expect(persisted).toEqual([{ themeId: 'spleen-light' }]);
+    expect(broadcastUiEvent).toHaveBeenCalledWith({
+      type: 'spleen:settings-changed',
+      properties: { keys: ['themeId'] },
+    });
+
+    const uiRes = await service.execute('ui.control', { command: 'open_surface', surface: 'teams' });
+    expect(uiRes.dispatched).toBe(true);
+    expect(broadcastUiEvent).toHaveBeenLastCalledWith({
+      type: 'spleen:ui-control',
+      properties: { command: 'open_surface', surface: 'teams' },
+    });
+  });
+});

@@ -84,52 +84,60 @@ struct OverviewProvider: TimelineProvider {
     }
 }
 
-// MARK: - Logo (full Spleen mark drawn from the SVG)
+// MARK: - Logo (full Spleen mark drawn from the master SVG)
 
-/// The Spleen logo, drawn to match packages/web/public/logo-dark-512x512.svg (generated
-/// by scripts/brand): the open-shell cube with lightly shaded back walls, a faint roof and three
-/// roof tiers that brighten towards the centre. Everything uses `.primary` at some opacity, so
-/// the system tint on the Lock Screen / Control Center keeps the layers apart. Coordinates are
-/// the SVG's (range x:-41.568…41.568, y:-48…48); the roof is centred on (0, -24).
+/// The Spleen mark, drawn from the same 1000-unit paths as
+/// docs/brand/source/spleen-app-icon.svg: three interlocking architectural blades
+/// filled with `.primary` so Lock Screen and Control Center tint stay readable.
 /// Hand-kept copy of the in-app logo in scripts/brand/geometry.mjs: brand:generate does not
 /// write it, so update it whenever that drawing changes.
-struct CubeLogoView: View {
+struct SpleenLogoView: View {
     var body: some View {
         Canvas { context, size in
-            let halfW: CGFloat = 41.568
-            let halfH: CGFloat = 48
-            let scale = min(size.width / (halfW * 2), size.height / (halfH * 2))
-            let cx = size.width / 2
-            let cy = size.height / 2
-            let lineWidth = max(1.2, 2.2 * scale)
+            let scale = min(size.width, size.height) / 1000
+            let origin = CGPoint(
+                x: (size.width - 1000 * scale) / 2,
+                y: (size.height - 1000 * scale) / 2
+            )
 
-            // Cube coordinate → canvas point.
-            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: cx + x * scale, y: cy + y * scale) }
-            func polygon(_ points: [(CGFloat, CGFloat)]) -> Path {
-                var path = Path()
-                path.move(to: p(points[0].0, points[0].1))
-                for point in points.dropFirst() { path.addLine(to: p(point.0, point.1)) }
-                path.closeSubpath()
-                return path
-            }
-            // Roof rhombus, or a tier inside it, at `s` of the roof.
-            func rhombus(_ s: CGFloat) -> Path {
-                polygon([(0, -24 - 24 * s), (halfW * s, -24), (0, -24 + 24 * s), (-halfW * s, -24)])
+            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+                CGPoint(x: origin.x + x * scale, y: origin.y + y * scale)
             }
 
-            // The back walls seen through the open front.
-            context.fill(polygon([(-halfW, -24), (-halfW, 24), (0, 0)]), with: .color(.primary.opacity(0.12)))
-            context.fill(polygon([(halfW, -24), (0, 0), (halfW, 24)]), with: .color(.primary.opacity(0.15)))
-            context.fill(rhombus(1), with: .color(.primary.opacity(0.08)))
-            for (s, opacity) in [(0.8, 0.22), (0.58, 0.27), (0.36, 0.85)] as [(CGFloat, Double)] {
-                context.fill(rhombus(s), with: .color(.primary.opacity(opacity)))
-            }
+            var upper = Path()
+            upper.move(to: p(326, 172))
+            upper.addLine(to: p(748, 172))
+            upper.addLine(to: p(678, 286))
+            upper.addLine(to: p(386, 286))
+            upper.addLine(to: p(358, 314))
+            upper.addLine(to: p(358, 371))
+            upper.addLine(to: p(246, 342))
+            upper.addLine(to: p(246, 252))
+            upper.closeSubpath()
 
-            var edges = rhombus(1)
-            edges.move(to: p(-halfW, -24)); edges.addLine(to: p(-halfW, 24)); edges.addLine(to: p(0, 48))
-            edges.addLine(to: p(halfW, 24)); edges.addLine(to: p(halfW, -24))
-            edges.move(to: p(0, 0)); edges.addLine(to: p(0, 48))
-            context.stroke(edges, with: .color(.primary), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            var core = Path()
+            core.move(to: p(246, 376))
+            core.addLine(to: p(692, 492))
+            core.addLine(to: p(754, 554))
+            core.addLine(to: p(754, 624))
+            core.addLine(to: p(308, 508))
+            core.addLine(to: p(246, 446))
+            core.closeSubpath()
+
+            var lower = Path()
+            lower.move(to: p(674, 828))
+            lower.addLine(to: p(252, 828))
+            lower.addLine(to: p(322, 714))
+            lower.addLine(to: p(614, 714))
+            lower.addLine(to: p(642, 686))
+            lower.addLine(to: p(642, 629))
+            lower.addLine(to: p(754, 658))
+            lower.addLine(to: p(754, 748))
+            lower.closeSubpath()
+
+            context.fill(upper, with: .color(.primary))
+            context.fill(core, with: .color(.primary))
+            context.fill(lower, with: .color(.primary))
         }
     }
 }

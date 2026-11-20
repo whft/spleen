@@ -79,22 +79,22 @@ export const createStaticRoutesRuntime = (dependencies) => {
   <style>
     :root {
       color-scheme: dark;
-      --surface-background: #151313;
-      --surface-elevated: #1c1b1a;
-      --surface-foreground: #cdccc3;
-      --surface-muted-foreground: #b6b4ab;
-      --interactive-border: rgba(57,56,54,.72);
-      --primary-base: #edb449;
+      --surface-background: #0B0F14;
+      --surface-elevated: #121821;
+      --surface-foreground: #F3EFE7;
+      --surface-muted-foreground: #8C98A4;
+      --interactive-border: rgba(44,55,67,.72);
+      --primary-base: #D9503F;
     }
     @media (prefers-color-scheme: light) {
       :root {
         color-scheme: light;
-        --surface-background: oklch(0.97 0.02 85);
-        --surface-elevated: oklch(0.99 0.01 90);
-        --surface-foreground: oklch(0.25 0.02 40);
-        --surface-muted-foreground: oklch(0.45 0.02 50);
-        --interactive-border: rgba(194,151,77,.22);
-        --primary-base: oklch(0.65 0.2 55);
+        --surface-background: #FBF9F5;
+        --surface-elevated: #FFFFFF;
+        --surface-foreground: #12161C;
+        --surface-muted-foreground: #5B6570;
+        --interactive-border: rgba(217,210,198,.72);
+        --primary-base: #C2463A;
       }
     }
     * { box-sizing: border-box; }
@@ -177,8 +177,8 @@ export const createStaticRoutesRuntime = (dependencies) => {
 </head>
 <body>
   <main>
-    <svg class="logo" viewBox="-50 -50 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Spleen logo">
-      <!-- brand:flat-logo:start --><defs><linearGradient id="spleen-logo-l" gradientUnits="userSpaceOnUse" x1="-40" y1="-30" x2="-4" y2="10"><stop offset="0" stop-color="currentColor" stop-opacity="0.03"/><stop offset="0.7" stop-color="currentColor" stop-opacity="0.12"/><stop offset="1" stop-color="currentColor" stop-opacity="0.2"/></linearGradient><linearGradient id="spleen-logo-r" gradientUnits="userSpaceOnUse" x1="40" y1="20" x2="4" y2="-20"><stop offset="0" stop-color="currentColor" stop-opacity="0.06"/><stop offset="0.7" stop-color="currentColor" stop-opacity="0.16"/><stop offset="1" stop-color="currentColor" stop-opacity="0.24"/></linearGradient></defs><path d="M0 -44 A44 44 0 0 0 0 44 L0 -44 Z" fill="url(#spleen-logo-l)"/><path d="M0 -44 A44 44 0 0 1 0 44 L0 -44 Z" fill="url(#spleen-logo-r)"/><path d="M-31 -31 A44 44 0 0 1 31 -31 A36 36 0 0 0 -31 -31 Z" fill="currentColor" fill-opacity="0.08"/><path data-tier="0" data-rest="0.12" data-lit="0.55" d="M-10 -23 a5 5 0 1 0 0.01 0 Z" fill="currentColor" fill-opacity="0.22"/><path data-tier="1" data-rest="0.15" data-lit="0.48" d="M2 -2 a5 5 0 1 0 0.01 0 Z" fill="currentColor" fill-opacity="0.27"/><path data-tier="2" data-rest="0.38" data-lit="0.85" d="M-5 22 a5 5 0 1 0 0.01 0 Z" fill="currentColor" fill-opacity="0.85"/><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M0 -44 A44 44 0 1 1 -0.01 -44 Z"/><path d="M16 -26 C6 -36 -16 -32 -18 -16 C-20 -2 8 0 14 12 C20 24 4 32 -8 30 C-14 29 -18 26 -20 22"/></g><!-- brand:flat-logo:end -->
+    <svg class="logo" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Spleen logo">
+      <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#D9503F"/><!-- brand:flat-logo:end -->
     </svg>
     <h1>Spleen is running in headless mode</h1>
     <p>This server is ready. Open it from the Spleen desktop or mobile app to use it.</p>

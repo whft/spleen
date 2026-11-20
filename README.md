@@ -3,7 +3,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/whft/spleen?style=flat&labelColor=100F0F&color=205EA6)](https://github.com/whft/spleen/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-66800B?style=flat&labelColor=100F0F)](LICENSE)
 
-Built on the OpenChamber source (MIT), rebranded and maintained as Spleen. The desktop app is a Tauri 2 host; no Electron runtime is shipped.
+Spleen is an independent OpenCode workspace. The desktop app is a Tauri 2 host; no Electron runtime is shipped.
 
 ## Run agent work. Keep control. Ship from anywhere.
 
@@ -12,19 +12,6 @@ Built on the OpenChamber source (MIT), rebranded and maintained as Spleen. The d
 Start agent work, see what changed, and take it through review and release. Your projects and sessions remain available when you switch devices or step away.
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/references/desktop_dark.png"><img src="docs/references/desktop_light.png" alt="Spleen desktop app"></picture>
-
-<details>
-<summary>More screenshots</summary>
-
-![VS Code Extension](packages/vscode/extension.jpg)
-
-<p>
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/references/mobile/new_session_dark.png"><img src="docs/references/mobile/new_session_light.png" width="30%" alt="Spleen mobile new session"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/references/mobile/chat_dark.png"><img src="docs/references/mobile/chat_light.png" width="30%" alt="Spleen mobile chat"></picture>
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/references/mobile/context_usage_dark.png"><img src="docs/references/mobile/context_usage_light.png" width="30%" alt="Spleen mobile context and usage"></picture>
-</p>
-
-</details>
 
 ## What you can do with Spleen
 
@@ -54,7 +41,7 @@ Open the same projects and sessions from Desktop, Web/PWA, VS Code, iOS, or Andr
 
 ### Private remote access
 
-Pair a device with a one-time QR code and connect through **Private Relay** without opening ports or exposing a public server. The connection is end-to-end encrypted and can be revoked at any time. Direct connections, LAN/VPN access, Cloudflare/Ngrok tunnels, and SSH are also supported.
+Pair a device with a one-time QR code and connect through **Private Relay** without opening ports or exposing a public server. The connection is end-to-end encrypted and can be revoked at any time. Direct connections, LAN/VPN access, and Cloudflare/Ngrok tunnels are also supported.
 
 ### Track work across projects
 
@@ -68,7 +55,7 @@ Run a prompt once, daily, weekly, or on a cron schedule. Scheduled tasks can use
 
 | Surface | Role |
 | --- | --- |
-| **Desktop** | The complete workspace for macOS, Windows, and Linux, with multiple windows, Mini Chat, remote machines, SSH, and native notifications |
+| **Desktop** | The Windows workspace: run and review sessions, approve work, and get native notifications from a Tauri 2 shell |
 | **Web / PWA** | Open your workspace in a browser, install it as an app, and stay up to date through background notifications |
 | **VS Code** | Keep sessions beside your code, send selections to the agent, open results in the editor, and compare parallel runs |
 | **iOS / Android** | Review and steer work away from your desk, receive completion alerts, and use the terminal with touch controls |
@@ -76,46 +63,25 @@ Run a prompt once, daily, weekly, or on a cron schedule. Scheduled tasks can use
 
 ## Quick start
 
-### Desktop for macOS, Windows, and Linux
+### Windows desktop
 
-Download the latest release from [GitHub Releases](https://github.com/whft/spleen/releases/latest). Desktop bundles the matching OpenCode CLI, so no separate OpenCode installation is required.
+The desktop app targets Windows 10/11 with WebView2. Release artifacts are not published yet; build the unsigned installer from source with [Windows development](docs/operations/WINDOWS-DEV.md). The installer bundles the matching OpenCode CLI, so no separate OpenCode installation is required.
 
-The nightly build of `main` is in the [Canary release](https://github.com/whft/spleen/releases/tag/canary). Tomorrow's release, available tonight.
-
-Linux releases come for x86_64 and ARM64 as a `.deb` (Debian, Ubuntu), an `.rpm` (Fedora, openSUSE) and an AppImage. The packages install Spleen into the app menu, and in-app updates ask for your password to install the new package:
-
-```bash
-sudo apt install ./Spleen-*-linux-amd64.deb    # Debian, Ubuntu
-sudo dnf install ./Spleen-*-linux-x86_64.rpm   # Fedora
-```
-
-The AppImage needs no install. Make it executable and keep it in a writable location for in-app updates; on its first start it adds itself to the app menu:
-
-```bash
-chmod +x Spleen-*.AppImage
-./Spleen-*.AppImage
-```
-
-Linux AppImages require FUSE (`libfuse.so.2`). Without FUSE, run with `APPIMAGE_EXTRACT_AND_RUN=1`.
+The local build writes `Spleen_<version>_x64-setup.exe` under `packages/desktop/src-tauri/target/release/bundle/nsis/`.
 
 ### VS Code
 
-Install [Spleen from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.spleen), or search for "Spleen" in Extensions.
+Build the extension from [`packages/vscode`](packages/vscode/README.md). A Marketplace listing is not published yet.
 
 ### iOS and Android
 
-The iOS and Android shells build from `packages/mobile`; there is no public test build link yet. For Android, download the `.apk` from the [Canary release](https://github.com/whft/spleen/releases/tag/canary) once published.
+The shells build from [`packages/mobile`](packages/mobile/README.md); no public binary is published yet.
 
 ### CLI for Web and PWA
 
 Requires Node.js 24.14+. CLI/Web and VS Code use your installed [OpenCode CLI](https://opencode.ai).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/whft/spleen/main/scripts/install.sh | bash
-spleen --ui-password be-creative-here
-```
-
-Common operations:
+After installing the `spleen` CLI, common operations are:
 
 ```bash
 spleen status
@@ -167,6 +133,7 @@ Bugs go to [issues](https://github.com/whft/spleen/issues/new/choose). Questions
 Special thanks to:
 
 - [OpenCode](https://opencode.ai) for the API and open-source architecture Spleen builds on
+- [OpenChamber](https://github.com/fedaykindev/openchamber), the MIT-licensed source Spleen was rebranded from
 - [Pierre](https://pierrejs-docs.vercel.app/) for the diff viewer and syntax highlighting
 - The [T3 Code](https://github.com/pingdotgg/t3code) team for their browser adapter for [libghostty-vt](https://github.com/ghostty-org/ghostty), which our terminal is built on
 - [Yulia Ivashko](https://github.com/yulia-ivashko), who built the firework celebration that plays on every successful push

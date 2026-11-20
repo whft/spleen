@@ -22,6 +22,18 @@ test('the installer stays a current-user NSIS install with the Spleen identity',
   assert.equal(config.identifier, 'dev.spleen.desktop');
   assert.deepEqual(config.bundle.targets, ['nsis']);
   assert.equal(config.bundle.windows.nsis.installMode, 'currentUser');
+  assert.equal(config.bundle.windows.nsis.installerIcon, 'icons/icon.ico');
+  assert.equal(config.bundle.windows.nsis.uninstallerIcon, 'icons/icon.ico');
+  assert.equal(config.bundle.windows.nsis.headerImage, 'icons/installer-header.bmp');
+  assert.equal(config.bundle.windows.nsis.sidebarImage, 'icons/installer-sidebar.bmp');
+});
+
+test('the bundled icon set is the approved Spleen mark', () => {
+  assert.ok(config.bundle.icon.includes('icons/icon.ico'));
+  const svg = fs.readFileSync(path.join(desktopRoot, 'src-tauri', 'icons', 'app-icon.svg'), 'utf8');
+  assert.match(svg, /fill="#0B0F14"/);
+  assert.match(svg, /fill="#F3EFE7"/);
+  assert.match(svg, /fill="#D9503F"/);
 });
 
 test('the updater points at the Spleen-owned feed', () => {

@@ -8,6 +8,7 @@ import { runBackgroundNetworkTask } from '@/lib/background-network';
 import { useFreshestSourceControlVisualSummaryForBranch } from '@/stores/useGitHubPrStatusStore';
 import { useSessionMessages } from '@/sync/sync-context';
 import { useContextWindowLimits } from '@/hooks/useContextWindowLimits';
+import { useSessionGoal } from '@/hooks/useSessionGoal';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
@@ -232,7 +233,9 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
   const { totalCost, ownCost, subagentCost, subagentCount } = useSubagentCostRollup(sessionId);
   const cost = totalCost !== null && totalCost > 0 ? totalCost : null;
   const showCostBreakdown = cost !== null && subagentCount > 0 && subagentCost > 0;
-  const hasSession = showSession && (contextUsage !== null || cost !== null || Boolean(goalRow));
+  const { goal, enabled: goalEnabled } = useSessionGoal(sessionId ?? '', directory ?? undefined);
+  const hasGoal = Boolean(sessionId && goalEnabled && goal?.objective?.trim());
+  const hasSession = showSession && Boolean(sessionId) && (contextUsage !== null || cost !== null || lastReplyCacheHit !== null || hasGoal);
   const hasRepository = showRepository && Boolean(branch || changed || prSummary || attentionLabel);
 
   useReportWorkStatusPresence('session-repository', hasSession || hasRepository);

@@ -31,7 +31,7 @@ const credentialError = (res, error) => res.status(400).json({
   error: error instanceof Error ? error.message : 'Credential validation failed',
 });
 
-export function registerQuotaRoutes(app, { getQuotaProviders }) {
+export function registerQuotaRoutes(app, { getQuotaProviders, onQuotaRefreshed = () => {} }) {
   app.get('/api/quota/extensions', (_req, res) => {
     res.json({ extensions: listExtensionQuotaProviders() });
   });
@@ -100,7 +100,15 @@ export function registerQuotaRoutes(app, { getQuotaProviders }) {
       const { providerId } = req.params;
       if (!providerId) return res.status(400).json({ error: 'Provider ID is required' });
       const { fetchQuotaForProvider } = await getQuotaProviders();
-      res.json(await fetchQuotaForProvider(providerId));
+      const result = await fetchQuotaForProvider(providerId);
+      if (req.query?.refresh === '1' && result && (
+        Number(result.remaining) > 0
+        || result.available === true
+        || (Array.isArray(result.windows) && result.windows.some((w) => Number(w?.remainingPercent) > 0 || Number(w?.remaining) > 0))
+      )) {
+        Promise.resolve(onQuotaRefreshed({ providerId, reason: 'refresh' })).catch(() => {});
+      }
+      res.json(result);
     } catch (error) {
       if (error instanceof QuotaRouteError) return res.status(error.status).json({ code: error.code, error: error.message });
       console.error('Failed to fetch quota:', error);
@@ -121,6 +129,7 @@ export function registerQuotaRoutes(app, { getQuotaProviders }) {
         return res.status(400).json({ code: 'INVALID_REQUEST', error: 'Invalid gift reset request' });
       }
       await useZaiGiftReset({ recordId, resetType, grantType });
+      Promise.resolve(onQuotaRefreshed({ providerId, reason: 'gift-reset' })).catch(() => {});
       res.json({ success: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';

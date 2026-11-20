@@ -31,6 +31,8 @@ import { useQuotaProviderSync } from '@/hooks/useQuotaProviderSync';
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
 import { useGuestMarksSync } from '@/hooks/useGuestMarksSync';
 import { useLimitFailoverNotices } from '@/hooks/useLimitFailoverNotices';
+import { useRecoverySync } from '@/hooks/useRecoverySync';
+import { useAgentUiControlSync } from '@/hooks/useAgentUiControlSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
@@ -670,6 +672,8 @@ function App({ apis }: AppProps) {
   useGuestCatalogSync();
   useGuestMarksSync();
   useLimitFailoverNotices();
+  useRecoverySync();
+  useAgentUiControlSync();
   useRoutingSync();
   useEnterprisePolicySync();
   // Desktop windows on a relay host; the phone has its own handling in MobileApp.

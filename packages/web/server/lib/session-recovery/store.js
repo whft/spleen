@@ -2,9 +2,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 3;
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'needs_review']);
+
+const isPidAlive = (pid) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  if (pid === process.pid) return true;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+};
 
 const MIGRATIONS = [
   `
@@ -52,6 +63,12 @@ const MIGRATIONS = [
   );
   INSERT OR IGNORE INTO recovery_lease (id, owner, expires_at) VALUES (1, '', 0);
   `,
+  `
+  ALTER TABLE executions ADD COLUMN provider_waits INTEGER NOT NULL DEFAULT 0;
+  `,
+  `
+  ALTER TABLE executions ADD COLUMN resumed_at INTEGER;
+  `,
 ];
 
 const loadDatabaseSync = () => {
@@ -60,7 +77,7 @@ const loadDatabaseSync = () => {
   return createRequire(import.meta.url)('node:sqlite').DatabaseSync;
 };
 
-export const openRecoveryDatabase = (filePath) => {
+const openRecoveryDatabase = (filePath) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const DatabaseSync = loadDatabaseSync();
   const db = new DatabaseSync(filePath);
@@ -105,6 +122,8 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
         attempts = CASE WHEN executions.state = 'recovering' THEN executions.attempts ELSE 0 END,
         next_wake_at = CASE WHEN executions.state = 'recovering' THEN executions.next_wake_at ELSE NULL END,
         resume_message_id = CASE WHEN executions.state = 'recovering' THEN executions.resume_message_id ELSE NULL END,
+        provider_waits = CASE WHEN executions.state = 'recovering' THEN executions.provider_waits ELSE 0 END,
+        resumed_at = CASE WHEN executions.state = 'recovering' THEN executions.resumed_at ELSE NULL END,
         last_error = NULL
     `),
     getExecution: db.prepare('SELECT * FROM executions WHERE session_id = ?'),
@@ -112,13 +131,15 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
       SELECT * FROM executions WHERE state NOT IN ('completed', 'failed', 'needs_review') ORDER BY started_at ASC
     `),
     listAll: db.prepare('SELECT * FROM executions ORDER BY updated_at DESC LIMIT 200'),
+    listFailedSince: db.prepare("SELECT * FROM executions WHERE state = 'failed' AND updated_at > ? ORDER BY updated_at DESC"),
     setState: db.prepare('UPDATE executions SET state = ?, updated_at = ?, last_error = ? WHERE session_id = ?'),
     finish: db.prepare(`
-      UPDATE executions SET state = ?, updated_at = ?, last_error = ?, next_wake_at = NULL WHERE session_id = ?
+      UPDATE executions SET state = ?, updated_at = ?, last_error = ?, next_wake_at = NULL, provider_waits = 0, resumed_at = NULL WHERE session_id = ?
     `),
     touch: db.prepare('UPDATE executions SET updated_at = ?, last_event_seq = ? WHERE session_id = ?'),
     schedule: db.prepare(`
-      UPDATE executions SET state = ?, updated_at = ?, attempts = ?, next_wake_at = ?, resume_message_id = ?, last_error = ?
+      UPDATE executions SET state = ?, updated_at = ?, attempts = ?, next_wake_at = ?, resume_message_id = ?, last_error = ?,
+        provider_waits = COALESCE(?, provider_waits), resumed_at = COALESCE(?, resumed_at)
       WHERE session_id = ?
     `),
     checkpoint: db.prepare('UPDATE executions SET checkpoint = ?, updated_at = ? WHERE session_id = ?'),
@@ -134,11 +155,14 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
     tools: db.prepare('SELECT * FROM tool_outcomes WHERE session_id = ? ORDER BY updated_at ASC'),
     event: db.prepare('INSERT INTO recovery_events (at, type, session_id, detail) VALUES (?, ?, ?, ?)'),
     recentEvents: db.prepare('SELECT * FROM recovery_events ORDER BY id DESC LIMIT 100'),
+    parent: db.prepare('UPDATE executions SET parent_session_id = ?, updated_at = ? WHERE session_id = ?'),
     acquire: db.prepare(`
       INSERT INTO recovery_lease (id, owner, expires_at) VALUES (1, ?, ?)
       ON CONFLICT(id) DO UPDATE SET owner = excluded.owner, expires_at = excluded.expires_at
       WHERE recovery_lease.expires_at <= ? OR recovery_lease.owner = excluded.owner
     `),
+    forceLease: db.prepare('UPDATE recovery_lease SET owner = ?, expires_at = ? WHERE id = 1 AND owner = ?'),
+    wakeWaiting: db.prepare("UPDATE executions SET next_wake_at = ?, updated_at = ? WHERE state = 'waiting_provider'"),
     readLease: db.prepare('SELECT owner, expires_at FROM recovery_lease WHERE id = 1'),
     release: db.prepare("UPDATE recovery_lease SET owner = '', expires_at = 0 WHERE id = 1 AND owner = ?"),
   };
@@ -198,6 +222,12 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
       statements.touch.run(at, Math.trunc(seq), sessionID);
     },
 
+    noteParent(sessionID, parentSessionID, at = now()) {
+      if (!sessionID || !parentSessionID || sessionID === parentSessionID) return;
+      statements.parent.run(parentSessionID, at, sessionID);
+      recordEvent('parent.linked', sessionID, { parentSessionID }, at);
+    },
+
     saveCheckpoint(sessionID, checkpoint, at = now()) {
       statements.checkpoint.run(JSON.stringify(checkpoint), at, sessionID);
     },
@@ -212,8 +242,8 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
       recordEvent('needs_review', sessionID, { reason }, at);
     },
 
-    schedule(sessionID, { state, attempts, nextWakeAt = null, resumeMessageID = null, error = null, at = now() }) {
-      statements.schedule.run(state, at, attempts, nextWakeAt, resumeMessageID, error, sessionID);
+    schedule(sessionID, { state, attempts, nextWakeAt = null, resumeMessageID = null, error = null, providerWaits = null, resumedAt = null, at = now() }) {
+      statements.schedule.run(state, at, attempts, nextWakeAt, resumeMessageID, error, providerWaits, resumedAt, sessionID);
     },
 
     get(sessionID) {
@@ -226,6 +256,10 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
 
     all() {
       return statements.listAll.all();
+    },
+
+    failedSince(since) {
+      return statements.listFailedSince.all(Number(since) || 0);
     },
 
     recentEvents() {
@@ -243,7 +277,20 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
     tryAcquireLease(owner, ttlMs, at = now()) {
       statements.acquire.run(owner, at + ttlMs, at);
       const lease = statements.readLease.get();
-      return lease?.owner === owner;
+      if (lease?.owner === owner) return true;
+      const match = typeof lease?.owner === 'string' ? lease.owner.match(/^(\d+)-/) : null;
+      if (match) {
+        const pid = Number.parseInt(match[1], 10);
+        if (pid !== process.pid && !isPidAlive(pid)) {
+          statements.forceLease.run(owner, at + ttlMs, lease.owner);
+          return statements.readLease.get()?.owner === owner;
+        }
+      }
+      return false;
+    },
+
+    wakeWaitingProvider(at = now()) {
+      return Number(statements.wakeWaiting.run(at, at)?.changes) || 0;
     },
 
     renewLease(owner, ttlMs, at = now()) {

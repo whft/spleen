@@ -73,7 +73,7 @@ const getDesktopBridge = (): DesktopBridgeGlobal | null => {
   return (window as unknown as { __SPLEEN_DESKTOP__?: DesktopBridgeGlobal }).__SPLEEN_DESKTOP__ ?? null;
 };
 
-export const hasDesktopRuntime = (): boolean => getDesktopRuntime()?.runtime === 'tauri';
+const hasDesktopRuntime = (): boolean => getDesktopRuntime()?.runtime === 'tauri';
 
 const getDesktopPlatform = (): string | null => {
   if (typeof window === 'undefined') return null;

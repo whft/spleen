@@ -95,3 +95,7 @@ packages/desktop/.cache/
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# Local installer build logs
+installer-build-*.log
+

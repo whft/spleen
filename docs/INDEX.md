@@ -11,6 +11,7 @@ they are not aspirational.
 | [`operations/WINDOWS-DEV.md`](operations/WINDOWS-DEV.md) | Engineering | Build and run the desktop app on Windows |
 | [`quality/EVIDENCE.md`](quality/EVIDENCE.md) | QA | Test/verification matrix with observed outcomes |
 | [`upstream/UPSTREAM.md`](upstream/UPSTREAM.md) | Engineering | Source snapshot, license, divergence, upgrade plan |
+| [`brand/BRAND.md`](brand/BRAND.md) | Design, engineering | Approved mark, palette, asset map and theme mapping |
 
 Module contracts live beside their code, for example:
 
@@ -26,5 +27,5 @@ here.
 ## Open gaps
 
 The ledger lists blockers with the owner action required. The largest are the
-updater keypair, Windows code signing, the missing GitHub remote, and the
-not-yet-built installer.
+updater keypair and Windows code signing. iOS widget branding is a known gap for
+a future iOS build.

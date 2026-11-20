@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createManagedConfigRuntime, MANAGED_CONFIG_FILE_NAME } from './managed-config-file.js';
+import { CORE_INSTRUCTIONS_FILE_NAME, SPLEEN_BASE_RULES } from '../session-knowledge/base-rules.js';
 
 const temporaryDirectories = [];
 
@@ -59,9 +60,16 @@ describe('managed OpenCode config file', () => {
     expect(childEnv.SPLEEN_AGENT_TOOL_TOKEN).toBe('token');
     expect(await readConfigFile()).toEqual({
       plugins: ['-opencode.browser', path.join(dataDir, 'agent-tool', 'spleen-agent-tool'), titleDirectory],
+      instructions: [path.join(dataDir, CORE_INSTRUCTIONS_FILE_NAME)],
       skills: [path.join(dataDir, 'skills')],
       commands: { 'new-extension': { description: expect.any(String), template: expect.stringContaining(path.join(dataDir, 'skills', 'spleen-extensions', 'SKILL.md')) } },
     });
+  });
+
+  it('writes the base rules where OpenCode reads them into every session', async () => {
+    const { dataDir, runtime } = await createHarness({ settings: {} });
+    await runtime.buildManagedChildEnv();
+    expect(await fs.readFile(path.join(dataDir, CORE_INSTRUCTIONS_FILE_NAME), 'utf8')).toBe(`${SPLEEN_BASE_RULES}\n`);
   });
 
   it('writes the extension-writing skill where OpenCode can scan it, out of the agent\'s own reach', async () => {
@@ -385,11 +393,24 @@ describe('managed OpenCode config file', () => {
     expect(JSON.parse(childEnv.OPENCODE_CONFIG_CONTENT)).toEqual({
       model: 'test/model',
       plugins: ['-opencode.browser', path.join(dataDir, 'agent-tool', 'spleen-agent-tool'), titleDirectory],
+      instructions: [path.join(dataDir, CORE_INSTRUCTIONS_FILE_NAME)],
       skills: [path.join(dataDir, 'skills')],
       commands: { 'new-extension': expect.any(Object) },
     });
     await expect(fs.stat(path.join(dataDir, MANAGED_CONFIG_FILE_NAME))).rejects.toThrow();
     expect(await runtime.refreshManagedConfigFile()).toEqual({ updated: false, reason: 'external-config' });
+  });
+
+  it('keeps the user instruction files and adds the base rules once', async () => {
+    const { dataDir, runtime } = await createHarness({
+      settings: {},
+      env: { OPENCODE_CONFIG: '/home/user/opencode.json', OPENCODE_CONFIG_CONTENT: '{"instructions":["/home/user/rules.md"]}' },
+    });
+
+    const childEnv = await runtime.buildManagedChildEnv();
+    const config = JSON.parse(childEnv.OPENCODE_CONFIG_CONTENT);
+
+    expect(config.instructions).toEqual(['/home/user/rules.md', path.join(dataDir, CORE_INSTRUCTIONS_FILE_NAME)]);
   });
 
   it('leaves no temp file behind and never publishes a partial list', async () => {

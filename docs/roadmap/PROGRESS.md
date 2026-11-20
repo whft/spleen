@@ -32,9 +32,11 @@ proved it. Dates are local (Windows, UTC-5).
 - `packages/electron`, `.openchamber`, `.claude` and the inherited changelog
   removed; root scripts now speak to `packages/desktop`.
 - `bun install`, `type-check:ui`, `type-check:web` pass, `bun run build` exits 0.
-- Brand assets: `scripts/brand/geometry.mjs` + `generate.mjs` produce 8 text and
-  17 image files (favicon, PWA, Tauri icons, tray, `.ico`); `SpleenLogo.tsx`
-  renders `SPLEEN_LOGO_ART`.
+- Brand assets: `scripts/brand` now reads the approved identity kit vectors in
+  `docs/brand/source` and writes 15 text and 56 image files (favicon, PWA, Tauri
+  icons, NSIS header/sidebar, tray, `.ico`, mobile launcher and splash).
+  `SpleenLogo.tsx` renders the kit path and terminal node; the default
+  `spleen-dark`/`spleen-light` themes use the kit palette.
 - Remaining brand gaps fixed on 2026-11-18: `site.webmanifest` name/colors,
   iOS widget scheme, iOS privacy comments, the ghostty PTY symbol, README
   badges/links.
@@ -135,7 +137,7 @@ Found only by running the compiled sidecar, each fixed at the cause:
   (tag/version agreement, signing-secret guard, draft release). The inherited
   upstream workflows that depended on OpenChamber infrastructure were removed.
 - Brand gate `scripts/brand/audit.mjs` with a two-entry allowlist for upstream
-  attribution; `bun run brand:audit` reports `8843 tracked files clean`.
+  attribution; `bun run brand:audit` reports the tracked tree clean.
 - Internal docs: `docs/INDEX.md`, architecture, recovery, Windows dev, evidence
   and upstream pages, plus `packages/web/server/lib/session-recovery/DOCUMENTATION.md`.
 

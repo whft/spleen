@@ -36,7 +36,7 @@ interface UpdateDialogProps {
   runtimeType?: 'desktop' | 'web' | 'vscode' | 'mobile' | null;
 }
 
-const GITHUB_RELEASES_URL = 'https://github.com/spleen/spleen/releases';
+const GITHUB_RELEASES_URL = 'https://github.com/whft/spleen/releases';
 
 type NotesGroup = { heading: string; bullets: string[] };
 

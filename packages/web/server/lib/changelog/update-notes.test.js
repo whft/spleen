@@ -102,7 +102,7 @@ describe('release sources', () => {
       return url.includes('api.spleen.invalid') ? { ok: false } : { ok: true, json: async () => index };
     };
     expect((await fetchReleaseNotes('1.2.3', undefined, compare, { fetch: apiDown }))[0].title).toBe('Comments everywhere');
-    expect(urls).toEqual(['https://api.spleen.invalid/v1/changelog/full', 'https://raw.githubusercontent.com/spleen/spleen/main/changelog/index.json']);
+    expect(urls).toEqual(['https://api.spleen.invalid/v1/changelog/full', 'https://raw.githubusercontent.com/whft/spleen/main/changelog/index.json']);
   });
 });
 

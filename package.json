@@ -45,7 +45,6 @@
     "check:changed": "node scripts/check-changed.mjs",
     "test": "node scripts/run-isolated-tests.mjs scripts && bun run --cwd packages/sdk test && bun run --cwd packages/ui test && bun run --cwd packages/vscode test && bun run --cwd packages/web test && bun run --cwd packages/desktop test",
     "clean": "node scripts/clean.mjs",
-    "changelog-card": "node scripts/changelog-card/generate.mjs",
     "changelog:build": "node scripts/changelog/build.mjs",
     "changelog:check": "node scripts/changelog/build.mjs --check",
     "postinstall": "node ./fix-deprecation.js && bun run --cwd packages/sdk build && bun run extensions:build",

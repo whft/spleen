@@ -300,7 +300,7 @@ The SDK ships its full reference. Read these before guessing a method or a manif
 
 - `node_modules/@spleen/sdk/API.md`: every manifest key and host method.
 - `node_modules/@spleen/sdk/GUEST_SERVICES.md`: services, schedules, session events, the roles under `service.provides`.
-- https://github.com/spleen/spleen/tree/main/packages/sdk/examples: whole extensions. `agent-desk` uses nearly every point, `session-events-log` hears events, `notification-webhook` is a notification channel, `tracker-provider` a tracker, `github-token` an integration, `checklist-editor` a file editor, `opencode-plugin` an OpenCode plugin.
+- https://github.com/whft/spleen/tree/main/packages/sdk/examples: whole extensions. `agent-desk` uses nearly every point, `session-events-log` hears events, `notification-webhook` is a notification channel, `tracker-provider` a tracker, `github-token` an integration, `checklist-editor` a file editor, `opencode-plugin` an OpenCode plugin.
 
 Service roles (`browser`, `source-control`, `notifications`, `tracker`, `quota`) each have their own manifest block and wire: read that role in `GUEST_SERVICES.md` first.
 

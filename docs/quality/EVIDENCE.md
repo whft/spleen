@@ -12,10 +12,40 @@ the repository root unless a directory is named.
 | `bun run type-check:web` | pass |
 | `bun run build` | pass (web + desktop asset staging; needs `packages/mobile/scripts/prepare-web-assets.mjs` in this snapshot) |
 | `cargo check` (src-tauri) | pass, 1 warning (`sidecar::shared` unused) |
-| `bun run --cwd packages/desktop test` | 4 pass |
-| `vitest run server/lib/session-recovery/` (packages/web) | 15 pass |
-| `bun run desktop:build:unsigned` | pass, `Spleen_0.1.0_x64-setup.exe` (155.1 MiB), no updater artifact |
-| `bun run brand:audit` | pass, `8843 tracked files clean` |
+| `vitest run server/lib/session-recovery/` (packages/web) | 33 pass: crash matrices, limit parking and continuation, parent links, lease |
+| `bun run desktop:build:unsigned` | pass, `Spleen_0.1.0_x64-setup.exe` (155.19 MiB, 162,730,828 bytes, SHA-256 `7BCD4C49D5166034614157BEB18B7381FCBD8C5469172EC5E99725C559CAA714`), no updater artifact; its sidecar embeds `rust_pty.dll` and the usage-limit recovery |
+| `bun run brand:generate` | pass, 15 text files and 56 images rebuilt from `docs/brand/source` |
+| `bun run brand:generate --check` | pass, every text output current |
+| `bun run brand:audit` | pass, `8826 tracked files clean` |
+| `bun test scripts/brand/generate.test.mjs packages/ui/src/components/ui/SpleenLogo.test.tsx` | 11 pass: master path and accent node match the kit, the rendered app icon keeps the tile and node, the sprite glyph follows the master, tray has no tile or dot, `.ico` directory sizes correct |
+| `bun run --cwd packages/desktop test` | 5 pass, including the bundled icon set and NSIS installer icons |
+| `bun test` theme suite (definition, storage, readable colors, `SpleenLogo`) | 48 pass |
+| `bun test packages/web/server/lib/session-knowledge/runtime.test.js` | 51 pass, including `spleen.base` in every session and a response style that cannot replace it |
+| `vitest run server/lib/opencode/managed-config-file.test.js server/lib/opencode/managed-plugin-config.test.js` (selected) | 5 pass: the managed config names the base-rules file, the file holds the exact text, the fallback keeps the user's files and appends ours once |
+| `bun test packages/vscode/src/plugin-switches.test.ts -t "managed OpenCode layer"` | 6 pass: the extension's managed config names the same base-rules file, writes its text, and merges it into `OPENCODE_CONFIG_CONTENT` when the user owns the config |
+| `vitest run server/lib/terminal/runtime.test.js` (packages/web) | 51 pass; the shell-list case still fails on Windows path expectations, present before this change |
+| compiled `spleen-server.exe serve` + `POST /api/terminal/create` | 200, `{"status":"running"}`, so the sidecar loads bun-pty from its embedded `rust_pty.dll` |
+| dev server on `127.0.0.1:58233` with an isolated data dir and `OPENCODE_CONFIG` cleared | `opencode.managed.json` names `<instance>/core-instructions.md`; the file is 2100 chars, starts `Spleen house rules`, carries no persona or greeting, and managed OpenCode launched on its allocated port |
+| `bun run check:changed -- --ratchet-only` | pass: no new findings, no source file over 800 lines grew |
+| `bun run check:changed` | pass: lint, dead code, ratchet and file-size gates all green |
+
+The root `tsconfig.json` no longer names the removed `packages/electron`
+project, and the three exports knip reported (`openRecoveryDatabase`,
+`toolPartsOf`, `hasDesktopRuntime`) are now private. The full gate passes; knip
+still prints four configuration hints, none of which fail.
+
+## Brand identity
+
+| Probe | Observation |
+|---|---|
+| Icon in `target/release/spleen.exe` (`ExtractAssociatedIcon`) | bone S on the near-black rounded tile with the vermilion node |
+| Taskbar while the release app ran | the same Spleen tile, distinct from the bundled OpenCode CLI icon beside it |
+| `Spleen_0.1.0_x64-setup.exe` icon | the Spleen tile; the generated `installer.nsi` sets `MUI_ICON` and the header/sidebar bitmaps |
+| Installer artwork | `installer-header.bmp` 150x57 and `installer-sidebar.bmp` 164x314 render the mark, wordmark and caption |
+| Splash at 420x260 | kit mark, bone wordmark and vermilion progress bar on `#0B0F14` |
+| Default themes | `spleen-dark` and `spleen-light` resolve and are selected in Appearance; both round-trip through `requireTheme(compactTheme(...))` |
+| App screenshots | `docs/references/desktop_dark.png` and `desktop_light.png`, 1440x900, captured from the running server |
+| Settings → About | kit mark, `Spleen`, and a single GitHub link to `whft/spleen`; the inherited Discord and X links are gone |
 
 ## Shell tests (upstream baseline)
 
@@ -52,6 +82,19 @@ Spleen and remain visible until addressed.
 |---|---|
 | Ten crashed chats + children (test) | exactly 10 resume prompts, children `waiting_parent`, second pass sends none |
 | 429 on resume (test) | `waiting_provider`, attempts kept, next wake in the future |
+| Usage-limit execution failure (test) | `waiting_provider` at `retryAfterMs` (120s), state not `failed`, attempts kept |
+| Usage reset reached (test) | the completed-but-failed turn is resumed with the usage-limit prompt, crash attempt unchanged |
+| Future reset in the transcript (test) | a due `waiting_provider` row waits for the reset the error names instead of resuming early |
+| Short reset after a continuation (test) | a repeated 5-minute hint cannot wake the chat before the 1-hour backoff |
+| 429 on the continuation POST (test) | counted as a provider wait and parked at the 1-hour backoff |
+| Free limit naming 10.9 hours (test) | parked at a 5-minute probe, then at the named reset |
+| Accepted continuation not yet in the transcript (test) | waited for from its send time, then review after 10 minutes |
+| Crash budget spent (test) | a due limit row still resumes at `attempts: 2` |
+| Quota with no reset (test) | parks 1h after the failure, then 2h on the next pass |
+| Rate limit that outlived OpenCode retries (test) | 8s hint is not trusted after the turn failed; parks 1h |
+| Chat failed by an earlier build (test) | a `failed` row with `provider.quota` is parked and resumed at startup |
+| Subagent link (test) | `parentID` from session info is stored; the child waits while the parent is pending |
+| Running child of a parked parent (test) | attached as `running`, not deferred to `waiting_parent` |
 | Two coordinators (test) | only the lease owner reconciles |
 | Resume attempt accounting (test) | attempt count survives the resumed execution start; a real new turn resets it |
 | Real crash mid-tool | force-kill during a running `sleep`; after restart `resume.sent` → resumed execution `completed`; no duplicate turn |
@@ -59,8 +102,12 @@ Spleen and remain visible until addressed.
 
 ## Not verified
 
+- A real provider usage limit and its reset: no account was deliberately
+  exhausted. The paths use OpenCode 2.3.0's exact `SessionError` shape
+  (`provider.*`, `retryAfterMs`, `response.body`) in unit tests.
 - NSIS install, upgrade from a previous signed build, uninstall, UAC, WebView2 absence.
 - Code signing and updater signature verification (no certificate or keypair).
 - Windows 11, 125/150/200% DPI, high-contrast and screen-reader passes.
+- The tray glyph on a light Windows theme, and the tray icon's pixels in the notification area: it sits in the overflow flyout and this session could not inject the clicks to open it.
 - Remote pairing, relay, browser panel, SSH, terminal parity in the Tauri host.
 - Performance comparison against the original Electron build.

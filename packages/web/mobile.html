@@ -50,7 +50,7 @@
 
           // Set the actual --background CSS variable, not just the element background.
           // `<body class="bg-background">` paints `var(--background)`, and design-system.css
-          // ships a baked default (.dark { --background: ... /* #151313 */ }) that otherwise
+          // ships a baked default (.dark { --background: ... /* #0B0F14 */ }) that otherwise
           // overpaints our html background the moment the stylesheet loads — before React's
           // theme system injects the real (flexoki/custom) vars with !important. Setting the
           // var inline on the root wins over that non-!important default, so body paints the

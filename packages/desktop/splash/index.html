@@ -9,9 +9,9 @@
       html, body {
         margin: 0;
         height: 100%;
-        background: #0a0d10;
-        color: #e8e4dc;
-        font-family: "Segoe UI", system-ui, sans-serif;
+        background: radial-gradient(circle at 50% 35%, #121923 0%, #090C11 72%);
+        color: #F3EFE7;
+        font-family: "Segoe UI Variable", "Segoe UI", Inter, system-ui, sans-serif;
         user-select: none;
         -webkit-user-select: none;
       }
@@ -19,32 +19,30 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid #1e242b;
-        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
         overflow: hidden;
       }
       .wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-      .mark { width: 56px; height: 56px; }
-      .name { font-size: 20px; letter-spacing: 0.22em; text-transform: uppercase; color: #f3efe7; }
-      .state { font-size: 12px; color: #8b949e; letter-spacing: 0.04em; }
-      .bar { width: 132px; height: 2px; background: #1b2128; overflow: hidden; border-radius: 2px; }
-      .bar span { display: block; width: 40%; height: 100%; background: #d9503f; animation: slide 1.15s ease-in-out infinite; }
+      .mark { width: 72px; height: 72px; color: #F3EFE7; }
+      .name { font-size: 16px; font-weight: 600; letter-spacing: 0.28em; text-transform: uppercase; color: #F3EFE7; }
+      .bar { width: 128px; height: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; border-radius: 2px; }
+      .bar span { display: block; width: 42%; height: 100%; background: #D9503F; animation: slide 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+      .state { font-size: 12px; color: #8C98A4; letter-spacing: 0.02em; }
       @keyframes slide {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(330%); }
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(340%); }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
-        <path d="M32 9c11 0 19 7.4 19 17.2 0 6.1-3.4 9.9-8.5 12.1L32 43.6 21.5 38.3C16.4 36.1 13 32.3 13 26.2 13 16.4 21 9 32 9Z" fill="#d9503f" opacity=".92"/>
-        <path d="M32 26c7.4 0 12.6 4.6 12.6 10.8 0 6.2-5.2 10.8-12.6 10.8s-12.6-4.6-12.6-10.8C19.4 30.6 24.6 26 32 26Z" fill="#f3efe7" opacity=".14"/>
-        <path d="M32 33.5v14" stroke="#0a0d10" stroke-width="2.4" stroke-linecap="round"/>
+      <svg class="mark" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Spleen">
+        <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#D9503F"/><!-- brand:flat-logo:end -->
       </svg>
       <div class="name">Spleen</div>
       <div class="bar"><span></span></div>
-      <div class="state" id="state">Starting the local engine</div>
+      <div class="state" id="state">Starting workspace...</div>
     </div>
     <script>
       const params = new URLSearchParams(location.search);

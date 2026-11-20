@@ -518,7 +518,10 @@ extension storage and passes it as `OPENCODE_CONFIG` in the child's environment
 only; the user's own config and `process.env.OPENCODE_CONFIG` are untouched.
 When the user already owns `OPENCODE_CONFIG`, the denials merge into
 `OPENCODE_CONFIG_CONTENT` and the route reports `requiresManualRestart`, since
-the running child only reads that value at launch. A rewrite that fails after the
+the running child only reads that value at launch. The managed layer also names
+`core-instructions.md` in `instructions`: the extension writes the same base
+rules there that the web server uses, because it starts its own OpenCode and has
+no Spleen sender to carry the instruction entry. A rewrite that fails after the
 store write also answers saved with `requiresManualRestart`. An unreadable store
 leaves the managed file as it was and fails a fresh launch, because starting
 without the denials would load the plugins the user switched off. A rule that

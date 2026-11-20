@@ -37,11 +37,13 @@ flags, which are exactly the evidence recovery needs.
 |---|---|
 | `state` | see transition table below |
 | `execution_seq` | `durable.seq` of `session.execution.started` |
-| `attempts` | Spleen resumes sent for this interruption |
+| `attempts` | crash resumes sent for this interruption |
+| `provider_waits` | continuation prompts sent for the current provider-limit series |
+| `resumed_at` | when the last continuation prompt was accepted |
 | `next_wake_at` | earliest next reconcile action |
 | `resume_message_id` | inbox id returned by the resume prompt |
 | `checkpoint` | reserved for the last confirmed cursor/tool summary |
-| `last_error` | the decision reason, for the status route |
+| `last_error` | the decision reason or the error type the revive pass matches |
 
 `tool_outcomes` keeps `(session_id, tool_id)` with name, status, and whether the
 tool was executed. `recovery_events` is the audit trail of starts, outcomes,
@@ -58,7 +60,7 @@ States: `running`, `recovering`, `waiting_parent`, `waiting_provider`,
 |---|---|
 | `session.execution.started` | begin/restart the row, record seq |
 | `session.execution.succeeded` | `completed` |
-| `session.execution.failed` | `failed` with the error name |
+| `session.execution.failed` | `waiting_provider` at the reset when a provider usage limit stopped it, else `failed` with the error name |
 | `session.execution.interrupted` | `user` → completed; anything else → `recovering` with a short wake |
 | `session.tool.called` | tool intent, `executed` flag from the event |
 | `session.tool.success` / `session.tool.failed` | tool outcome |
@@ -84,6 +86,8 @@ On start, and on every hub reconnect and 30s poll, the coordinator:
 | session missing | `needs_review` |
 | session is active | `attach` (`running`) |
 | messages unreadable | `unknown`, retry in 15s |
+| transcript ends in a provider usage limit, its reset is still ahead | keep `waiting_provider` until that reset |
+| transcript ends in a provider usage limit, its reset has passed | resume, even when the failed assistant turn is complete |
 | transcript has no unfinished assistant turn | `completed`, or `failed` when the session outcome says failed |
 | unfinished turn, a Spleen resume marker is the last user message and no assistant followed | `recovering`, retry after 30s; `needs_review` after 10 min |
 | unfinished turn and the resume budget is spent (2) | `needs_review` |
@@ -102,24 +106,49 @@ slow OpenCode startup is not mistaken for an orphaned turn.
 ## Resume
 
 The continuation prompt goes into the same session, so the model already has the
-transcript. It adds only: the original request (clipped), completed tool calls it
-must not repeat, tool calls whose outcome is unknown and must be inspected
-before repeating, child-session results, and an instruction not to create a
-duplicate subagent. It carries
+transcript: it is the plain word `Continue.` and nothing else. It carries
 `metadata.spleenRecovery = { sessionID, executionSeq, attempt }`; the next
 reconciliation sees that user message and does not send a second resume.
 
-A provider limit (HTTP 429 or a quota/rate message) parks the row as
-`waiting_provider` at the reset time or 15 minutes out, and does not spend the
-resume budget. Any other failure backs off 30s, then 60s and spends an attempt.
+A provider limit parks the row as `waiting_provider` at the reset time the error
+names (`retryAfterMs` or the body's reset hints, anchored at the failure) or at
+an hour out, doubling per pass to 24 hours. A named reset farther than five
+minutes away gets one five-minute probe first, because a free-limit window can
+clear earlier than the provider's hint; if the probe is still limited, the
+named reset or the backoff applies. When the reset passes, the next
+reconciliation resumes the chat even though the failed assistant message is
+marked complete: the limit, not a crash, stopped the turn. Provider-limit waits
+are not bounded by the
+two-attempt crash budget: each continuation increments `provider_waits`, while
+`attempts` counts only crash resumes. A limit that repeats after a continuation
+never wakes sooner than the backoff for its `provider_waits`, so a provider that
+keeps naming a short reset cannot cause a tight continuation loop. A 429 on the
+prompt POST counts as a provider wait too, so a rate-limited prompt endpoint
+cannot be retried at its short hint either. A continuation the backend accepted
+but has not yet written to the transcript is awaited for 30s, up to 10 minutes
+from its send, instead of re-parking the previous limit error or sending a
+second prompt; past that the row goes to review. Any other failure backs off
+30s, then 60s and spends an attempt.
+
+At startup the same check runs on the transcript, so a limit reached while the
+app was closed is parked or resumed as well; the wait starts from the assistant
+message's completion time, not from the restart. Rows an earlier build had
+already marked `failed` with a limit error are parked once at startup (last
+35 days, 30s apart) and continue through the same path; a revived row starts
+with a fresh crash budget and a fresh limit backoff.
 
 ## Subagents
 
 Children (`parent_session_id`) are resumed only when their parent is not itself
-pending. A pending parent resumes first and receives the child states and
-summaries in its prompt; resuming a child first risks two agents redoing the
-same work. A child past its parent's recovery stays `waiting_parent` until the
-parent settles, then reconciles on its own.
+pending. The link is read from the session's parent fields during
+reconciliation, so subagents wait for their parent even when the execution
+events never named it. A pending parent resumes first and receives the child
+states and summaries in its prompt; resuming a child first risks two agents
+redoing the same work. A child past its parent's recovery stays
+`waiting_parent` until the parent settles, then reconciles on its own. A stored
+parent link defers an idle child before its session is fetched, and the child's
+wake follows the parent's next wake (capped at five minutes), so a parent parked
+for a long reset does not make every child poll the backend.
 
 ## Coordinator and DB
 
@@ -135,6 +164,12 @@ is used so the same code runs in Node tests and in the Bun-compiled sidecar.
   and the model is told to verify before repeating it.
 - `Session.Info.outcome` is not per-turn; only the transcript tail is trusted.
 - Children are not resumed before their parent by design.
+- A waiting chat shows nothing new until it resumes; the ledger keeps the state,
+  but the clients have no recovery banner yet.
+- A limit that names no reset is retried after 1h, 2h, 4h and so on up to 24h,
+  so a long weekly or monthly limit costs one continuation prompt per pass. A
+  long named reset gets one 5-minute probe first, which recovers a limit that
+  clears early at the cost of one possibly-refused request.
 - The ledger keeps one row per session; the `recovery_events` table holds the
   history needed for audits.
 - A resumed turn that crashes again starts a new execution event; the attempt
@@ -143,8 +178,9 @@ is used so the same code runs in Node tests and in the Bun-compiled sidecar.
 
 ## Verification
 
-- `packages/web`: `vitest run server/lib/session-recovery/` — 15 tests, including
-  ten crashed chats with children resumed once each, quota parking, lease
+- `packages/web`: `vitest run server/lib/session-recovery/` — 33 tests, including
+  ten crashed chats with children resumed once each, quota parking and
+  continuation, short-reset backoff, parent links read from session info, lease
   exclusivity and attempt accounting.
 - Real backend, 2026-11-18: turn with a running `sleep` tool, `spleen.exe`
   force-killed, app restarted; ledger recorded `resume.sent`, the resumed

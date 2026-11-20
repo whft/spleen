@@ -104,39 +104,39 @@
     --oc-motion-layout-easing: linear(0, 0.0344, 0.1145, 0.2151, 0.3209, 0.423, 0.5166, 0.5995, 0.6712, 0.7322, 0.7832, 0.8255, 0.8602, 0.8885, 0.9114, 0.9298, 0.9445, 0.9563, 0.9657, 0.9731, 0.9789, 0.9835, 0.9872, 0.99, 0.9922, 0.994, 0.9953, 0.9964, 0.9972, 0.9978, 0.9983, 0.9987, 1);
 
     /* Default Light Theme */
-    --background: oklch(0.97 0.02 85); /* Warm sand background */
-    --foreground: oklch(0.25 0.02 40); /* Dark warm text */
-    --card: oklch(0.99 0.01 90); /* Bright sand card */
-    --card-foreground: oklch(0.25 0.02 40); /* Dark warm text */
-    --popover: oklch(0.99 0.01 90); /* Bright sand popover */
-    --popover-foreground: oklch(0.25 0.02 40); /* Dark warm text */
-    --primary: oklch(0.65 0.2 55); /* Primary accent - orange */
-    --primary-foreground: oklch(0.99 0.01 90); /* Light text on primary */
-    --secondary: oklch(0.92 0.02 80); /* Light sand */
-    --secondary-foreground: oklch(0.25 0.02 40); /* Dark warm text */
-    --muted: oklch(0.9 0.015 75); /* Muted sand */
-    --muted-foreground: oklch(0.45 0.02 50); /* Medium warm text */
-    --accent: oklch(0.92 0.02 80); /* Light sand accent */
-    --accent-foreground: oklch(0.25 0.02 40); /* Dark warm text */
-    --destructive: oklch(0.55 0.25 25); /* Warm red */
-    --destructive-foreground: oklch(0.99 0.01 90); /* Light text */
-    --border: oklch(0.85 0.02 70); /* Warm border */
-    --input: oklch(0.88 0.02 75); /* Input background */
-    --ring: oklch(0.65 0.2 55); /* Focus ring color */
+    --background: #FBF9F5; /* Spleen paper */
+    --foreground: #12161C; /* Spleen ink */
+    --card: #FFFFFF; /* Bright paper card */
+    --card-foreground: #12161C; /* Spleen ink */
+    --popover: #FFFFFF; /* Bright paper popover */
+    --popover-foreground: #12161C; /* Spleen ink */
+    --primary: #C2463A; /* Spleen vermilion for light surfaces */
+    --primary-foreground: #FFFFFF; /* Light text on primary */
+    --secondary: #F4F0E8; /* Bone surface */
+    --secondary-foreground: #12161C; /* Spleen ink */
+    --muted: #F4F0E8; /* Bone surface */
+    --muted-foreground: #5B6570; /* Secondary ink */
+    --accent: #F4F0E8; /* Bone accent */
+    --accent-foreground: #12161C; /* Spleen ink */
+    --destructive: #B7493F; /* Accessible red */
+    --destructive-foreground: #FFFFFF; /* Light text */
+    --border: #D9D2C6; /* Warm paper border */
+    --input: #F4F0E8; /* Input background */
+    --ring: #2F6FB0; /* Focus ring color */
     --radius: 0.5625rem;
     --chart-1: oklch(0.58 0.15 230); /* Blue */
     --chart-2: oklch(0.58 0.15 145); /* Oasis green */
-    --chart-3: oklch(0.65 0.2 55); /* Orange */
+    --chart-3: #C2463A; /* Spleen vermilion */
     --chart-4: oklch(0.55 0.18 30); /* Rose */
     --chart-5: oklch(0.6 0.16 85); /* Golden sand */
-    --sidebar: oklch(0.95 0.02 80); /* Slightly darker sand */
-    --sidebar-foreground: oklch(0.25 0.02 40); /* Dark warm text */
-    --sidebar-primary: oklch(0.65 0.2 55); /* Primary accent */
-    --sidebar-primary-foreground: oklch(0.99 0.01 90); /* Light text */
-    --sidebar-accent: oklch(0.9 0.02 75); /* Light sand accent */
-    --sidebar-accent-foreground: oklch(0.25 0.02 40); /* Dark warm text */
-    --sidebar-border: oklch(0.85 0.02 70); /* Warm border */
-    --sidebar-ring: oklch(0.65 0.2 55); /* Focus ring */
+    --sidebar: #F4F0E8; /* Bone sidebar */
+    --sidebar-foreground: #12161C; /* Spleen ink */
+    --sidebar-primary: #C2463A; /* Spleen vermilion */
+    --sidebar-primary-foreground: #FFFFFF; /* Light text */
+    --sidebar-accent: #EFEAE0; /* Panel tone */
+    --sidebar-accent-foreground: #12161C; /* Spleen ink */
+    --sidebar-border: #D9D2C6; /* Warm paper border */
+    --sidebar-ring: #2F6FB0; /* Focus ring */
   }
 
   /* Shortcuts read in the interface font, the way tooltips show them. The
@@ -175,39 +175,39 @@
     --oc-glass-popover-blur: 40px;
     --oc-glass-tooltip-opacity: 64%;
     --oc-glass-saturation: 1.16;
-    /* Default Dark Theme - using OKLCH color space */
-    --background: oklch(0.16 0.01 30); /* #151313 */
-    --foreground: oklch(0.85 0.02 90); /* #cdccc3 */
-    --card: oklch(0.19 0.01 40); /* #1C1B1A */
-    --card-foreground: oklch(0.85 0.02 90); /* #cdccc3 */
-    --popover: oklch(0.24 0.01 40); /* #282726 */
-    --popover-foreground: oklch(0.85 0.02 90); /* #cdccc3 */
-    --primary: oklch(0.77 0.17 85); /* #edb449 - golden sand */
-    --primary-foreground: oklch(0.16 0.01 30); /* #151313 */
-    --secondary: oklch(0.29 0.01 40); /* #343331 */
-    --secondary-foreground: oklch(0.85 0.02 90); /* #cdccc3 */
-    --muted: oklch(0.33 0.01 40); /* #403E3C */
-    --muted-foreground: oklch(0.75 0.02 80); /* #b6b4ab */
-    --accent: oklch(0.29 0.01 40); /* #343331 */
-    --accent-foreground: oklch(0.85 0.02 90); /* #cdccc3 */
-    --destructive: oklch(0.65 0.15 30); /* #d98678 */
-    --destructive-foreground: oklch(0.9 0.02 80); /* #e1dcd0 */
-    --border: oklch(0.31 0.01 35); /* #393836 */
-    --input: oklch(0.33 0.01 40); /* #403E3C */
-    --ring: oklch(0.77 0.17 85); /* #edb449 */
-    --chart-1: oklch(0.68 0.12 230); /* #5aa9d9 - blue */
-    --chart-2: oklch(0.68 0.12 145); /* #81af6c - green */
-    --chart-3: oklch(0.7 0.13 95); /* #c2974d - yellow */
-    --chart-4: oklch(0.65 0.14 45); /* #d8886d - coral */
-    --chart-5: oklch(0.68 0.12 55); /* #d29470 - orange */
-    --sidebar: oklch(0.16 0.01 30); /* #151313 */
-    --sidebar-foreground: oklch(0.85 0.02 90); /* #cdccc3 */
-    --sidebar-primary: oklch(0.77 0.17 85); /* #edb449 */
-    --sidebar-primary-foreground: oklch(0.16 0.01 30); /* #151313 */
-    --sidebar-accent: oklch(0.24 0.01 40); /* #282726 */
-    --sidebar-accent-foreground: oklch(0.85 0.02 90); /* #cdccc3 */
-    --sidebar-border: oklch(0.31 0.01 35); /* #393836 */
-    --sidebar-ring: oklch(0.77 0.17 85); /* #edb449 */
+    /* Default Dark Theme */
+    --background: #0B0F14; /* Spleen tile */
+    --foreground: #F3EFE7; /* Spleen bone */
+    --card: #121821; /* Raised tile */
+    --card-foreground: #F3EFE7; /* Spleen bone */
+    --popover: #1A222D; /* Floating tile */
+    --popover-foreground: #F3EFE7; /* Spleen bone */
+    --primary: #D9503F; /* Spleen vermilion */
+    --primary-foreground: #FFFFFF; /* Light text on primary */
+    --secondary: #1A222D; /* Panel tile */
+    --secondary-foreground: #F3EFE7; /* Spleen bone */
+    --muted: #1A222D; /* Panel tile */
+    --muted-foreground: #8C98A4; /* Secondary text */
+    --accent: #1A222D; /* Panel tile */
+    --accent-foreground: #F3EFE7; /* Spleen bone */
+    --destructive: #E46D68; /* Accessible red */
+    --destructive-foreground: #0B0F14; /* Dark text */
+    --border: #2C3743; /* Spleen border */
+    --input: #2C3743; /* Input edge */
+    --ring: #83A7DC; /* Focus ring color */
+    --chart-1: #5AA9D9; /* Blue */
+    --chart-2: #76BE9D; /* Green */
+    --chart-3: #D9503F; /* Vermilion */
+    --chart-4: #E46D68; /* Coral */
+    --chart-5: #E6BA74; /* Amber */
+    --sidebar: #080B0F; /* Canvas below the chat */
+    --sidebar-foreground: #F3EFE7; /* Spleen bone */
+    --sidebar-primary: #D9503F; /* Spleen vermilion */
+    --sidebar-primary-foreground: #FFFFFF; /* Light text */
+    --sidebar-accent: #1A222D; /* Panel tile */
+    --sidebar-accent-foreground: #F3EFE7; /* Spleen bone */
+    --sidebar-border: #2C3743; /* Spleen border */
+    --sidebar-ring: #83A7DC; /* Focus ring */
   }
 
   * {

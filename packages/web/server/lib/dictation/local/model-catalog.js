@@ -31,7 +31,7 @@ export const LOCAL_STT_MODEL_CATALOG = {
   'parakeet-ultra-int8': {
     type: 'nemo_transducer',
     archiveUrl:
-      'https://github.com/spleen/spleen/releases/download/asr-models/sherpa-onnx-nemo-parakeet-ultra-int8.tar.bz2',
+      'https://github.com/whft/spleen/releases/download/asr-models/sherpa-onnx-nemo-parakeet-ultra-int8.tar.bz2',
     extractedDir: 'sherpa-onnx-nemo-parakeet-ultra-int8',
     files: {
       encoder: 'encoder.int8.onnx',

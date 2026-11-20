@@ -1,0 +1,122 @@
+{
+  "plus": {
+    "id": 1,
+    "svg": "08_UI_ICONS/svg/plus.svg",
+    "category": "core"
+  },
+  "x": {
+    "id": 2,
+    "svg": "08_UI_ICONS/svg/x.svg",
+    "category": "core"
+  },
+  "chevron-left": {
+    "id": 3,
+    "svg": "08_UI_ICONS/svg/chevron-left.svg",
+    "category": "core"
+  },
+  "chevron-right": {
+    "id": 4,
+    "svg": "08_UI_ICONS/svg/chevron-right.svg",
+    "category": "core"
+  },
+  "search": {
+    "id": 5,
+    "svg": "08_UI_ICONS/svg/search.svg",
+    "category": "core"
+  },
+  "settings": {
+    "id": 6,
+    "svg": "08_UI_ICONS/svg/settings.svg",
+    "category": "core"
+  },
+  "terminal": {
+    "id": 7,
+    "svg": "08_UI_ICONS/svg/terminal.svg",
+    "category": "core"
+  },
+  "folder": {
+    "id": 8,
+    "svg": "08_UI_ICONS/svg/folder.svg",
+    "category": "core"
+  },
+  "file": {
+    "id": 9,
+    "svg": "08_UI_ICONS/svg/file.svg",
+    "category": "core"
+  },
+  "git-branch": {
+    "id": 10,
+    "svg": "08_UI_ICONS/svg/git-branch.svg",
+    "category": "core"
+  },
+  "play": {
+    "id": 11,
+    "svg": "08_UI_ICONS/svg/play.svg",
+    "category": "core"
+  },
+  "stop": {
+    "id": 12,
+    "svg": "08_UI_ICONS/svg/stop.svg",
+    "category": "core"
+  },
+  "clock": {
+    "id": 13,
+    "svg": "08_UI_ICONS/svg/clock.svg",
+    "category": "core"
+  },
+  "check": {
+    "id": 14,
+    "svg": "08_UI_ICONS/svg/check.svg",
+    "category": "core"
+  },
+  "alert-triangle": {
+    "id": 15,
+    "svg": "08_UI_ICONS/svg/alert-triangle.svg",
+    "category": "core"
+  },
+  "trash": {
+    "id": 16,
+    "svg": "08_UI_ICONS/svg/trash.svg",
+    "category": "core"
+  },
+  "chat": {
+    "id": 17,
+    "svg": "08_UI_ICONS/svg/chat.svg",
+    "category": "extended"
+  },
+  "panel-left": {
+    "id": 18,
+    "svg": "08_UI_ICONS/svg/panel-left.svg",
+    "category": "extended"
+  },
+  "refresh-cw": {
+    "id": 19,
+    "svg": "08_UI_ICONS/svg/refresh-cw.svg",
+    "category": "extended"
+  },
+  "pause": {
+    "id": 20,
+    "svg": "08_UI_ICONS/svg/pause.svg",
+    "category": "extended"
+  },
+  "wifi-off": {
+    "id": 21,
+    "svg": "08_UI_ICONS/svg/wifi-off.svg",
+    "category": "extended"
+  },
+  "bot": {
+    "id": 22,
+    "svg": "08_UI_ICONS/svg/bot.svg",
+    "category": "extended"
+  },
+  "external-link": {
+    "id": 23,
+    "svg": "08_UI_ICONS/svg/external-link.svg",
+    "category": "extended"
+  },
+  "layers": {
+    "id": 24,
+    "svg": "08_UI_ICONS/svg/layers.svg",
+    "category": "extended"
+  }
+}

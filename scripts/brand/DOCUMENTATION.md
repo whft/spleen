@@ -2,51 +2,75 @@
 
 ## Ownership
 
-`scripts/brand` owns every drawing of the Spleen logo. `geometry.mjs` describes the shapes; `raster.mjs` turns them into PNG, the pixel-exact small cube and `.ico` files; `generate.mjs` writes each file where its runtime reads it. `bun run brand:generate` rewrites all of them; `bun run brand:generate --check` fails when a generated text file was edited by hand.
+`scripts/brand` turns the approved identity kit into every file each runtime
+reads. The vectors live in `docs/brand/source`; `geometry.mjs` reads them,
+`raster.mjs` produces PNG and `.ico` output, and `generate.mjs` writes the
+outputs. `bun run brand:generate` rewrites all of them; `bun run brand:generate
+--check` fails when a generated text file was edited by hand.
 
-The logo has four drawings, each for a kind of place:
-
-| Drawing | Where it shows |
-|---|---|
-| App icon, an Icon Composer document (`packages/electron/resources/icons/AppIcon.icon`) | macOS Dock and Finder, the iOS app. Its layers carry the six macOS appearances: Default, Dark, Clear and Tinted, light and dark |
-| Icon without a tile: the open shell with a dark grey inside, white edges, black outline | Windows, Linux, the VS Code Marketplace; on a black square for phone home screens, PWA and Android |
-| In-app logo: the open shell in one colour | Every splash, About, sign-in, empty states, README |
-| Glyph: cube outline and two roof rings, one colour | macOS menu bar, favicon, VS Code activity bar and title buttons, model picker sprite, Android notification and themed icon, iOS Control Center |
-
-Spleen Canary, the nightly build, has its own icons in `packages/electron/resources/icons-canary`, drawn by `canary.mjs`: the release cube on a blue tile with a yellow canary at its side. Its Icon Composer document `AppIcon.icon` is the master and is edited in Icon Composer; the Windows and Linux icon (the release icon without a tile, its cube flat in blue, with the rendered document's bird in front in a black outline), the `.ico` (blue pixel cubes below 32 px, each with a round pixel chick kept as text in `raster.mjs`), the menu bar templates (the glyph with the canary redrawn per pixel, kept as text in `canary.mjs`, standing over its lower right corner with a thin clear gap around it, in every state) and `Assets.car`/`icon.icns` come from it.
-
-The macOS menu bar animation lives in `packages/electron/tray.mjs`; this module only draws its frames. `SpleenLogo.tsx` renders the in-app logo from the generated `spleenLogoArt.ts` and owns its loading animation.
+The identity itself, the colour map and the consumer list live in
+`docs/brand/BRAND.md`. Change the source vector or the tokens there first, then
+regenerate.
 
 ## Invariants
 
-- Every logo file in the repository comes out of `generate.mjs`, except Canary's `AppIcon.icon`, the master its other files are generated from. A change to the logo is a change to `geometry.mjs` and a run of `bun run brand:generate`, never an edit of an output. One exception: the iOS widgets draw the in-app logo in SwiftUI (`CubeLogoView` in `packages/mobile/ios/App/SpleenWidget/WidgetShared.swift`), by hand from the same numbers. A change to the in-app logo updates it in the same change; `--check` does not cover it.
-- The four HTML documents that show before React (the web `index.html`, the Electron splash in `early-startup.mjs`, the VS Code loader in `webviewHtml.ts`, the headless server page in `static-routes-runtime.js`) and `SpleenLogo.tsx` draw the same in-app logo. The HTML documents carry it between `<!-- brand:flat-logo:start -->` and `<!-- brand:flat-logo:end -->`; the generator rewrites only that region.
-- The in-app logo is drawn in `currentColor` (or the splash stroke colour), never a fixed colour, so it follows every theme.
-- Text outputs are checked by `generate.test.mjs`; image bytes are not, because they depend on the libvips build.
-- On macOS with Xcode 26 the generator also compiles `Assets.car` and `icon.icns` with `actool`, renders `dev-icon.png` with Icon Composer's `ictool`, writes every Canary icon, and writes the Control Center SF Symbol with `swiftdraw`. Elsewhere those files stay as they are.
+- Every mark comes from `docs/brand/source/spleen-app-icon.svg`,
+  `spleen-symbol-color-transparent.svg` or `spleen-tray-white.svg`. No module
+  keeps a second copy of the path or the dot coordinates.
+- The app icon keeps the 217/1000 tile radius, `#0B0F14` tile, `#F3EFE7` bone
+  blades and `#D9503F` central vermilion blade.
+- Tray and splash images have an alpha channel and no baked background. The tray
+  is the monochrome glyph; the rounded tile never goes in the tray.
+- The NSIS header and sidebar bitmaps are 24-bit BMPs built from the same tile,
+  bone blades and vermilion core. The installer and uninstaller use `icon.ico`.
+- The vermilion core belongs to the brand mark and the app icon. The tray glyph
+  and generic UI icons render monochrome.
+- The four documents that render before React (`packages/desktop/splash/index.html`,
+  `packages/web/index.html`, the VS Code loader in `webviewHtml.ts`, the headless
+  server page in `static-routes-runtime.js`) and `SpleenLogo.tsx` draw the same
+  1000-unit path.
+  The HTML documents carry it between `<!-- brand:flat-logo:start -->` and
+  `<!-- brand:flat-logo:end -->`; the generator rewrites only that region.
+- `packages/web/public/favicon.svg` and the Tauri `app-icon.svg` are the app
+  icon, not a bare symbol, so they stay visible on both light and dark chrome.
+- Text outputs are checked by `generate.test.mjs`; image bytes are not, because
+  they depend on the libvips build. The Windows build plus the installer smoke
+  test cover the raster outputs.
+- Generic UI icons stay on `@/components/icon/Icon`. `docs/brand/ui-icons` is
+  source material for app-specific marks, not a replacement icon library.
 
 ## Decisions
 
-### Why one script and not exported files
+### Why the generator reads the SVG source
 
-The logo used to live in about forty hand-exported files and six inline drawings that had to be kept in step by hand. A redesign touched all of them. With the shapes in code, the next change is one edit and one run, and a test catches a file edited on its own.
+The kit ships one master and many exports. Keeping the path in TypeScript, the
+tray in Rust and the loader in HTML would let them drift. Parsing the master at
+generation time gives one path, one stroke and one dot for every output; a
+change to the master propagates on the next `brand:generate`.
 
-### Why the app icon is layered and not one picture
+### Why the inline loader uses a 1000-unit viewBox
 
-macOS turns a single flat picture into a grey smudge in Clear and Tinted: it can only reduce it to its brightness. Separate layers (shell, three tiers) let the system draw each as its own glass. The tiers appear twice: white with baked opacity for the light Default, opaque and coloured for Dark, Clear and Tinted, so each tier keeps its own tone there. A layer hidden in an appearance keeps glass off in it, or its glass still shows.
+The previous mark used a 100-unit viewBox with a separately scaled path. The
+kit's path is authored in 1000 units; keeping those coordinates avoids a scale
+step that would change the stroke and dot radii. The in-app logo, the web
+loader, the VS Code loader and the headless page all use the same numbers.
 
-### Why the small Windows sizes are pixel art and not scaled vector
+### Why the tray glyph is cropped out of the app tile
 
-At 16 to 24 px the 30 degree edges fall between pixels and the cube blurs. `pixelCube` redraws it with 2:1 edges on whole pixels, no anti-aliasing, and a 1 px black outline for light taskbars. The `.ico` carries these for 16, 20 and 24 px and the vector rendering above that.
+Windows shows a tray icon at 16 to 32 pixels. The rounded tile turns into a dark
+blob there, and the kit explicitly calls for a transparent monochrome glyph.
+`tray.png` is the white glyph from `spleen-tray-white.svg`; the tile stays in the
+taskbar and installer icon.
 
-### Why the macOS dev icon is rendered by ictool and not drawn
+### Why the in-app logo breathes instead of lighting tiers
 
-The release Dock icon is glass rendered by the system. A flat drawing next to it looked like a different app. `ictool` renders the real document the way the Dock does, and the tape goes on top.
+The inherited mark had three roof tiers that lit in sequence. The S has no
+tiers, so `SpleenLogo` and the VS Code loader fade the whole mark through one
+opacity step every two seconds. The logo's geometry never moves.
 
-### Why Canary's icon is a picture and not geometry
+## Known gap
 
-Its bird and glass were drawn in Icon Composer, and the look that was approved is the one Icon Composer renders. Redrawing it as vector art would change it. The other Canary files are cut from that rendering, so a change to the document is one edit and one run, like the release icons.
-
-### Why Canary's Windows and Linux cube is drawn flat and not cut from the document
-
-The cube cut out of the rendered document carried its glass: a thin pale edge line under the black outline and glass on the top face, next to the release icon's thick white edges. On a taskbar the two apps looked like different families. `canary.mjs` draws the release icon without a tile in the Canary blues (`CANARY_NO_TILE`) and takes only the bird from the document, so the two icons differ in colour and bird alone.
+The iOS widget keeps a hand-written copy of the path in
+`packages/mobile/ios/App/SpleenWidget/WidgetShared.swift`. `brand:generate` does
+not write Swift, and the Windows build does not compile it. Check it in an iOS
+build before shipping the widget.

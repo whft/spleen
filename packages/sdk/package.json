@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/spleen/spleen.git",
+    "url": "git+https://github.com/whft/spleen.git",
     "directory": "packages/sdk"
   },
   "type": "module",

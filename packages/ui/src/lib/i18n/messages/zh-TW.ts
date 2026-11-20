@@ -65,6 +65,9 @@ import { markdownGithubI18n } from './markdown-github.i18n';
 import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { subagentsI18n } from './subagents.i18n';
+import { recoveryI18n } from './recovery.i18n';
+import { teamsI18n } from './teams.i18n';
+import { discordI18n } from './discord.i18n';
 import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { tooltipsDiffI18n } from './tooltips-diff.i18n';
@@ -256,6 +259,9 @@ export const dict: Record<I18nKey, string> = {
   ...autocompleteScopeI18n['zh-TW'],
   ...workflowsI18n['zh-TW'],
   ...subagentsI18n['zh-TW'],
+  ...recoveryI18n['zh-TW'],
+  ...teamsI18n['zh-TW'],
+  ...discordI18n['zh-TW'],
   ...sessionReferencesI18n['zh-TW'],
   ...guestStatusViewI18n['zh-TW'],
   ...tooltipsDiffI18n['zh-TW'],

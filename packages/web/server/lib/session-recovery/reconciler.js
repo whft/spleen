@@ -1,7 +1,11 @@
+import { isLimitError, isLimitErrorType, parseLimitResetAt } from '../limit-failover/policy.js';
+
 const PENDING_WAIT_MS = 15_000;
 const RESUME_SETTLE_MS = 30_000;
 const STALE_MS = 10 * 60_000;
-const MAX_PROMPT_CHARS = 2_000;
+const LIMIT_WAIT_BASE_MS = 60 * 60_000;
+const LIMIT_WAIT_MAX_MS = 24 * 60 * 60_000;
+const LIMIT_PROBE_MS = 5 * 60_000;
 
 const EXTERNAL_TOOL = /bash|shell|write|edit|patch|git|task|fetch|publish|deploy|push|delete|move/i;
 
@@ -13,7 +17,36 @@ const asText = (value) => (typeof value === 'string' ? value : '');
 
 const contentOf = (message) => (Array.isArray(message?.content) ? message.content : []);
 
-export const toolPartsOf = (message) => contentOf(message)
+const limitWaitMs = (waits) => Math.min(
+  LIMIT_WAIT_MAX_MS,
+  LIMIT_WAIT_BASE_MS * 2 ** Math.max(0, (Number(waits) || 0) - 1),
+);
+
+export const providerLimitResetAt = (error, now, waits = 0, failedAt = now) => {
+  if (!isRecord(error)) return null;
+  const type = asText(error.type);
+  const body = asText(error.response?.body) || asText(error.body) || null;
+  const baseAt = Number(failedAt) > 0 ? Number(failedAt) : now;
+  const retryAfterMs = Number.isFinite(error.retryAfterMs) ? error.retryAfterMs : undefined;
+  const resetAt = parseLimitResetAt({
+    retryAfterMs,
+    body,
+    message: asText(error.message),
+    data: isRecord(error.data) ? error.data : undefined,
+  }, baseAt);
+  const backoffAt = baseAt + limitWaitMs(waits);
+  const floor = (at) => (waits > 0 ? Math.max(at, backoffAt) : at);
+  const firstCheck = (at) => (waits === 0 && at - baseAt > LIMIT_PROBE_MS ? baseAt + LIMIT_PROBE_MS : floor(at));
+  if (isLimitErrorType(type)) {
+    if (resetAt === null || (type === 'provider.rate-limit' && resetAt - baseAt < 60_000)) return backoffAt;
+    return firstCheck(resetAt);
+  }
+
+  if (!isLimitError(error)) return null;
+  return resetAt === null ? backoffAt : firstCheck(resetAt);
+};
+
+const toolPartsOf = (message) => contentOf(message)
   .filter((part) => isRecord(part) && part.type === 'tool')
   .map((part) => ({
     id: asText(part.id),
@@ -54,6 +87,17 @@ export const summarizeTail = (messages) => {
   const unknownTools = tools.filter((tool) => tool.status !== 'completed' && (tool.executed || tool.status === 'running'));
   const pending = assistants.length === 0 || !assistantCompleted(lastAssistant);
   const marker = isRecord(lastUser?.metadata?.spleenRecovery) ? lastUser.metadata.spleenRecovery : null;
+  const idle = [...after].reverse().find((message) => message?.type === 'idle');
+  const contentErrorPart = contentOf(lastAssistant).find((part) => isRecord(part) && part.type === 'error');
+  const contentError = contentErrorPart ? (isRecord(contentErrorPart.error) ? contentErrorPart.error : contentErrorPart) : null;
+  const error = isRecord(lastAssistant?.error)
+    ? lastAssistant.error
+    : (isRecord(idle?.error) ? idle.error : contentError);
+  const errorAt = isRecord(lastAssistant?.error) || contentError
+    ? (Number(lastAssistant?.time?.completed) || Number(lastAssistant?.time?.created) || null)
+    : (Number(idle?.time?.created) || null);
+  const lastAssistantCompletedAt = Number(lastAssistant?.time?.completed) || 0;
+  const lastAssistantFailed = Boolean(isRecord(lastAssistant?.error) || contentError || lastAssistant?.finish === 'error');
   return {
     pending,
     lastUser: {
@@ -62,6 +106,10 @@ export const summarizeTail = (messages) => {
       marker,
     },
     lastAssistant,
+    lastAssistantCompletedAt,
+    lastAssistantFailed,
+    error,
+    errorAt,
     completedTools,
     unknownTools,
     assistantCount: assistants.length,
@@ -91,6 +139,68 @@ export const decideRecovery = ({
   }
 
   const tail = summarizeTail(messages);
+  const attempts = Number(row?.attempts) || 0;
+  const waits = Number(row?.provider_waits) || 0;
+  const resumedAt = Number(row?.resumed_at) || 0;
+  const errorAt = Number(tail?.errorAt) || 0;
+  const beforeResume = resumedAt > 0 && errorAt > 0 && errorAt <= resumedAt;
+  const anchoredFailedAt = tail?.errorAt ?? (Number(row?.updated_at) || Number(row?.started_at) || now);
+  const limitResetAt = tail?.lastUser && !beforeResume
+    ? providerLimitResetAt(tail.error, now, waits, anchoredFailedAt)
+    : null;
+
+  if (row?.state === 'waiting_provider') {
+    if (Number(row.next_wake_at) > now) {
+      return { action: 'wait', state: 'waiting_provider', reason: 'provider limit', nextWakeAt: Number(row.next_wake_at) };
+    }
+    if (limitResetAt !== null) {
+      if (limitResetAt > now) {
+        return { action: 'wait', state: 'waiting_provider', reason: 'provider limit', nextWakeAt: limitResetAt };
+      }
+      return {
+        action: 'resume',
+        state: 'recovering',
+        reason: 'provider limit reset',
+        attempt: attempts,
+        afterLimit: true,
+        tail,
+      };
+    }
+    if (
+      tail
+      && !tail.pending
+      && !beforeResume
+      && !tail.lastAssistantFailed
+      && asText(session.outcome) !== 'failed'
+      && Number(tail.lastAssistantCompletedAt) > Number(row.updated_at || 0)
+    ) {
+      return {
+        action: 'complete',
+        state: 'completed',
+        reason: 'no unfinished turn',
+      };
+    }
+    return {
+      action: 'resume',
+      state: 'recovering',
+      reason: 'provider limit reset',
+      attempt: attempts,
+      afterLimit: true,
+      tail,
+    };
+  }
+
+  if (limitResetAt !== null) {
+    return { action: 'park', state: 'waiting_provider', reason: 'provider limit', nextWakeAt: limitResetAt };
+  }
+
+  if (beforeResume) {
+    if (now - resumedAt > staleMs) {
+      return { action: 'needs_review', state: 'needs_review', reason: 'resume delivered but not in transcript' };
+    }
+    return { action: 'wait', state: 'recovering', reason: 'resume already delivered', nextWakeAt: now + resumeSettleMs };
+  }
+
   // The transcript is authoritative: a session-level outcome can belong to an
   // earlier turn, and an unfinished assistant turn is exactly what a crash leaves.
   if (!tail || !tail.pending) {
@@ -102,14 +212,24 @@ export const decideRecovery = ({
   }
 
   const startedAt = Number(row?.started_at) || 0;
-  const stale = startedAt > 0 && now - startedAt > staleMs;
+  const staleFrom = resumedAt > 0 ? resumedAt : startedAt;
+  const stale = staleFrom > 0 && now - staleFrom > staleMs;
 
   if (tail.lastUser?.marker && tail.assistantCount === 0) {
-    if (stale) return { action: 'needs_review', state: 'needs_review', reason: 'resume delivered but no assistant turn' };
+    if (stale) {
+      if (waits > 0 && waits < 12) {
+        return {
+          action: 'wait',
+          state: 'waiting_provider',
+          reason: 'provider limit retry',
+          nextWakeAt: now + limitWaitMs(waits),
+        };
+      }
+      return { action: 'needs_review', state: 'needs_review', reason: 'resume delivered but no assistant turn' };
+    }
     return { action: 'wait', state: 'recovering', reason: 'resume already delivered', nextWakeAt: now + resumeSettleMs };
   }
 
-  const attempts = Number(row?.attempts) || 0;
   if (attempts >= maxAttempts) {
     return { action: 'needs_review', state: 'needs_review', reason: 'resume budget exhausted' };
   }
@@ -126,29 +246,9 @@ export const decideRecovery = ({
   };
 };
 
-const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
-
-export const buildResumePrompt = ({ sessionID, executionSeq, attempt, tail, childResults = [] }) => {
-  const lines = [
-    '[Spleen recovery] The desktop app restarted while this turn was running. The transcript above is authoritative.',
-  ];
-  if (tail?.lastUser?.text) {
-    lines.push(`Original request: ${clip(tail.lastUser.text.replace(/\s+/g, ' ').trim(), MAX_PROMPT_CHARS)}`);
-  }
-  const completed = tail?.completedTools ?? [];
-  if (completed.length > 0) {
-    lines.push(`Tool calls already completed, keep their results and do not run them again: ${completed.slice(-12).map((tool) => `${tool.name} (${tool.id})`).join(', ')}.`);
-  }
-  const unknown = tail?.unknownTools ?? [];
-  if (unknown.length > 0) {
-    lines.push(`Tool calls whose outcome is unknown: ${unknown.slice(-12).map((tool) => `${tool.name} (${tool.id})`).join(', ')}. Inspect the workspace, process state or remote state before repeating any of them.`);
-  }
-  for (const child of childResults.slice(0, 8)) {
-    lines.push(`Child session ${child.sessionID} is ${child.state}: ${clip(child.summary, 400)}`);
-  }
-  lines.push('Continue the original work from evidence. Do not create a new subagent for work a child session already did.');
-  return {
-    text: lines.join('\n'),
-    metadata: { spleenRecovery: { sessionID, executionSeq, attempt } },
-  };
-};
+// The transcript already carries the request, every tool call and whatever ran
+// before the crash, so the resume is the plain word a person would send.
+export const buildResumePrompt = ({ sessionID, executionSeq, attempt }) => ({
+  text: 'Continue.',
+  metadata: { spleenRecovery: { sessionID, executionSeq, attempt } },
+});

@@ -18,8 +18,23 @@ const PLUGIN_PACKAGE_JSON = `${JSON.stringify({
   exports: { '.': './index.js' },
 }, null, 2)}\n`;
 
-const PLUGIN_SOURCE = `const LIMIT_ERROR_TYPES = new Set(["provider.quota", "provider.free-limit", "provider.budget-limit", "provider.model-budget-limit", "provider.rate-limit"])
+const PLUGIN_SOURCE = `const LIMIT_ERROR_TYPES = new Set(["provider.quota", "provider.free-limit", "provider.budget-limit", "provider.model-budget-limit", "provider.go-limit", "provider.chatgpt-limit", "provider.rate-limit"])
+const LIMIT_TEXT_RE = /rate.?limit|usage.?limit|quota\\s*(?:exceeded|reached|exhausted)|too many requests|\\b429\\b|overloaded|try again (?:in|at|after)|limit resets/i
 const ROUTE = ${JSON.stringify(ROUTE)}
+
+const isLikelyLimitError = (error) => {
+  if (!error || typeof error !== "object") return false
+  if (error.type === "provider.auth") return false
+  const status = Number(error.status ?? error.statusCode ?? error.response?.status ?? error.data?.statusCode)
+  if (status === 401 || status === 403) return false
+  if (LIMIT_ERROR_TYPES.has(error.type)) return true
+  if (status === 429 || status === 529) return true
+  const typeText = [error.name, error.code, error.type].filter(Boolean).join(" ")
+  if (/rate.?limit|quota|budget|usage.?limit|overloaded|resource_exhausted|too_many_requests/i.test(typeText)) return true
+  if (typeof error.type === "string" && error.type.startsWith("provider.") && error.type !== "provider.error") return false
+  const msg = [error.message, typeof error.body === "string" ? error.body : "", error.data?.message].filter(Boolean).join(" ")
+  return Boolean(msg && LIMIT_TEXT_RE.test(msg))
+}
 
 const callback = () => {
   const base = process.env.SPLEEN_AGENT_TOOL_URL
@@ -46,7 +61,7 @@ export default {
   id: ${JSON.stringify(PLUGIN_ID)},
   setup: async (ctx) => {
     await ctx.session.hook("retry", async (event) => {
-      if (!LIMIT_ERROR_TYPES.has(event.error?.type)) return
+      if (!isLikelyLimitError(event.error)) return
       const target = callback()
       if (!target) return
       try {
@@ -59,8 +74,11 @@ export default {
             modelID: event.model.id,
             error: {
               type: event.error.type,
+              name: event.error.name,
+              code: event.error.code,
+              status: event.error.status ?? event.error.statusCode ?? event.error.response?.status,
               message: event.error.message,
-              body: event.error.response?.body,
+              body: event.error.response?.body ?? event.error.body,
               retryAfterMs: event.error.retryAfterMs,
             },
             proposed: event.decision,
@@ -126,6 +144,7 @@ export const createLimitFailoverRuntime = ({
   readSettings,
   authorizeRequest,
   broadcastUiEvent = () => {},
+  onFailoverApplied = () => {},
   now = Date.now,
 }) => {
   const pluginDirectory = path.join(instanceDir, 'limit-failover', PLUGIN_ID);
@@ -242,6 +261,7 @@ export const createLimitFailoverRuntime = ({
     tickets.delete(ticketID);
     if (applied) {
       broadcastUiEvent({ type: 'spleen:limit-failover', properties: ticket.announcement });
+      Promise.resolve(onFailoverApplied(ticket.announcement)).catch(() => {});
     } else if (ticket.credentialID) {
       switchedAt.delete(ticket.credentialID);
       settledAt.delete(`${ticket.sessionID}:${ticket.credentialID}`);

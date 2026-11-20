@@ -135,8 +135,8 @@ export function getWebviewHtml(options: WebviewHtmlOptions): string {
 <body>
   <!-- Initial loading screen with the Spleen logo -->
   <div id="initial-loading">
-    <svg class="logo" width="70" height="70" viewBox="-50 -50 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- brand:flat-logo:start --><defs><linearGradient id="spleen-logo-l" gradientUnits="userSpaceOnUse" x1="-40" y1="-30" x2="-4" y2="10"><stop offset="0" stop-color="currentColor" stop-opacity="0.03"/><stop offset="0.7" stop-color="currentColor" stop-opacity="0.12"/><stop offset="1" stop-color="currentColor" stop-opacity="0.2"/></linearGradient><linearGradient id="spleen-logo-r" gradientUnits="userSpaceOnUse" x1="40" y1="20" x2="4" y2="-20"><stop offset="0" stop-color="currentColor" stop-opacity="0.06"/><stop offset="0.7" stop-color="currentColor" stop-opacity="0.16"/><stop offset="1" stop-color="currentColor" stop-opacity="0.24"/></linearGradient></defs><path d="M0 -44 A44 44 0 0 0 0 44 L0 -44 Z" fill="url(#spleen-logo-l)"/><path d="M0 -44 A44 44 0 0 1 0 44 L0 -44 Z" fill="url(#spleen-logo-r)"/><path d="M-31 -31 A44 44 0 0 1 31 -31 A36 36 0 0 0 -31 -31 Z" fill="currentColor" fill-opacity="0.08"/><path data-tier="0" data-rest="0.12" data-lit="0.55" d="M-10 -23 a5 5 0 1 0 0.01 0 Z" fill="currentColor" fill-opacity="0.22"/><path data-tier="1" data-rest="0.15" data-lit="0.48" d="M2 -2 a5 5 0 1 0 0.01 0 Z" fill="currentColor" fill-opacity="0.27"/><path data-tier="2" data-rest="0.38" data-lit="0.85" d="M-5 22 a5 5 0 1 0 0.01 0 Z" fill="currentColor" fill-opacity="0.85"/><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M0 -44 A44 44 0 1 1 -0.01 -44 Z"/><path d="M16 -26 C6 -36 -16 -32 -18 -16 C-20 -2 8 0 14 12 C20 24 4 32 -8 30 C-14 29 -18 26 -20 22"/></g><!-- brand:flat-logo:end -->
+    <svg class="logo" width="70" height="70" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- brand:flat-logo:start --><g fill="currentColor"><path d="M 326 172 H 748 L 678 286 H 386 L 358 314 V 371 L 246 342 V 252 Z"/><path d="M 674 828 H 252 L 322 714 H 614 L 642 686 V 629 L 754 658 V 748 Z"/></g><path d="M 246 376 L 692 492 L 754 554 V 624 L 308 508 L 246 446 Z" fill="#D9503F"/><!-- brand:flat-logo:end -->
     </svg>
     <!-- Status text stays empty while things are fine; populated only on error. -->
     <div class="status-text" id="loading-status"></div>
@@ -145,24 +145,20 @@ export function getWebviewHtml(options: WebviewHtmlOptions): string {
   
   <div id="root"></div>
   <script>
-    // While the splash shows, the roof tiers light up one at a time, one step a
-    // second, like the app's own startup logo; a smooth CSS animation repainted
-    // the logo on every frame.
+    // The splash mark breathes once every two seconds, like the app's startup
+    // logo. A per-frame CSS animation repainted the logo continuously; this
+    // only touches opacity once a second.
     (function () {
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      var step = 0;
+      var dimmed = false;
       var timer = null;
       var tick = function () {
         var splash = document.getElementById('initial-loading');
-        var tiers = splash ? splash.querySelectorAll('[data-tier]') : [];
-        if (!tiers.length || splash.classList.contains('fade-out')) { clearInterval(timer); return; }
-        var lit = step % tiers.length;
-        tiers.forEach(function (tier, i) {
-          tier.setAttribute('fill-opacity', tier.getAttribute(i === lit ? 'data-lit' : 'data-rest'));
-        });
-        step += 1;
+        var logo = splash ? splash.querySelector('.logo') : null;
+        if (!logo || splash.classList.contains('fade-out')) { clearInterval(timer); return; }
+        dimmed = !dimmed;
+        logo.style.opacity = dimmed ? '0.55' : '1';
       };
-      tick();
       timer = setInterval(tick, 1000);
     })();
 

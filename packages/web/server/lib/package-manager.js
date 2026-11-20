@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 
 const PACKAGE_NAME = '@spleen/web';
 const PACKAGE_PATH_SEGMENTS = PACKAGE_NAME.split('/');
-const GITHUB_RELEASES_URL = 'https://github.com/spleen/spleen/releases';
+const GITHUB_RELEASES_URL = 'https://github.com/whft/spleen/releases';
 const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/spleen/spleen/releases';
 let cachedDetection = null;
 

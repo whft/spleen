@@ -64,6 +64,9 @@ import { markdownGithubI18n } from './markdown-github.i18n';
 import { autocompleteScopeI18n } from './autocomplete-scope.i18n';
 import { workflowsI18n } from './workflows.i18n';
 import { subagentsI18n } from './subagents.i18n';
+import { recoveryI18n } from './recovery.i18n';
+import { teamsI18n } from './teams.i18n';
+import { discordI18n } from './discord.i18n';
 import { sessionReferencesI18n } from './session-references.i18n';
 import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { tooltipsDiffI18n } from './tooltips-diff.i18n';
@@ -255,6 +258,9 @@ export const dict = {
   ...autocompleteScopeI18n['en'],
   ...workflowsI18n['en'],
   ...subagentsI18n['en'],
+  ...recoveryI18n['en'],
+  ...teamsI18n['en'],
+  ...discordI18n['en'],
   ...sessionReferencesI18n['en'],
   ...guestStatusViewI18n['en'],
   ...tooltipsDiffI18n['en'],

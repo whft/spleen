@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { useDeviceInfo } from '@/lib/device';
 import { useUIStore } from '@/stores/useUIStore';
+import { DiscordIntegrationCard } from './DiscordIntegrationCard';
 
 export const IntegrationsPage: React.FC = () => {
   const { t } = useI18n();
@@ -75,6 +76,15 @@ export const IntegrationsPage: React.FC = () => {
             <TrackerSettings key={descriptor.id} descriptor={descriptor} />
           ))}
           {builtInGuests.map((guest) => <GuestIntegrationCard key={`${runtimeKey}:${guest.id}`} guest={guest} />)}
+        </SettingsSection>
+      ) : null}
+      {!isVSCodeRuntime() ? (
+        <SettingsSection
+          title={t('contextPanel.mode.discord')}
+          settingsItem="integrations.discord"
+          contentClassName="space-y-3"
+        >
+          <DiscordIntegrationCard />
         </SettingsSection>
       ) : null}
       <CatalogExtensionsSection />

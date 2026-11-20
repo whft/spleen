@@ -10,6 +10,8 @@ const BUILT_IN_CONTEXT_PANEL_MODES = [
   'notes',
   'terminal',
   'workflows',
+  'teams',
+  'discord',
   'subagents',
   'pages',
 ] as const;

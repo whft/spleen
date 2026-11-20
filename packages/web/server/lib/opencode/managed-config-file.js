@@ -1,7 +1,8 @@
-import { appendManagedCommand, appendManagedPermissions, appendManagedPolicies, appendManagedPlugin, appendManagedSkills } from './managed-plugin-config.js';
+import { appendManagedCommand, appendManagedInstructions, appendManagedPermissions, appendManagedPolicies, appendManagedPlugin, appendManagedSkills } from './managed-plugin-config.js';
 import { managedPermissionRules } from '../agent-tool/runtime.js';
 import { isLimitFailoverConfigured } from '../limit-failover/policy.js';
 import { isSharingAvailable } from '../share-pages/relay-client.js';
+import { CORE_INSTRUCTIONS_FILE_NAME, SPLEEN_BASE_RULES } from '../session-knowledge/base-rules.js';
 import { materializeSessionTitlePlugin } from './session-title-plugin.js';
 import { EXTENSION_AUTHORING_COMMAND, materializeAuthoringSkill } from '../guests/agent-context.js';
 
@@ -28,7 +29,9 @@ const BUILTIN_IMAGE_PLUGIN = '-opencode.tool.image-generate';
  * everywhere but in the sessions that allow it. OpenCode appends every layer's
  * permissions to each agent, so ours add to the user's rules and replace none.
  * `skills` lists our extension-writing skill and the folders active extensions
- * ship, and `commands` the command that starts extension work. It sits above
+ * ship, `commands` the command that starts extension work, and `instructions`
+ * the base-rules file OpenCode reads into every session, including subagents
+ * it starts on its own. It sits above
  * the user's global `opencode.json` and below their project config, so it never
  * shadows a project-level choice. The plugin folders active extensions ship
  * come after Spleen's own plugins: OpenCode loads in list order, so an
@@ -66,12 +69,26 @@ export const createManagedConfigRuntime = ({
   readPluginDenials = () => [],
 }) => {
   const filePath = path.join(instanceDir, MANAGED_CONFIG_FILE_NAME);
+  const coreInstructionsPath = path.join(instanceDir, CORE_INSTRUCTIONS_FILE_NAME);
 
   const ownsConfigFile = () => (env.OPENCODE_CONFIG ?? '').trim().length === 0;
 
-  const writeConfigFile = async ({ disabled, directories, extensionPlugins, permissions, policies, skills, commands }) => {
+  const materializeCoreInstructions = async () => {
     await fsPromises.mkdir(instanceDir, { recursive: true });
-    const config = { plugins: [...disabled, ...directories, ...extensionPlugins], skills, commands };
+    const tmp = `${coreInstructionsPath}.tmp-${process.pid}-${Date.now()}`;
+    try {
+      await fsPromises.writeFile(tmp, `${SPLEEN_BASE_RULES}\n`, { encoding: 'utf8', mode: 0o600 });
+      await fsPromises.rename(tmp, coreInstructionsPath);
+    } catch (error) {
+      await fsPromises.rm(tmp, { force: true }).catch(() => {});
+      throw error;
+    }
+    return coreInstructionsPath;
+  };
+
+  const writeConfigFile = async ({ disabled, directories, extensionPlugins, permissions, policies, skills, commands, instructions }) => {
+    await fsPromises.mkdir(instanceDir, { recursive: true });
+    const config = { plugins: [...disabled, ...directories, ...extensionPlugins], instructions, skills, commands };
     if (policies.length > 0) config.policies = policies;
     if (permissions.length > 0) config.permissions = permissions;
     const text = `${JSON.stringify(config, null, 2)}\n`;
@@ -115,7 +132,8 @@ export const createManagedConfigRuntime = ({
     const authoring = await materializeAuthoringSkill({ fsPromises, instanceDir, spleenVersion });
     const skills = [authoring.skillsRoot, ...await listExtensionSkillDirectories()];
     const extensionPlugins = await listExtensionPluginDirectories();
-    return { disabled, directories, extensionPlugins, permissions, policies: readPluginDenials(), skills, commands: { [EXTENSION_AUTHORING_COMMAND]: authoring.command } };
+    const instructions = [await materializeCoreInstructions()];
+    return { disabled, directories, extensionPlugins, permissions, policies: readPluginDenials(), skills, commands: { [EXTENSION_AUTHORING_COMMAND]: authoring.command }, instructions };
   };
 
   let writing = null;
@@ -150,6 +168,7 @@ export const createManagedConfigRuntime = ({
     if (enabled.policies.length > 0) content = appendManagedPolicies(content, enabled.policies);
     if (enabled.permissions.length > 0) content = appendManagedPermissions(content, enabled.permissions);
     content = appendManagedSkills(content, enabled.skills);
+    content = appendManagedInstructions(content, enabled.instructions);
     for (const [name, command] of Object.entries(enabled.commands)) content = appendManagedCommand(content, name, command);
     return { ...childEnv, OPENCODE_CONFIG_CONTENT: content };
   };

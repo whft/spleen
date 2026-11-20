@@ -3,64 +3,64 @@
     "id": "spleen-dark",
     "name": "Spleen",
     "variant": "dark",
-    "description": "The Spleen signature - Vitesse syntax over OpenCode-deep neutrals with Flexoki accents, harmonized in OKLCH (dark variant)",
+    "description": "Spleen's signature: near-black canvas, bone text and a single vermilion terminal accent",
     "version": "1.0.0",
     "author": "Spleen",
     "tags": [
       "dark",
       "brand",
-      "hybrid",
-      "warm",
+      "minimal",
+      "editorial",
       "ink"
     ]
   },
   "colors": {
     "primary": {
-      "base": "#da7c47",
-      "hover": "#eb8c57",
-      "active": "#fd9b66",
-      "muted": "#da7c4780"
+      "base": "#d9503f",
+      "hover": "#e56858",
+      "active": "#f07a6a",
+      "muted": "#d9503f80"
     },
     "surface": {
-      "background": "#120f0e",
-      "foreground": "#ebe7dc",
-      "muted": "#0e0c0b",
-      "mutedForeground": "#9a978d",
-      "elevated": "#1b1918",
-      "subtle": "#171616"
+      "background": "#0b0f14",
+      "foreground": "#f3efe7",
+      "muted": "#080b0f",
+      "mutedForeground": "#8c98a4",
+      "elevated": "#121821",
+      "subtle": "#1a222d"
     },
     "interactive": {
-      "border": "#242323bf",
-      "selection": "#c8c6c52b",
-      "borderHover": "#504e4c",
-      "focusRing": "#da7c4755",
+      "border": "#2c3743bf",
+      "selection": "#d9503f2b",
+      "borderHover": "#3e4c5a",
+      "focusRing": "#83a7dc55",
       "hover": "#ffffff0f",
       "active": "#ffffff1a"
     },
     "status": {
-      "error": "#da5b4a",
-      "warning": "#c67f13",
-      "success": "#76ad4f",
-      "info": "#479fe6"
+      "error": "#e46d68",
+      "warning": "#e6ba74",
+      "success": "#76be9d",
+      "info": "#83a7dc"
     },
     "syntax": {
       "base": {
-        "background": "#100e0d",
-        "comment": "#7d917d",
-        "keyword": "#34983a",
-        "string": "#d58373",
-        "number": "#279e93",
-        "function": "#78a952",
-        "variable": "#c69457",
-        "type": "#479cb1",
-        "operator": "#da6b6d"
+        "background": "#0b0f14",
+        "comment": "#6e7c8a",
+        "keyword": "#7bc896",
+        "string": "#e39a82",
+        "number": "#6ec4b8",
+        "function": "#91c977",
+        "variable": "#e2b778",
+        "type": "#69b6d6",
+        "operator": "#e07d77"
       },
       "tokens": {
-        "commentDoc": "#7a8e7a",
-        "stringEscape": "#dcd7c6",
-        "variableProperty": "#bda94a",
-        "className": "#8590d6",
-        "punctuation": "#908b7e"
+        "commentDoc": "#7a8896",
+        "stringEscape": "#f3efe7",
+        "variableProperty": "#d4ba6a",
+        "className": "#8ca6e6",
+        "punctuation": "#9ba6b2"
       },
       "highlights": {
         "diffAdded": "#4d934e",
@@ -70,33 +70,33 @@
     },
     "pr": {
       "open": "#93a233",
-      "blocked": "#da7c47",
+      "blocked": "#d9503f",
       "merged": "#9988e5"
     },
     "chat": {
-      "userMessageBackground": "#2d1c12",
-      "divider": "#302e2b",
-      "background": "#120f0e"
+      "userMessageBackground": "#161d27",
+      "divider": "#25303b",
+      "background": "#0b0f14"
     },
     "markdown": {
-      "link": "#5d99a9",
-      "linkHover": "#6ba7b8",
-      "inlineCode": "#99b985",
-      "inlineCodeBackground": "#171616",
-      "blockquote": "#949187",
-      "blockquoteBorder": "#302e2b",
-      "listMarker": "#4d934e99",
-      "italic": "#ebe7dc"
+      "link": "#83a7dc",
+      "linkHover": "#9bb8e4",
+      "inlineCode": "#c9a87e",
+      "inlineCodeBackground": "#1a222d",
+      "blockquote": "#9aa6b2",
+      "blockquoteBorder": "#25303b",
+      "listMarker": "#d9503f99",
+      "italic": "#f3efe7"
     },
     "tools": {
-      "border": "#302e2b73",
-      "icon": "#949187",
-      "title": "#ebe7dc",
-      "description": "#949187",
+      "border": "#2c374380",
+      "icon": "#798793",
+      "title": "#f3efe7",
+      "description": "#8c98a4",
       "edit": {
-        "addedBackground": "#4d934e25",
-        "removedBackground": "#e0605c25",
-        "lineNumber": "#949187"
+        "addedBackground": "#76be9d25",
+        "removedBackground": "#e46d6825",
+        "lineNumber": "#798793"
       }
     }
   },

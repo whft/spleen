@@ -1,39 +1,21 @@
 import crypto from 'node:crypto';
 
-import { parseLimitResetAt } from '../limit-failover/policy.js';
-import { buildResumePrompt, decideRecovery, isExternalTool } from './reconciler.js';
+import { isLimitError, isLimitErrorType } from '../limit-failover/policy.js';
+import { sessionParentId } from '../session-lineage.js';
+import { buildResumePrompt, decideRecovery, isExternalTool, providerLimitResetAt } from './reconciler.js';
 
 const LEASE_TTL_MS = 60_000;
 const LEASE_RENEW_MS = 20_000;
 const CONNECT_DEBOUNCE_MS = 2_000;
 const RETRY_BASE_MS = 30_000;
-const PROVIDER_WAIT_MS = 15 * 60_000;
 const CHILD_DEFER_MS = 15_000;
+const CHILD_MAX_DEFER_MS = 5 * 60_000;
+const REVIVE_LIMIT_MS = 35 * 24 * 60 * 60_000;
+const REVIVE_STAGGER_MS = 30_000;
 const MESSAGE_FETCH_LIMIT = 60;
 
 const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const asText = (value) => (typeof value === 'string' ? value : '');
-
-const limitFailureOf = (error, now) => {
-  const status = Number(error?.status) || 0;
-  const message = asText(error?.message);
-  if (status !== 429 && !/quota|rate limit|usage limit|too many requests/i.test(message)) return null;
-  return parseLimitResetAt({ retryAfterMs: error?.retryAfterMs, body: error?.body }, now) ?? now + PROVIDER_WAIT_MS;
-};
-
-const summarizeChild = (session, messages) => {
-  const assistant = Array.isArray(messages)
-    ? [...messages].reverse().find((message) => message?.type === 'assistant')
-    : null;
-  const text = Array.isArray(assistant?.content)
-    ? assistant.content.filter((part) => part?.type === 'text').map((part) => part.text).join(' ')
-    : '';
-  return {
-    sessionID: session.id,
-    state: asText(session.outcome) || 'unknown',
-    summary: text.trim() || asText(session.title) || 'no assistant summary',
-  };
-};
 
 export const createSessionRecoveryRuntime = ({
   store,
@@ -57,6 +39,7 @@ export const createSessionRecoveryRuntime = ({
   let heartbeatTimer = null;
   let pollTimer = null;
   let reconcilePromise = null;
+  const manualWakeIds = new Set();
   const unsubscribers = [];
 
   const backoffFor = (attempts) => RETRY_BASE_MS * (2 ** Math.max(0, attempts - 1));
@@ -75,19 +58,43 @@ export const createSessionRecoveryRuntime = ({
       sessions: rows.slice(0, 50).map((row) => ({
         sessionID: row.session_id,
         parentSessionID: row.parent_session_id,
+        directory: row.directory || null,
         state: row.state,
         attempts: row.attempts,
+        providerWaits: row.provider_waits ?? 0,
         nextWakeAt: row.next_wake_at,
+        resumedAt: row.resumed_at ?? null,
+        updatedAt: row.updated_at ?? null,
         reason: row.last_error || null,
       })),
     };
+  };
+
+  const reviveLimitFailures = () => {
+    const at = now();
+    let revived = 0;
+    for (const row of store.failedSince(at - REVIVE_LIMIT_MS)) {
+      if (!isLimitErrorType(row.last_error) && !isLimitError({ type: row.last_error, message: row.last_error })) continue;
+      store.schedule(row.session_id, {
+        state: 'waiting_provider',
+        attempts: 0,
+        providerWaits: 0,
+        nextWakeAt: at + revived * REVIVE_STAGGER_MS,
+        error: 'provider limit',
+        at,
+      });
+      revived += 1;
+    }
   };
 
   const renewLease = () => {
     if (stopped) return;
     const held = hasLease;
     hasLease = store.renewLease(owner, leaseTtlMs, now());
-    if (!held && hasLease && !reconcileTimer) scheduleReconcile(0);
+    if (!held && hasLease) {
+      reviveLimitFailures();
+      if (!reconcileTimer) scheduleReconcile(0);
+    }
   };
 
   const takeLease = () => {
@@ -114,7 +121,62 @@ export const createSessionRecoveryRuntime = ({
         break;
       case 'session.execution.failed': {
         const error = isRecord(data.error) ? data.error : {};
-        store.finish(sessionID, 'failed', { at, error: asText(error.name) || asText(error.type) || 'failed' });
+        const row = store.get(sessionID);
+        const attempts = Number(row?.attempts) || 0;
+        const limitResetAt = providerLimitResetAt(error, at, Number(row?.provider_waits) || 0);
+        if (limitResetAt !== null) {
+          if (!row) store.beginExecution({ sessionID, directory: directory || null, seq, at });
+          store.schedule(sessionID, {
+            state: 'waiting_provider',
+            attempts,
+            nextWakeAt: limitResetAt,
+            error: 'provider limit',
+            at,
+          });
+          broadcastSummary({ parked: sessionID });
+          break;
+        }
+        store.finish(sessionID, 'failed', {
+          at,
+          error: asText(error.type) || asText(error.name) || asText(error.code) || asText(error.message) || 'failed',
+        });
+        break;
+      }
+      case 'session.error': {
+        const error = isRecord(data.error) ? data.error : {};
+        const row = store.get(sessionID);
+        const limitResetAt = providerLimitResetAt(error, at, Number(row?.provider_waits) || 0);
+        if (limitResetAt !== null) {
+          if (!row) store.beginExecution({ sessionID, directory: directory || null, seq, at });
+          store.schedule(sessionID, {
+            state: 'waiting_provider',
+            attempts: Number(row?.attempts) || 0,
+            nextWakeAt: limitResetAt,
+            error: 'provider limit',
+            at,
+          });
+          broadcastSummary({ parked: sessionID });
+        }
+        break;
+      }
+      case 'session.status': {
+        const statusInfo = isRecord(data.status) ? data.status : data;
+        if (asText(statusInfo?.type) !== 'retry') return;
+        const message = asText(statusInfo.message);
+        const row = store.get(sessionID);
+        const error = { message, retryAfterMs: Number.isFinite(statusInfo.next) && statusInfo.next > at ? statusInfo.next - at : undefined };
+        const limitResetAt = providerLimitResetAt(error, at, Number(row?.provider_waits) || 0);
+        if (limitResetAt !== null) {
+          if (!row) store.beginExecution({ sessionID, directory: directory || null, seq, at });
+          store.schedule(sessionID, {
+            state: 'waiting_provider',
+            attempts: Number(row?.attempts) || 0,
+            nextWakeAt: limitResetAt,
+            error: 'provider limit',
+            at,
+          });
+          broadcastSummary({ parked: sessionID });
+        }
         break;
       }
       case 'session.execution.interrupted': {
@@ -178,8 +240,9 @@ export const createSessionRecoveryRuntime = ({
     try {
       const session = await openCodeFetch(`/api/session/${encodeURIComponent(sessionID)}`, { directory });
       return isRecord(session) ? session : null;
-    } catch {
-      return null;
+    } catch (error) {
+      if (Number(error?.status) === 404) return null;
+      throw error;
     }
   };
 
@@ -196,28 +259,13 @@ export const createSessionRecoveryRuntime = ({
     }
   };
 
-  const childResultsOf = async (sessionID) => {
-    const children = store.all().filter((row) => row.parent_session_id === sessionID && !store.isTerminal(row.state));
-    const results = [];
-    for (const child of children.slice(0, 8)) {
-      const session = await fetchSession(child.session_id, child.directory);
-      if (!session) continue;
-      const messages = await fetchMessages(child.session_id, child.directory);
-      results.push(summarizeChild(session, messages));
-    }
-    return results;
-  };
-
   const sendResume = async (row, decision) => {
     const sessionID = row.session_id;
     const directory = row.directory || null;
-    const childResults = await childResultsOf(sessionID);
     const body = buildResumePrompt({
       sessionID,
       executionSeq: row.execution_seq,
       attempt: decision.attempt,
-      tail: decision.tail,
-      childResults,
     });
     try {
       const inbox = await openCodeFetch(`/api/session/${encodeURIComponent(sessionID)}/prompt`, {
@@ -226,23 +274,28 @@ export const createSessionRecoveryRuntime = ({
         body,
       });
       const resumeMessageID = asText(inbox?.id) || null;
+      const sentAt = now();
       store.schedule(sessionID, {
         state: 'recovering',
         attempts: decision.attempt,
-        nextWakeAt: now() + 30_000,
+        nextWakeAt: sentAt + 30_000,
         resumeMessageID,
-        at: now(),
+        providerWaits: decision.afterLimit ? (Number(row.provider_waits) || 0) + 1 : null,
+        resumedAt: sentAt,
+        at: sentAt,
       });
-      store.noteRecovery('resume.sent', sessionID, { attempt: decision.attempt, resumeMessageID }, now());
+      store.noteRecovery('resume.sent', sessionID, { attempt: decision.attempt, resumeMessageID }, sentAt);
       broadcastSummary({ resumed: sessionID });
       return true;
     } catch (error) {
       const at = now();
-      const limitResetAt = limitFailureOf(error, at);
+      const waits = (Number(row.provider_waits) || 0) + 1;
+      const limitResetAt = providerLimitResetAt(error, at, waits);
       if (limitResetAt !== null) {
         store.schedule(sessionID, {
           state: 'waiting_provider',
           attempts: decision.attempt,
+          providerWaits: waits,
           nextWakeAt: limitResetAt,
           error: 'provider limit',
           at,
@@ -261,13 +314,35 @@ export const createSessionRecoveryRuntime = ({
     }
   };
 
-  const reconcileRow = async (row, activeMap, pendingIDs) => {
+  const reconcileRow = async (row, activeMap, pendingByID) => {
     const sessionID = row.session_id;
     const directory = row.directory || null;
+    const storedParent = row.parent_session_id && row.parent_session_id !== sessionID
+      ? pendingByID.get(row.parent_session_id)
+      : null;
+    const deferToParent = (parent) => {
+      const at = now();
+      const parentWake = Number(parent.next_wake_at) || 0;
+      store.schedule(sessionID, {
+        state: 'waiting_parent',
+        attempts: Number(row.attempts) || 0,
+        nextWakeAt: Math.min(Math.max(at + CHILD_DEFER_MS, parentWake), at + CHILD_MAX_DEFER_MS),
+        at,
+      });
+    };
+    if (storedParent && !activeMap[sessionID]) {
+      deferToParent(storedParent);
+      return;
+    }
+
     const session = await fetchSession(sessionID, directory);
     const messages = session ? await fetchMessages(sessionID, directory) : null;
+    const parentSessionID = sessionParentId(session) || row.parent_session_id || null;
+    if (session && parentSessionID && parentSessionID !== row.parent_session_id) {
+      store.noteParent(sessionID, parentSessionID, now());
+    }
     const decision = decideRecovery({
-      row,
+      row: { ...row, parent_session_id: parentSessionID },
       active: Boolean(activeMap[sessionID]),
       session,
       messages,
@@ -285,6 +360,15 @@ export const createSessionRecoveryRuntime = ({
       case 'needs_review':
         store.markNeedsReview(sessionID, decision.reason, now());
         break;
+      case 'park':
+        store.schedule(sessionID, {
+          state: 'waiting_provider',
+          attempts: Number(row.attempts) || 0,
+          nextWakeAt: decision.nextWakeAt,
+          at: now(),
+          error: decision.reason,
+        });
+        break;
       case 'wait':
         store.schedule(sessionID, {
           state: decision.state,
@@ -295,7 +379,7 @@ export const createSessionRecoveryRuntime = ({
         });
         break;
       case 'resume':
-        if (now() - runtimeStartedAt < startGraceMs) {
+        if (!manualWakeIds.delete(sessionID) && now() - runtimeStartedAt < startGraceMs) {
           store.schedule(sessionID, {
             state: 'recovering',
             attempts: Number(row.attempts) || 0,
@@ -305,13 +389,8 @@ export const createSessionRecoveryRuntime = ({
           });
           break;
         }
-        if (row.parent_session_id && pendingIDs.has(row.parent_session_id)) {
-          store.schedule(sessionID, {
-            state: 'waiting_parent',
-            attempts: Number(row.attempts) || 0,
-            nextWakeAt: now() + CHILD_DEFER_MS,
-            at: now(),
-          });
+        if (parentSessionID && pendingByID.has(parentSessionID)) {
+          deferToParent(pendingByID.get(parentSessionID));
           break;
         }
         await sendResume(row, decision);
@@ -323,7 +402,9 @@ export const createSessionRecoveryRuntime = ({
 
   const runReconcile = async () => {
     if (stopped || !hasLease) return;
-    const rows = store.pending();
+    const at = now();
+    const pendingRows = store.pending();
+    const rows = pendingRows.filter((row) => !(Number(row.next_wake_at) > at));
     if (rows.length === 0) {
       broadcastSummary({ reconciled: true });
       return;
@@ -346,13 +427,13 @@ export const createSessionRecoveryRuntime = ({
       return;
     }
 
-    const pendingIDs = new Set(rows.map((row) => row.session_id));
+    const pendingByID = new Map(pendingRows.map((row) => [row.session_id, row]));
     const queue = [...rows];
     const workers = Array.from({ length: Math.max(1, Math.min(resumeConcurrency, queue.length)) }, async () => {
       while (queue.length > 0 && !stopped) {
         const row = queue.shift();
         try {
-          await reconcileRow(row, activeMap, pendingIDs);
+          await reconcileRow(row, activeMap, pendingByID);
         } catch (error) {
           console.warn(`[session-recovery] reconcile ${row.session_id} failed: ${error?.message || error}`);
         }
@@ -395,7 +476,10 @@ export const createSessionRecoveryRuntime = ({
         if (statusEvent?.type === 'connect') scheduleReconcile(connectDebounceMs);
       }));
     }
-    if (hasLease) scheduleReconcile(0);
+    if (hasLease) {
+      reviveLimitFailures();
+      scheduleReconcile(0);
+    }
     return { hasLease };
   };
 
@@ -418,11 +502,58 @@ export const createSessionRecoveryRuntime = ({
     hasLease = false;
   };
 
+  const resumeNow = async (sessionID) => {
+    const id = asText(sessionID).trim();
+    if (!id) return { ok: false, reason: 'invalid_session' };
+    const row = store.get(id);
+    if (!row) return { ok: false, reason: 'not_found' };
+    const at = now();
+    manualWakeIds.add(id);
+    store.schedule(id, {
+      state: 'waiting_provider',
+      attempts: row.state === 'needs_review' || row.state === 'failed' ? 0 : (Number(row.attempts) || 0),
+      providerWaits: Number(row.provider_waits) || 0,
+      nextWakeAt: at,
+      error: 'manual resume',
+      at,
+    });
+    broadcastSummary({ resumeRequested: id });
+    if (hasLease) await reconcile();
+    return { ok: true, sessionID: id };
+  };
+
+  const dismiss = (sessionID) => {
+    const id = asText(sessionID).trim();
+    if (!id) return { ok: false, reason: 'invalid_session' };
+    const row = store.get(id);
+    if (!row) return { ok: false, reason: 'not_found' };
+    manualWakeIds.delete(id);
+    store.finish(id, 'completed', { error: 'dismissed', at: now() });
+    broadcastSummary({ dismissed: id });
+    return { ok: true, sessionID: id };
+  };
+
+  const wakeWaitingProvider = () => {
+    const at = now();
+    for (const row of store.pending()) {
+      if (row.state === 'waiting_provider') manualWakeIds.add(row.session_id);
+    }
+    const updated = store.wakeWaitingProvider(at);
+    if (updated > 0) {
+      broadcastSummary({ woken: updated });
+      if (hasLease) scheduleReconcile(0);
+    }
+    return { ok: true, updated };
+  };
+
   return {
     start,
     stop,
     handleEvent,
     reconcile,
+    resumeNow,
+    dismiss,
+    wakeWaitingProvider,
     status,
     get hasLease() {
       return hasLease;

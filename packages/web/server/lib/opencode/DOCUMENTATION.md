@@ -153,7 +153,7 @@ OpenCode 2 loads the user config, then `OPENCODE_CONFIG`, then project `opencode
 - `packages/web/server/lib/opencode/startup-performance.js`: opt-in startup phase diagnostics with fixed labels and numeric metadata allowlists.
 - `packages/web/server/lib/agent-tool/runtime.js`: managed OpenCode custom-tool materialization, environment injection, same-machine authentication (loopback, or the bound address for a concrete bind), and fixed CLI action dispatch.
 - `packages/web/server/lib/opencode/managed-plugin-config.js`: the `OPENCODE_CONFIG_CONTENT` merge used only on the fallback path, when the user's own environment owns `OPENCODE_CONFIG`; it appends managed plugin directories, plugin-switch policies and permission rules.
-- `packages/web/server/lib/opencode/managed-config-file.js`: the managed OpenCode config layer — materializes the enabled Spleen plugins (agent tools, the limit failover reporter from `../limit-failover/` while a fallback model or an account switch is set, and the session title prompt, always), writes the plugin-switch denials into `policies`, and publishes them in a file OpenCode watches.
+- `packages/web/server/lib/opencode/managed-config-file.js`: the managed OpenCode config layer — materializes the enabled Spleen plugins (agent tools, the limit failover reporter from `../limit-failover/` while a fallback model or an account switch is set, and the session title prompt, always), writes the plugin-switch denials into `policies`, points `instructions` at the base-rules file, and publishes them in a file OpenCode watches.
 - `packages/web/server/lib/opencode/plugin-switches.js`: Spleen's own record of the plugins switched off in its UI, stored under `<data-dir>/plugin-switches.json` and applied only to the managed OpenCode child.
 - `packages/web/server/lib/opencode/session-title-plugin.js`: the plugin that gives OpenCode's hidden `title` agent Spleen's title style and names a session started with attached context alone from that context. See "Session title prompt" below.
 - `packages/web/server/lib/opencode/instance-dir.js`: this server's own folder under `<data-dir>/run/instances/<pid>/` for the files its managed OpenCode reads, and removal of folders left by servers that are gone.
@@ -1624,8 +1624,18 @@ under a running child.
   would give the agent a second image tool on a model the user did not pick
   in Settings. The fallback path merges the same entries. Its layer sits above the user's
   global `opencode.json` and below their project config.
-- `OPENCODE_CONFIG_CONTENT` is passed through untouched, so whatever the user
-  put there still applies.
+- The file's `instructions` list names one file, `core-instructions.md` in the
+  same instance folder, rewritten from `session-knowledge/base-rules.js` with
+  the config. It is the second carrier of the base rules: OpenCode reads
+  `instructions` into every session it starts, including subagents it starts on
+  its own, which never pass through a Spleen sender. The first carrier is the
+  `spleen.base` instruction entry, written for the sessions Spleen prompts.
+  Both hold the same text. The VS Code extension writes the same file into its
+  own managed layer (`../../vscode/src/plugin-switches.ts`), so the sessions it
+  starts without a Spleen server carry the rules too.
+- On the managed-file path, `OPENCODE_CONFIG_CONTENT` is not used. On the
+  fallback path, the user's value is preserved and Spleen appends its plugin
+  directories, skills, instruction file and command.
 - `SPLEEN_AGENT_TOOL_URL` and a fresh `SPLEEN_AGENT_TOOL_TOKEN` are
   always in the child environment, including while every managed tool is off —
   a tool switched on later then reaches a process that can already call back.

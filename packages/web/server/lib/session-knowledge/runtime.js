@@ -1,9 +1,11 @@
 import { isRecord } from '../shared/guards.js';
+import { SPLEEN_BASE_RULES } from './base-rules.js';
 import { UI_BLOCKS_GUIDANCE } from './ui-blocks-guidance.js';
 
 const PINS_METADATA_KEY = 'project_context_pins';
 
 export const KNOWLEDGE_ENTRY_KEYS = {
+  base: 'spleen.base',
   checkout: 'spleen.checkout',
   pinned: 'spleen.pinned',
   memory: 'spleen.memory',
@@ -204,6 +206,7 @@ const buildGuidance = ({ linking, naming, rendering, secrets, workflows }) => {
 
 export const buildKnowledgeEntries = ({ notes, plans, memory, linking = false, naming = false, rendering = false, secrets = false, workflows = false, checkout = null, responseStyleInstruction, extensions }) => {
   const entries = {
+    [KNOWLEDGE_ENTRY_KEYS.base]: SPLEEN_BASE_RULES,
     [KNOWLEDGE_ENTRY_KEYS.pinned]: truncate(buildPinnedBlock({ notes, plans })),
     [KNOWLEDGE_ENTRY_KEYS.memory]: truncate(buildMemoryBlock(memory)),
     [KNOWLEDGE_ENTRY_KEYS.guidance]: buildGuidance({ linking, naming, rendering, secrets, workflows }),

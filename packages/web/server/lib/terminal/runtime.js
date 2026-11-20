@@ -179,7 +179,7 @@ const appendHistory = (history, text) => {
   if (history.head > 128) { history.chunks = history.chunks.slice(history.head); history.head = 0; }
 };
 
-export async function loadTerminalPtyProvider(bunVersion = globalThis.Bun?.version, importPty = (name) => import(name)) {
+export async function loadTerminalPtyProvider(bunVersion = globalThis.Bun?.version, importPty = (name) => (name === 'bun-pty' ? import('bun-pty') : import('node-pty'))) {
   if (bunVersionRunsBunPty(bunVersion)) {
     try { const pty = await importPty('bun-pty'); return { spawn: pty.spawn, backend: 'bun-pty' }; } catch { /* fall through */ }
   }

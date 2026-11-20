@@ -1,5 +1,5 @@
 // Turning the drawings in geometry.mjs into image files: PNG through sharp
-// (librsvg), the pixel-exact tray cube, and Windows .ico containers.
+// (librsvg) and Windows .ico containers.
 
 import sharp from 'sharp';
 
@@ -17,9 +17,63 @@ export const svgToPng = (svg, size) => {
     .toBuffer();
 };
 
+/** Renders a non-square SVG, for installer header and sidebar bitmaps. */
+export const svgToPngSize = (svg, width, height) => {
+  const svgWidth = Number(/<svg[^>]*\swidth="([\d.]+)"/.exec(svg)?.[1]);
+  if (!svgWidth) throw new Error('SVG needs a numeric width to render');
+  return sharp(Buffer.from(svg), { density: (72 * width) / svgWidth })
+    .resize(width, height)
+    .png()
+    .toBuffer();
+};
+
+/** 24-bit BMP for the NSIS installer pages. */
+export const encodeBmp = async (png) => {
+  const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const rowSize = Math.ceil((info.width * 3) / 4) * 4;
+  const pixelSize = rowSize * info.height;
+  const file = Buffer.alloc(54 + pixelSize);
+  file.write('BM', 0);
+  file.writeUInt32LE(file.length, 2);
+  file.writeUInt32LE(54, 10);
+  file.writeUInt32LE(40, 14);
+  file.writeInt32LE(info.width, 18);
+  file.writeInt32LE(info.height, 22);
+  file.writeUInt16LE(1, 26);
+  file.writeUInt16LE(24, 28);
+  file.writeUInt32LE(pixelSize, 34);
+  for (let y = 0; y < info.height; y += 1) {
+    const sourceRow = (info.height - 1 - y) * info.width * 3;
+    const targetRow = 54 + y * rowSize;
+    for (let x = 0; x < info.width; x += 1) {
+      file[targetRow + x * 3] = data[sourceRow + x * 3 + 2];
+      file[targetRow + x * 3 + 1] = data[sourceRow + x * 3 + 1];
+      file[targetRow + x * 3 + 2] = data[sourceRow + x * 3];
+    }
+  }
+  return file;
+};
+
 export const solidSquare = (size, background) => sharp({ create: { width: size, height: size, channels: 4, background } })
   .png()
   .toBuffer();
+
+/** Removes the alpha channel, for stores that reject transparent icons. */
+export const flattenTo = (png, background) => sharp(png)
+  .flatten({ background })
+  .removeAlpha()
+  .png()
+  .toBuffer();
+
+/** Centers one image on an opaque canvas, for launch screens. */
+export const centerOn = async ({ png, width, height, background }) => {
+  const { width: innerWidth, height: innerHeight } = await sharp(png).metadata();
+  return sharp({ create: { width, height, channels: 4, background } })
+    .composite([{ input: png, left: Math.round((width - innerWidth) / 2), top: Math.round((height - innerHeight) / 2) }])
+    .removeAlpha()
+    .png()
+    .toBuffer();
+};
 
 /**
  * Lays `png` over a square of `background` with `inset` px free on every side.
@@ -34,196 +88,6 @@ export const composeOnSquare = async ({ png, size, background, inset = 0, round 
     : sharp({ create: { width: size, height: size, channels: 4, background } });
   return base.composite([{ input: inner, left: inset, top: inset }]).png().toBuffer();
 };
-
-// ---------------------------------------------------------------------------
-// Pixel-exact cube for 16-24 px (Windows .ico frames, favicon-16). Scaled-down
-// vector art blurs there: the 30 degree edges fall between pixels. These use a
-// 2:1 slope, so every edge is a clean two-pixel staircase, with no
-// anti-aliasing and a 1 px black outline for light taskbars.
-
-const PIXEL_COLORS = {
-  leftWall: [0x45, 0x47, 0x4d],
-  rightWall: [0x5a, 0x5c, 0x62],
-  roof: [0x1d, 0x1e, 0x21],
-  edge: [0xf5, 0xf5, 0xf7],
-  outline: [0, 0, 0],
-  tiers: [[0x78, 0x7a, 0x80], [0x9f, 0xa1, 0xa6], [0xd4, 0xd5, 0xd8]],
-  singleTier: [0xb8, 0xba, 0xc0],
-};
-
-/** The Canary cube: blue glass, as in its app icon, with the pixel chick at its lower right. */
-export const CANARY_PIXEL_COLORS = {
-  leftWall: [0x40, 0x62, 0xcc],
-  rightWall: [0x33, 0x54, 0xc2],
-  roof: [0x24, 0x44, 0xb0],
-  edge: [0xf5, 0xf8, 0xff],
-  outline: [0, 0, 0],
-  tiers: [[0x78, 0x98, 0xed], [0xa2, 0xbb, 0xf4], [0xe0, 0xea, 0xff]],
-  singleTier: [0xa8, 0xc0, 0xf5],
-  bird: [0xff, 0xdd, 0x00],
-  birdLight: [0xff, 0xf0, 0x7a],
-  birdOrange: [0xf0, 0x9a, 0x2a],
-};
-
-/**
- * Canary's bird for the pixel cubes: a round chick facing left, one design at
- * three levels of detail, standing at the lower right over the cube (Iuliia's
- * pick, 2026-10-30; a slender canary did not read at these sizes, and the
- * icon's canary redrawn per pixel did not either, 2026-11-02). K black,
- * Y yellow, L light yellow, O orange, '.' leaves the cube. Windows shows the
- * 24 px frame on the taskbar and in the tray at 150%, 16 and 20 at 100%.
- */
-export const PIXEL_BIRDS = {
-  24: [
-    '....KKKK...',
-    '..KKYYYYK..',
-    '.KYYLLYYYK.',
-    'KKYKYYYYYYK',
-    'OOYKYYYYYYK',
-    'KKYYYYYYYYK',
-    '.KYYYLLOYYK',
-    '.KYYLLOOYYK',
-    '.KYYYOOYYK.',
-    '..KKYYYYK..',
-    '....KKKK...',
-  ],
-  20: ['...KKK...', '..KYYYK..', '.KYYKYYK.', 'OOYYYYYK.', '.KYYYYYYK', '.KYYLLOYK', '.KYYYOOYK', '..KYYYYK.', '...KKKK..'],
-  16: ['..KKK..', '.KYYYK.', 'OYYKYYK', '.KYYYYK', '.KYLOYK', '..KYYK.', '...KK..'],
-};
-
-/** Tiers per size: [half-width in px (even), index into the palette's tiers or 'single'], outer to core. */
-export const PIXEL_CUBES = {
-  16: { halfWidth: 6, wallHeight: 7, tiers: [[4, 'single']] },
-  20: { halfWidth: 8, wallHeight: 9, tiers: [[6, 0], [4, 2]] },
-  24: { halfWidth: 10, wallHeight: 11, tiers: [[8, 0], [6, 1], [4, 2]] },
-};
-
-const createCanvas = (size) => {
-  const data = new Uint8Array(size * size * 4);
-  const inside = (x, y) => x >= 0 && y >= 0 && x < size && y < size;
-  const set = (x, y, [r, g, b]) => {
-    if (!inside(x, y)) return;
-    const i = (y * size + x) * 4;
-    data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
-  };
-  const alpha = (x, y) => (inside(x, y) ? data[(y * size + x) * 4 + 3] : 0);
-  return { data, set, alpha };
-};
-
-// Convex polygon on integer pixel coordinates: on each pixel row, every pixel
-// from the left edge to the right edge, boundary pixels included.
-const fillPolygon = (canvas, size, points, color) => {
-  for (let y = 0; y < size; y += 1) {
-    const xs = [];
-    points.forEach(([xa, ya], i) => {
-      const [xb, yb] = points[(i + 1) % points.length];
-      if (y < Math.min(ya, yb) || y > Math.max(ya, yb)) return;
-      if (ya === yb) xs.push(xa, xb);
-      else xs.push(xa + ((xb - xa) * (y - ya)) / (yb - ya));
-    });
-    if (xs.length < 2) continue;
-    for (let x = Math.ceil(Math.min(...xs)); x <= Math.floor(Math.max(...xs)); x += 1) canvas.set(x, y, color);
-  }
-};
-
-// Bresenham from `a` to `b`, both ends included: each step along the longer
-// axis moves the other coordinate once the error reaches zero, so a half-way
-// pixel lands away from the start.
-const drawLine = (canvas, [x0, y0], [x1, y1], color) => {
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const xs = x1 < x0 ? -1 : 1;
-  const ys = y1 < y0 ? -1 : 1;
-  const [long, short] = dx >= dy ? [dx, dy] : [dy, dx];
-  let x = x0;
-  let y = y0;
-  let e = 2 * short - long;
-  for (let i = 0; i <= long; i += 1) {
-    canvas.set(x, y, color);
-    if (short && e >= 0) {
-      if (dx >= dy) y += ys; else x += xs;
-      e -= 2 * long;
-    }
-    e += 2 * short;
-    if (dx >= dy) x += xs; else y += ys;
-  }
-};
-
-/** Raw RGBA pixels of the pixel-exact cube at `size` (16, 20 or 24); `tape` for a development copy. */
-/** `bird` adds Canary's bird (PIXEL_BIRDS). */
-export const pixelCube = (size, { tape = false, colors = PIXEL_COLORS, bird = false } = {}) => {
-  const spec = PIXEL_CUBES[size];
-  if (!spec) throw new Error(`No pixel cube for ${size} px`);
-  const { halfWidth: hw, wallHeight: h, tiers } = spec;
-  const rise = hw / 2;
-  const total = 2 * rise + h + 1;
-  const y0 = Math.floor((size - total) / 2);
-  const c = Math.floor(size / 2);
-  const T = [c, y0];
-  const L = [c - hw, y0 + rise];
-  const F = [c, y0 + 2 * rise];
-  const R = [c + hw, y0 + rise];
-  const BL = [L[0], L[1] + h];
-  const B = [F[0], F[1] + h];
-  const BR = [R[0], R[1] + h];
-
-  const art = createCanvas(size);
-  fillPolygon(art, size, [L, F, B, BL], colors.leftWall);
-  fillPolygon(art, size, [F, R, BR, B], colors.rightWall);
-  fillPolygon(art, size, [T, R, F, L], colors.roof);
-  const cy = y0 + rise;
-  for (const [k, tier] of tiers) {
-    const color = tier === 'single' ? colors.singleTier : colors.tiers[tier];
-    fillPolygon(art, size, [[c, cy - k / 2], [c + k, cy], [c, cy + k / 2], [c - k, cy]], color);
-  }
-  for (const [a, b] of [[T, L], [T, R], [L, F], [F, R], [L, BL], [R, BR], [BL, B], [B, BR], [F, B]]) {
-    drawLine(art, a, b, colors.edge);
-  }
-
-  const out = createCanvas(size);
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      if (art.alpha(x, y)) continue;
-      if (art.alpha(x + 1, y) || art.alpha(x - 1, y) || art.alpha(x, y + 1) || art.alpha(x, y - 1)) {
-        out.set(x, y, colors.outline);
-      }
-    }
-  }
-  for (let i = 0; i < art.data.length; i += 4) {
-    if (art.data[i + 3]) out.data.set(art.data.subarray(i, i + 4), i);
-  }
-  // Over the finished cube: the drawing carries its own outline.
-  if (bird) drawPixelBird(out, size, colors);
-  if (tape) drawPixelTape(out, size);
-  return out.data;
-};
-
-const drawPixelBird = (canvas, size, colors) => {
-  const rows = PIXEL_BIRDS[size];
-  const left = size - rows[0].length;
-  const top = size - rows.length;
-  rows.forEach((row, dy) => [...row].forEach((cell, dx) => {
-    if (cell !== '.') canvas.set(left + dx, top + dy, { K: colors.outline, Y: colors.bird, L: colors.birdLight, O: colors.birdOrange }[cell]);
-  }));
-};
-
-const TAPE_COLORS = { yellow: [0xd6, 0xa2, 0x3c], dark: [0x1b, 0x1b, 0x1b] };
-
-// The development-copy tape across the lower cube, full width: two-pixel
-// diagonal stripes, a quarter of the icon high.
-const drawPixelTape = (canvas, size) => {
-  const height = Math.round(size / 4);
-  const top = Math.round(size * 0.6);
-  for (let y = top; y < top + height; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      canvas.set(x, y, (x + y) % 4 < 2 ? TAPE_COLORS.yellow : TAPE_COLORS.dark);
-    }
-  }
-};
-
-export const pixelCubePng = (size, options) => sharp(Buffer.from(pixelCube(size, options)), { raw: { width: size, height: size, channels: 4 } })
-  .png()
-  .toBuffer();
 
 // ---------------------------------------------------------------------------
 // .ico with PNG-compressed entries (Windows Vista and later read them).

@@ -37,6 +37,7 @@ source:
 
 | Key | Holds |
 |---|---|
+| `spleen.base` | Spleen's own house rules, the same in every session (`base-rules.js`) |
 | `spleen.pinned` | pinned notes and plan bodies |
 | `spleen.memory` | the memory index and when to save |
 | `spleen.guidance` | when to link, when to draw a page, where the tools are called |
@@ -51,6 +52,20 @@ call it in process. An empty text removes the entry. A key left out of
 the current style, including main chat, btw forks, UI-queued messages and fusion
 judges. A disabled setting returns empty text and removes the entry. A failed
 settings read omits the style and preserves the existing entry.
+
+The base rules are written every time and have no off switch. They are the app's
+promise that a new session answers the same way before the user has configured
+anything; a setting would make the first message of a fresh install different
+from the first message of an old one. The same text also reaches every session
+OpenCode starts on its own through `instructions` in the managed config
+(`../opencode/managed-config-file.js`), which is the only channel a subagent
+never prompted by Spleen reads. The VS Code extension writes the same file into
+its own managed layer (`../../../../vscode/src/plugin-switches.ts`), because it
+spawns its OpenCode without a Spleen server and would otherwise carry no rules
+at all. The user's own rules go in the global `AGENTS.md` that Settings → Behavior
+edits, and a project's `AGENTS.md` or the user's message stays more specific where
+it applies. The text is product copy in `base-rules.js`, not a setting, so
+changing it is a code change with a test and a review.
 
 Internal subagents, scheduled tasks and multi-run lanes pass an explicit empty
 style to clear one inherited from an earlier user-facing send. A send into the

@@ -1,3 +1,8 @@
+export function appendManagedInstructions(
+  rawConfig: string | undefined,
+  files: string[],
+): string;
+
 export function appendManagedPolicies(
   rawConfig: string | undefined,
   policies: Array<{ action: string; resource: string; effect: string }>,

@@ -2,8 +2,23 @@ import { expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 
+import { iconSpriteData } from '../../packages/ui/src/components/icon/sprite.ts';
 import { textOutputs } from './generate.mjs';
-import { PIXEL_CUBES, encodeIco, pixelCube } from './raster.mjs';
+import {
+  FLAT_LOGO,
+  SPLEEN_ACCENT,
+  SPLEEN_CORE_PATH,
+  SPLEEN_INK,
+  SPLEEN_MARK_VIEWBOX,
+  SPLEEN_PATH,
+  SPLEEN_TILE,
+  appIconSvg,
+  markIconSvg,
+  sourceSvg,
+  traySvg,
+} from './geometry.mjs';
+import { encodeIco, svgToPng } from './raster.mjs';
+import sharp from 'sharp';
 
 test('every generated text file matches scripts/brand', () => {
   const stale = [...textOutputs()]
@@ -12,30 +27,47 @@ test('every generated text file matches scripts/brand', () => {
   expect(stale).toEqual([]);
 });
 
-test('the pixel cube has no anti-aliasing: every pixel is opaque or empty', () => {
-  for (const size of Object.keys(PIXEL_CUBES).map(Number)) {
-    const pixels = pixelCube(size);
-    const alphas = new Set();
-    for (let i = 3; i < pixels.length; i += 4) alphas.add(pixels[i]);
-    expect([...alphas].sort((a, b) => a - b)).toEqual([0, 255]);
+test('the generated mark matches the master monogram paths', () => {
+  const master = sourceSvg('spleen-symbol-color-transparent.svg');
+  for (const d of [...FLAT_LOGO.shell, SPLEEN_CORE_PATH]) {
+    expect(master).toContain(`d="${d}"`);
   }
 });
 
-test('the pixel cube is outlined: no cube pixel touches an empty one', () => {
-  const size = 16;
-  const pixels = pixelCube(size);
-  const at = (x, y) => (x < 0 || y < 0 || x >= size || y >= size ? null : pixels.subarray((y * size + x) * 4, (y * size + x) * 4 + 4));
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      const pixel = at(x, y);
-      const isOutline = pixel[3] === 255 && pixel[0] === 0 && pixel[1] === 0 && pixel[2] === 0;
-      if (pixel[3] === 0 || isOutline) continue;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const next = at(x + dx, y + dy);
-        expect(next !== null && next[3] === 255).toBe(true);
-      }
-    }
-  }
+test('the app icon keeps the Spleen tile, bone blades and ember core', () => {
+  const svg = appIconSvg({ size: 512 });
+  expect(svg).toContain(`fill="${SPLEEN_TILE.fill}"`);
+  expect(svg).toContain(`rx="${SPLEEN_TILE.rx}"`);
+  expect(svg).toContain(`fill="${SPLEEN_INK}"`);
+  expect(svg).toContain(`fill="${SPLEEN_ACCENT}"`);
+});
+
+test('the tray glyph is transparent and monochrome with no tile', () => {
+  const svg = traySvg({ size: 32, color: '#FFFFFF' });
+  expect(svg).not.toContain('<rect');
+  expect(svg).not.toContain(SPLEEN_ACCENT);
+  expect(svg).toContain('fill="#FFFFFF"');
+});
+
+test('the cropped UI mark uses the tight viewBox', () => {
+  expect(markIconSvg({ size: 24 })).toContain(`viewBox="${SPLEEN_MARK_VIEWBOX}"`);
+});
+
+test('the UI sprite brand glyph follows the master path', () => {
+  expect(iconSpriteData.spleen).toContain(SPLEEN_PATH);
+  expect(iconSpriteData.spleen).toContain(SPLEEN_CORE_PATH);
+});
+
+test('the rendered app icon keeps the kit tile, bone blade and ember core', async () => {
+  const size = 256;
+  const png = await svgToPng(appIconSvg({ size }), size);
+  const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+  const at = (x, y) => [...data.subarray((y * info.width + x) * info.channels, (y * info.width + x) * info.channels + 3)];
+  const rgb = (hex) => [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
+
+  expect(at(128, 25)).toEqual(rgb(SPLEEN_TILE.fill));
+  expect(at(128, 58)).toEqual(rgb(SPLEEN_INK));
+  expect(at(128, 128)).toEqual(rgb(SPLEEN_ACCENT));
 });
 
 test('an .ico directory points at each PNG with its size', () => {

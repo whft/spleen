@@ -13,11 +13,16 @@ import { useUsageProviderGroups } from '@/components/usage/usageGroups';
 import { UsageGiftResetButton } from '@/components/usage/UsageGiftResetButton';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { pickUsageHeadline } from './usageHeadline';
-import { WorkStatusRow, WorkStatusCollapsibleSection, WorkStatusValue } from './WorkStatusPrimitives';
+import { WorkStatusMeter, WorkStatusRow, WorkStatusCollapsibleSection, WorkStatusValue } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import { usageValueTone } from './usageValueTone';
 
-
+const meterColorForWindow = (usedPercent: number | null | undefined): string => {
+  if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent)) return 'var(--muted-foreground)';
+  if (usedPercent >= 80) return 'var(--status-error)';
+  if (usedPercent >= 50) return 'var(--status-warning)';
+  return 'var(--primary-base)';
+};
 
 export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visible = true }) => {
   const { t } = useI18n();
@@ -41,15 +46,16 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
 
   if (groups.length === 0) return null;
 
-  const modeLabel = displayMode === 'remaining'
-    ? t('header.services.remaining')
-    : t('header.services.used');
-
+  const fallbackRow = groups.flatMap((group) => group.rows).find((row) => {
+    const percent = displayMode === 'remaining' ? row.window.remainingPercent : row.window.usedPercent;
+    return formatQuotaWindowValueLabel(row.window, percent, t) !== '-';
+  }) ?? null;
   const headline = pickUsageHeadline(groups, currentProviderId);
-  const headlineMetric = headline
+  const summaryRow = headline?.row ?? fallbackRow;
+  const headlineMetric = summaryRow
     ? formatQuotaWindowValueLabel(
-      headline.row.window,
-      displayMode === 'remaining' ? headline.row.window.remainingPercent : headline.row.window.usedPercent,
+      summaryRow.window,
+      displayMode === 'remaining' ? summaryRow.window.remainingPercent : summaryRow.window.usedPercent,
       t,
     )
     : null;
@@ -59,16 +65,12 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
       id="usage"
       title={t('chat.workStatus.section.usage')}
       icon="timer"
-      summary={(
+      summary={summaryRow && headlineMetric && headlineMetric !== '-' ? (
         <span className="inline-flex items-center gap-1.5">
-          {headline && headlineMetric && headlineMetric !== '-' ? (
-            <>
-              <span className="truncate">{headline.row.label}</span>
-              <WorkStatusValue tone={usageValueTone(headline.row.window) === 'muted' ? 'default' : usageValueTone(headline.row.window)}>{headlineMetric}</WorkStatusValue>
-            </>
-          ) : modeLabel}
+          <span className="truncate">{summaryRow.label}</span>
+          <WorkStatusValue tone={usageValueTone(summaryRow.window) === 'muted' ? 'default' : usageValueTone(summaryRow.window)}>{headlineMetric}</WorkStatusValue>
         </span>
-      )}
+      ) : undefined}
       action={(
         <Tooltip>
           <TooltipTrigger asChild>
@@ -123,29 +125,38 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
               shownMetric !== metricLabel ? `${rowLabel}: ${metricLabel}` : null,
               resetFull && resetFull !== resetLabel ? resetFull : null,
             ].filter((line): line is string => line !== null);
+            const meterPercent = typeof displayPercent === 'number' && Number.isFinite(displayPercent)
+              ? displayPercent
+              : (typeof row.window.usedPercent === 'number' && Number.isFinite(row.window.usedPercent)
+                ? row.window.usedPercent
+                : null);
             return (
-              <WorkStatusRow
-                key={`${group.providerId}-${row.key}`}
-                leading={<span aria-hidden className="size-[13px] shrink-0" />}
-                muted
-                label={(
-                  <span className="inline-flex min-w-0 items-baseline gap-1.5">
-                    <span className="truncate">{rowLabel}</span>
-                    {resetLabel ? (
-                      <span className="shrink-0 text-[0.6875rem] text-muted-foreground">{resetLabel}</span>
-                    ) : null}
-                  </span>
-                )}
-                tooltip={tooltipLines.length > 0 ? (
-                  <span className="flex flex-col gap-0.5">{tooltipLines.map((line) => <span key={line}>{line}</span>)}</span>
-                ) : undefined}
-                value={metricLabel === '-' ? undefined : (
-                  <span className="inline-flex items-center gap-1">
-                    <UsageGiftResetButton window={row.window} providerId={group.providerId} />
-                    <WorkStatusValue tone={usageValueTone(row.window)}>{shownMetric}</WorkStatusValue>
-                  </span>
-                )}
-              />
+              <React.Fragment key={`${group.providerId}-${row.key}`}>
+                <WorkStatusRow
+                  leading={<span aria-hidden className="size-[13px] shrink-0" />}
+                  muted
+                  label={(
+                    <span className="inline-flex min-w-0 items-baseline gap-1.5">
+                      <span className="truncate">{rowLabel}</span>
+                      {resetLabel ? (
+                        <span className="shrink-0 text-[0.6875rem] text-muted-foreground">{resetLabel}</span>
+                      ) : null}
+                    </span>
+                  )}
+                  tooltip={tooltipLines.length > 0 ? (
+                    <span className="flex flex-col gap-0.5">{tooltipLines.map((line) => <span key={line}>{line}</span>)}</span>
+                  ) : undefined}
+                  value={metricLabel === '-' ? undefined : (
+                    <span className="inline-flex items-center gap-1">
+                      <UsageGiftResetButton window={row.window} providerId={group.providerId} />
+                      <WorkStatusValue tone={usageValueTone(row.window)}>{shownMetric}</WorkStatusValue>
+                    </span>
+                  )}
+                />
+                {meterPercent !== null ? (
+                  <WorkStatusMeter percent={meterPercent} color={meterColorForWindow(row.window.usedPercent)} />
+                ) : null}
+              </React.Fragment>
             );
           })}
         </React.Fragment>
