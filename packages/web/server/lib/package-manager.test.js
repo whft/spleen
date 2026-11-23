@@ -263,6 +263,38 @@ describe('checkForUpdates', () => {
     }
   });
 
+  it('falls back to GET when GitHub rejects POST with 401 on releases/latest', async () => {
+    let calls = 0;
+    globalThis.fetch = vi.fn(async (_url, options) => {
+      calls += 1;
+      if (options?.method === 'POST') {
+        return { ok: false, status: 401 };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          tag_name: 'v1.2.0',
+          body: 'Release notes',
+          html_url: 'https://github.com/whft/spleen/releases/tag/v1.2.0',
+        }),
+      };
+    });
+
+    const result = await checkForUpdates({
+      appType: 'desktop-electron',
+      currentVersion: '1.1.0',
+      platform: 'windows',
+      arch: 'x64',
+    });
+
+    expect(calls).toBe(2);
+    expect(result.available).toBe(true);
+    expect(result.version).toBe('1.2.0');
+    expect(result.body).toBe('Release notes');
+    expect(result.releaseUrl).toBe('https://github.com/whft/spleen/releases/tag/v1.2.0');
+  });
+
   it('offers a Canary Android app the newest APK of the canary pre-release', async () => {
     fetchMock
       .when('api.github.com/repos/whft/spleen/releases/latest', {

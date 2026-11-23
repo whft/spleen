@@ -156,7 +156,7 @@ async function checkForUpdatesFromApi(currentVersion, options = {}) {
       signal: AbortSignal.timeout(10000),
     });
 
-    if (!response.ok && (response.status === 404 || response.status === 405) && UPDATE_CHECK_URL.includes('api.github.com/')) {
+    if (!response.ok && UPDATE_CHECK_URL.includes('api.github.com/')) {
       response = await fetch(UPDATE_CHECK_URL, {
         method: 'GET',
         headers: {
