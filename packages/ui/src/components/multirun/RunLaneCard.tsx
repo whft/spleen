@@ -146,7 +146,7 @@ export function RunLaneCard({
         }
       } : undefined}
       className={cn(
-        'relative flex min-h-[184px] flex-col gap-2 rounded-xl border p-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'relative flex min-h-[184px] flex-col gap-2 rounded-xl border p-3 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
         'bg-[var(--surface-elevated)] border-border hover:border-[var(--interactive-border-hover)]',
         isFusion && 'col-span-full min-h-0 border-[color-mix(in_srgb,var(--primary-base)_35%,transparent)]',
         fuseSource && 'cursor-pointer',
@@ -186,7 +186,7 @@ export function RunLaneCard({
       <div className={cn('typography-meta text-foreground', isFusion ? 'line-clamp-4' : 'line-clamp-5 flex-1', 'whitespace-pre-line break-words')}>
         {body}
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 typography-micro text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 typography-micro tabular-nums text-muted-foreground">
         {changes}
         <LaneDuration session={session} busy={busy} />
         {session.cost > 0 ? <span>{costFormatter.format(session.cost)}</span> : null}

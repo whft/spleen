@@ -138,7 +138,7 @@ export const BrowserToolbar: React.FC<BrowserToolbarProps> = ({
   ];
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+    <div className="oc-workspace-toolbar flex min-w-0 items-center gap-1.5 border-b border-edge px-2 py-1.5">
       <div className="flex shrink-0 items-center gap-0.5">
         {onHome ? <ToolbarTooltipButton icon="home" label={t('contextPanel.browser.devServers.title')} onClick={onHome} /> : null}
         <ToolbarTooltipButton icon="arrow-left" label={t('contextPanel.browser.back')} onClick={onBack} disabled={!canGoBack} />

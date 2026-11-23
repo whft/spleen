@@ -50,7 +50,7 @@ export const TeamExecutionGraph: React.FC<TeamExecutionGraphProps> = React.memo(
           type="button"
           onClick={() => onSelectMember?.(member)}
           disabled={!member.sessionId}
-          className={`group flex w-full flex-col gap-1.5 rounded-xl border p-3 text-start transition-colors duration-150 ${
+          className={`group flex w-full flex-col gap-1.5 rounded-xl border p-3 text-start transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background pointer-coarse:min-h-11 motion-reduce:transition-none ${
             active
               ? 'border-[var(--status-success)]/45 bg-surface-subtle/80 hover:border-[var(--status-success)]/70'
               : 'border-edge-muted bg-surface-elevated/70 hover:border-border-hover hover:bg-surface-elevated'
@@ -95,10 +95,10 @@ export const TeamExecutionGraph: React.FC<TeamExecutionGraphProps> = React.memo(
     };
 
     return (
-      <div className="flex flex-col gap-2.5 rounded-lg border border-border/70 bg-background/60 p-3">
+      <div className="flex flex-col gap-2.5 rounded-xl border border-edge bg-surface-subtle/50 p-3">
         {/* Compact execution summary strip */}
         <div className="flex items-center justify-between gap-2 text-[11px]">
-          <div className="flex items-center gap-2 font-mono text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 font-mono tabular-nums text-muted-foreground">
             <span className="font-medium text-foreground">{teamName}</span>
             <span>·</span>
             <span>{runningCount} running</span>
@@ -115,9 +115,16 @@ export const TeamExecutionGraph: React.FC<TeamExecutionGraphProps> = React.memo(
         </div>
 
         {/* Hairline progress bar */}
-        <div className="h-1 w-full overflow-hidden rounded-full bg-surface-subtle">
+        <div
+          role="progressbar"
+          aria-label={`${teamName} progress`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPct}
+          className="h-1 w-full overflow-hidden rounded-full bg-surface-subtle"
+        >
           <div
-            className="h-full bg-[var(--status-success)] transition-all duration-300"
+            className="h-full bg-[var(--status-success)] transition-all duration-300 motion-reduce:transition-none"
             style={{ width: `${progressPct}%` }}
           />
         </div>

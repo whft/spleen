@@ -1,5 +1,4 @@
 import type { useI18n } from '@/lib/i18n';
-import { SpleenLogo } from '@/components/ui/SpleenLogo';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
@@ -57,7 +56,7 @@ import { FormDock } from '@/components/chat/FormDock';
 import { PermissionDock } from '@/components/chat/PermissionDock';
 import { MessageSelectionBar } from '@/components/chat/messageSelection/MessageSelectionBar';
 import type { ChatInputProps } from './chatInputProps';
-import { renderDraftTitle } from './ComposerDraftTitle';
+import { DraftStudioHero } from './ComposerDraftTitle';
 import { MAX_MOBILE_COMPOSER_LINES, MAX_VISIBLE_COMPOSER_LINES, MOBILE_COMPOSER_BOUND_GAP_PX } from './composerInputLimits';
 import { MemoComposerDictation, MemoModelControls } from './memoComposerControls';
 
@@ -227,12 +226,11 @@ export function renderComposerForm({
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
             {showDesktopDraftPresentation ? (
-                <div className={cn('chat-input-column relative z-10 mb-7 flex flex-col items-center text-center', draftPresentationClassName)}>
-                    <SpleenLogo width={48} height={48} className="mb-4 text-foreground" />
-                    <h1 className="text-balance text-[1.75rem] font-medium tracking-[-0.028em] text-foreground md:text-[2rem]">
-                        {renderDraftTitle(draftHeading, draftProjectLabel)}
-                    </h1>
-                </div>
+                <DraftStudioHero
+                    heading={draftHeading}
+                    projectLabel={draftProjectLabel}
+                    className={cn('chat-input-column mb-7', draftPresentationClassName)}
+                />
             ) : null}
             <div className={cn('chat-input-column relative z-10 overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 {/* Comment mode shows only its own shell: the normal composer's

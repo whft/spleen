@@ -41,7 +41,6 @@ if (symbolPaths.length !== 3 || symbolFills.length !== 3) {
 export const SPLEEN_UPPER_PATH = symbolPaths[0];
 export const SPLEEN_CORE_PATH = symbolPaths[1];
 export const SPLEEN_LOWER_PATH = symbolPaths[2];
-export const SPLEEN_PATH = SPLEEN_UPPER_PATH;
 export const SPLEEN_PATHS = [SPLEEN_UPPER_PATH, SPLEEN_CORE_PATH, SPLEEN_LOWER_PATH];
 export const SPLEEN_INK = symbolFills[0];
 export const SPLEEN_ACCENT = symbolFills[1];

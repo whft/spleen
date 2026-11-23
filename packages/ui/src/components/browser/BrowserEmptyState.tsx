@@ -109,7 +109,9 @@ export const BrowserEmptyState: React.FC<{
 
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 overflow-hidden bg-background p-6 text-center">
-      <SpleenLogo width={110} height={110} className="shrink-0 opacity-20" />
+      <div className="oc-studio-emblem flex size-16 shrink-0 items-center justify-center rounded-2xl bg-surface-elevated">
+        <SpleenLogo width={42} height={42} className="shrink-0 opacity-85" />
+      </div>
       <div className="flex shrink-0 flex-col gap-1">
         <span className="typography-ui-header text-foreground">{t('contextPanel.browser.empty')}</span>
         <span className="typography-micro text-muted-foreground">{t('contextPanel.browser.emptyHint')}</span>

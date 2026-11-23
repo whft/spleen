@@ -10,7 +10,7 @@ import {
   SPLEEN_CORE_PATH,
   SPLEEN_INK,
   SPLEEN_MARK_VIEWBOX,
-  SPLEEN_PATH,
+  SPLEEN_UPPER_PATH,
   SPLEEN_TILE,
   appIconSvg,
   markIconSvg,
@@ -54,7 +54,7 @@ test('the cropped UI mark uses the tight viewBox', () => {
 });
 
 test('the UI sprite brand glyph follows the master path', () => {
-  expect(iconSpriteData.spleen).toContain(SPLEEN_PATH);
+  expect(iconSpriteData.spleen).toContain(SPLEEN_UPPER_PATH);
   expect(iconSpriteData.spleen).toContain(SPLEEN_CORE_PATH);
 });
 

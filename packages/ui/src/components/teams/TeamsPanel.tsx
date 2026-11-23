@@ -467,21 +467,11 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                   ) : null}
                   {!builtIn ? (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => void startEditAgent(agent)}
-                        title="Edit agent"
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <RiEditLine className="h-3.5 w-3.5" />
+                      <button type="button" onClick={() => void startEditAgent(agent)} aria-label={`Edit ${agent.name}`} title="Edit agent" className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
+                        <RiEditLine className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteAgent(agent)}
-                        title="Delete agent"
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <RiDeleteBinLine className="h-3.5 w-3.5" />
+                      <button type="button" onClick={() => void handleDeleteAgent(agent)} aria-label={`Delete ${agent.name}`} title="Delete agent" className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
+                        <RiDeleteBinLine className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </>
                   ) : null}
@@ -607,26 +597,28 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                 {activeTeam.status === 'active' ? (
                   <button
                     type="button"
+                    aria-label={t('teams.action.stop')}
                     title={t('teams.action.stop')}
                     onClick={() => void teamsApi.stop(activeTeam.id).then(loadTeams)}
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
                   >
-                    <RiStopCircleLine className="h-4 w-4" />
+                    <RiStopCircleLine className="h-4 w-4" aria-hidden="true" />
                   </button>
                 ) : null}
                 <button
                   type="button"
+                  aria-label={t('teams.action.delete')}
                   title={t('teams.action.delete')}
                   onClick={() => void teamsApi.remove(activeTeam.id).then(loadTeams)}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
                 >
-                  <RiDeleteBinLine className="h-4 w-4" />
+                  <RiDeleteBinLine className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
             {/* Sub-navigation */}
-            <div className="flex items-center gap-1 border-b border-border/60 pb-1.5 text-xs">
+            <div role="tablist" aria-label={activeTeam.name} className="flex flex-wrap items-center gap-1 border-b border-edge pb-2 text-xs">
               {(
                 [
                   { id: 'topology', label: 'Topology' },
@@ -638,11 +630,13 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={subTab === tab.id}
                   onClick={() => setSubTab(tab.id)}
-                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-9 motion-reduce:transition-none ${
                     subTab === tab.id
-                      ? 'border border-border/80 bg-secondary text-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'oc-selected text-foreground'
+                      : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
                   }`}
                 >
                   {tab.label}

@@ -162,7 +162,7 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
             {}
             <div
                 className={cn(
-                    'group/tool flex gap-1.5 pe-2 ps-px py-1.5 rounded-xl',
+                    'group/tool flex gap-1.5 pe-2 ps-px py-1.5 rounded-xl transition-colors duration-150 hover:bg-interactive-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
                     isMultiFileApplyPatch ? 'flex-wrap items-start cursor-pointer' : 'items-center cursor-pointer',
                 )}
                 onClick={isMultiFileApplyPatch ? () => onToggle(part.id) : handleMainRowClick}
@@ -173,6 +173,7 @@ export const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader;
                     onToggle(part.id);
                 } : handleMainKeyDown}
                 role="button"
+                aria-expanded={isExpanded}
                 tabIndex={0}
             >
                 <div className={cn('flex gap-1.5', isMultiFileApplyPatch ? 'w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5' : 'items-center flex-shrink-0')}>

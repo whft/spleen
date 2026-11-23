@@ -101,7 +101,7 @@ export const RecoveryStatusBanner: React.FC<RecoveryStatusBannerProps> = ({
           <span
             aria-hidden="true"
             className={cn(
-              'size-1.5 shrink-0 rounded-full transition-opacity duration-200',
+              'size-1.5 shrink-0 rounded-full transition-opacity duration-200 motion-reduce:transition-none',
               isWarning ? 'bg-[var(--status-warning)]' : 'bg-[var(--status-success)]',
               blinkDimmed && 'opacity-35',
             )}
