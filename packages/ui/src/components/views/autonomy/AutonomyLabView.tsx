@@ -49,6 +49,7 @@ export const AutonomyLabView: React.FC = () => {
   const [newMode, setNewMode] = React.useState<'finite' | 'ongoing'>('ongoing');
   const [newCadenceSec, setNewCadenceSec] = React.useState(30);
   const [continueNote, setContinueNote] = React.useState('');
+  const [editVerifyCmd, setEditVerifyCmd] = React.useState('');
   const [sourceName, setSourceName] = React.useState('');
   const [sourceLocation, setSourceLocation] = React.useState('');
   const [sourceKind, setSourceKind] = React.useState<'directory' | 'git' | 'file' | 'url'>('directory');
@@ -94,6 +95,20 @@ export const AutonomyLabView: React.FC = () => {
       await data.refresh('objectives');
     } catch (err) {
       data.setError(err instanceof Error ? err.message : 'Failed to send continuation');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleSaveVerifyCmd = async (id: string, cmdText: string) => {
+    setBusyAction(true);
+    try {
+      const cleaned = cmdText.trim();
+      await autonomyLabApi.updateObjective(id, { verificationCommands: cleaned ? [cleaned] : [] });
+      setEditVerifyCmd('');
+      await data.refresh('objectives');
+    } catch (err) {
+      data.setError(err instanceof Error ? err.message : 'Failed to update verification command');
     } finally {
       setBusyAction(false);
     }
@@ -396,6 +411,33 @@ export const AutonomyLabView: React.FC = () => {
                         <option key={s.id} value={s.id}>{s.title.slice(0, 48)} ({s.id.slice(0, 12)})</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                    <span className="typography-micro text-muted-foreground">Verification Cmd:</span>
+                    <input
+                      value={editVerifyCmd}
+                      onChange={(e) => setEditVerifyCmd(e.target.value)}
+                      placeholder={data.selectedObjective.verificationCommands[0] || 'None (informational research only)'}
+                      className="min-w-0 flex-1 rounded-md border border-border bg-card px-2 py-1 typography-micro"
+                    />
+                    <button
+                      type="button"
+                      disabled={busyAction || !editVerifyCmd.trim()}
+                      onClick={() => void handleSaveVerifyCmd(data.selectedObjective!.id, editVerifyCmd)}
+                      className="rounded-md border border-border px-2 py-1 typography-micro hover:bg-interactive-hover/50 disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                    {data.selectedObjective.verificationCommands.length > 0 ? (
+                      <button
+                        type="button"
+                        disabled={busyAction}
+                        onClick={() => void handleSaveVerifyCmd(data.selectedObjective!.id, '')}
+                        className="rounded-md border border-border px-2 py-1 typography-micro text-muted-foreground hover:bg-interactive-hover/50"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
                   </div>
                   <form onSubmit={handleContinueObjective} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-2">
                     <input

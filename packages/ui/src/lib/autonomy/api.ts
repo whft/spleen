@@ -208,6 +208,13 @@ export const autonomyLabApi = {
       body: JSON.stringify({ sessionId }),
     }))
   ),
+  updateObjective: async (id: string, patch: { verificationCommands?: string[]; mode?: 'finite' | 'ongoing'; budget?: { reviewIntervalMs?: number; maxTurns?: number } }): Promise<AutonomyObjective> => (
+    readJson<AutonomyObjective>(await apiFetch(`/api/autonomy/objectives/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }))
+  ),
   listSessions: async (): Promise<AutonomySessionSummary[]> => {
     const res = await readJson<{ sessions: AutonomySessionSummary[] }>(await apiFetch('/api/autonomy/sessions'));
     return res.sessions ?? [];

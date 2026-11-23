@@ -2166,17 +2166,17 @@ const teamsService = createTeamsService({
   sessionService: spleenSessionService,
   readSessionStatus: async (sessionId, directory) => {
     const active = await readTeamSessionOpenCodeFetch('/api/session/active', directory);
-    return active ? (active[sessionId] ? { type: 'busy' } : { type: 'idle' }) : null;
+    const map = active?.data && !Array.isArray(active.data) ? active.data : active;
+    return map ? (map[sessionId] ? { type: 'busy' } : { type: 'idle' }) : null;
   },
   readLastAssistantMessage: async (sessionId, directory) => {
     const page = await readTeamSessionOpenCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/message?limit=15`, directory);
     const list = Array.isArray(page?.data) ? page.data : (Array.isArray(page) ? page : []);
-    let lastAssistant = null;
-    let bestTs = -1;
+    let lastAssistant = null, bestTs = -1;
     for (const m of list) {
       if (m?.type !== 'assistant') continue;
-      const ts = Number(m?.time?.completed) || Number(m?.time?.created) || 0;
-      if (ts >= bestTs) { bestTs = ts; lastAssistant = m; }
+      const doneTs = Number(m?.time?.completed) || (m?.finish || m?.error ? Number(m?.time?.created) || 0 : 0);
+      if (doneTs > 0 && doneTs >= bestTs) { bestTs = doneTs; lastAssistant = m; }
     }
     if (!lastAssistant) return null;
     const text = (Array.isArray(lastAssistant.content) ? lastAssistant.content : []).filter((p) => p?.type === 'text' && asNonEmptyString(p.text)).map((p) => p.text).join('').trim();

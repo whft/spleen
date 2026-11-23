@@ -152,6 +152,15 @@ export const createAutonomySupervisor = ({
     return updated;
   };
 
+  const updateObjective = (id, patch = {}) => {
+    const updated = store.updateObjective(id, patch);
+    if (updated) {
+      store.recordDecision({ objectiveId: id, kind: 'policy', summary: 'Updated objective settings' });
+      emit('autonomy:updated', { objectiveId: id });
+    }
+    return updated;
+  };
+
   const pauseObjective = (id, reason = 'Paused by user') => {
     const updated = store.updateObjective(id, { status: 'paused', lastError: reason });
     if (updated) {
@@ -455,14 +464,28 @@ export const createAutonomySupervisor = ({
           await Promise.resolve(onObjectiveCompleted(getObjectiveDetail(objective.id), verifyRes)).catch(() => {});
         }
       } else if (verifyRes.status === 'failed') {
-        const nextStreak = objective.failureStreak + 1;
-        if (nextStreak >= MAX_FAILURE_STREAK) {
-          store.updateObjective(objective.id, { status: 'blocked', failureStreak: nextStreak, lastError: verifyRes.summary });
-          store.recordDecision({ objectiveId: objective.id, kind: 'blocker', summary: `Stopped after ${nextStreak} consecutive verification failures` });
+        if (objective.mode === 'ongoing') {
+          const intervalMs = Math.max(10_000, Number(budget.reviewIntervalMs) || 30_000);
+          const nextReview = now() + intervalMs;
+          store.updateObjective(objective.id, { status: 'waiting', loopPhase: 'remember', nextReviewAt: nextReview, lastError: null });
+          store.recordDecision({
+            objectiveId: objective.id,
+            kind: 'verify',
+            summary: `Verification check exited non-zero (${verifyRes.summary}); continuing ongoing research in ${Math.round(intervalMs / 1000)}s without forcing code edits`,
+          });
+          if (onObjectiveCompleted) {
+            await Promise.resolve(onObjectiveCompleted(getObjectiveDetail(objective.id), verifyRes)).catch(() => {});
+          }
         } else {
-          store.updateObjective(objective.id, { failureStreak: nextStreak, loopPhase: 'replan', lastError: verifyRes.summary });
-          for (const followUp of verifyRes.followUpTasks) {
-            store.addTask(objective.id, { ...followUp, idempotencyKey: `fix_${verifyRes.verification.id}_${followUp.title}` });
+          const nextStreak = objective.failureStreak + 1;
+          if (nextStreak >= MAX_FAILURE_STREAK) {
+            store.updateObjective(objective.id, { status: 'blocked', failureStreak: nextStreak, lastError: verifyRes.summary });
+            store.recordDecision({ objectiveId: objective.id, kind: 'blocker', summary: `Stopped after ${nextStreak} consecutive verification failures` });
+          } else {
+            store.updateObjective(objective.id, { failureStreak: nextStreak, loopPhase: 'replan', lastError: verifyRes.summary });
+            for (const followUp of verifyRes.followUpTasks) {
+              store.addTask(objective.id, { ...followUp, idempotencyKey: `fix_${verifyRes.verification.id}_${followUp.title}` });
+            }
           }
         }
       } else {
@@ -535,6 +558,7 @@ export const createAutonomySupervisor = ({
     listObjectives: (filters) => store.listObjectives(filters),
     addTask,
     attachSession,
+    updateObjective,
     replanObjective,
     pauseObjective,
     resumeObjective,

@@ -1,4 +1,4 @@
-import { asNonEmptyString } from '../shared/guards.js';
+import { asNonEmptyString, isRecord } from '../shared/guards.js';
 
 const DEFAULT_POLL_MS = 2_000;
 const DEFAULT_MAX_WAIT_MS = 900_000;
@@ -9,12 +9,52 @@ const sleep = (ms) => new Promise((resolve) => {
 });
 
 const extractAssistantText = (message) => {
-  const parts = Array.isArray(message?.content) ? message.content : [];
+  const parts = Array.isArray(message?.content)
+    ? message.content
+    : (Array.isArray(message?.parts) ? message.parts : []);
   return parts
     .filter((p) => p?.type === 'text' && asNonEmptyString(p.text))
     .map((p) => p.text)
-    .join('')
+    .join('\n')
     .trim();
+};
+
+const isSessionInActivePayload = (payload, sessionId) => {
+  if (!payload || !sessionId) return null;
+  const inner = isRecord(payload.data)
+    ? payload.data
+    : (Array.isArray(payload.data) ? payload.data : payload);
+  if (Array.isArray(inner)) {
+    return inner.some((entry) => entry === sessionId || entry?.id === sessionId || entry?.sessionID === sessionId);
+  }
+  if (isRecord(inner)) {
+    return Object.prototype.hasOwnProperty.call(inner, sessionId);
+  }
+  return null;
+};
+
+const normalizeAssistantMessage = (msg) => {
+  if (!isRecord(msg)) return null;
+  const isV2 = msg.type === 'assistant';
+  const isV1 = !isV2 && isRecord(msg.info) && msg.info.role === 'assistant';
+  if (!isV2 && !isV1) return null;
+  const meta = isV1 ? msg.info : msg;
+  const completedNum = Number(meta?.time?.completed);
+  const createdNum = Number(meta?.time?.created);
+  const finish = asNonEmptyString(meta?.finish);
+  const hasError = Boolean(meta?.error || finish === 'error' || meta?.aborted);
+  const isDone = (Number.isFinite(completedNum) && completedNum > 0) || Boolean(finish) || hasError;
+  if (!isDone) return null;
+  const completedAt = (Number.isFinite(completedNum) && completedNum > 0)
+    ? completedNum
+    : (Number.isFinite(createdNum) && createdNum > 0 ? createdNum : 0);
+  if (completedAt <= 0) return null;
+  return {
+    completedAt,
+    text: extractAssistantText(msg),
+    failed: hasError,
+    error: asNonEmptyString(meta?.error?.message) || (hasError ? 'Assistant turn failed' : null),
+  };
 };
 
 export const createOpenCodeSessionAdapter = ({
@@ -23,33 +63,24 @@ export const createOpenCodeSessionAdapter = ({
   const readSessionStatus = async (sessionId, directory) => {
     if (!readOpenCodeJson) return null;
     const active = await readOpenCodeJson('/api/session/active', directory);
-    if (!active) return null;
-    return active[sessionId] ? { type: 'busy' } : { type: 'idle' };
+    const busy = isSessionInActivePayload(active, sessionId);
+    if (busy === null) return null;
+    return busy ? { type: 'busy' } : { type: 'idle' };
   };
 
   const readLastAssistantMessage = async (sessionId, directory) => {
     if (!readOpenCodeJson) return null;
     const page = await readOpenCodeJson(`/api/session/${encodeURIComponent(sessionId)}/message?limit=15`, directory);
     const list = Array.isArray(page?.data) ? page.data : (Array.isArray(page) ? page : []);
-    let lastAssistant = null;
-    let bestTs = -1;
+    let best = null;
     for (const msg of list) {
-      if (msg?.type !== 'assistant') continue;
-      const ts = Number(msg?.time?.completed) || Number(msg?.time?.created) || 0;
-      if (ts >= bestTs) {
-        bestTs = ts;
-        lastAssistant = msg;
+      const normalized = normalizeAssistantMessage(msg);
+      if (!normalized) continue;
+      if (!best || normalized.completedAt >= best.completedAt) {
+        best = normalized;
       }
     }
-    if (!lastAssistant || bestTs <= 0) return null;
-    const text = extractAssistantText(lastAssistant);
-    const failed = Boolean(lastAssistant.error || lastAssistant.finish === 'error' || lastAssistant.aborted);
-    return {
-      completedAt: bestTs,
-      text,
-      failed,
-      error: asNonEmptyString(lastAssistant.error?.message) || (failed ? 'Assistant turn failed' : null),
-    };
+    return best;
   };
 
   const listSessions = async (limit = 40) => {
@@ -86,16 +117,22 @@ export const buildAutonomyTaskPrompt = (objective, task, completedTasks = []) =>
     lines.push(`Acceptance Criteria:\n${objective.acceptanceCriteria.map((c) => `- ${c}`).join('\n')}`);
   }
   if (Array.isArray(objective.verificationCommands) && objective.verificationCommands.length > 0) {
-    lines.push(`Verification Commands:\n${objective.verificationCommands.map((c) => `- ${c}`).join('\n')}`);
+    lines.push(`Configured Verification Commands (informational — ignore unrelated/third-party repo failures outside your scope):\n${objective.verificationCommands.map((c) => `- ${c}`).join('\n')}`);
   }
   if (asNonEmptyString(task.error)) {
     lines.push(`Previous Attempt Issue (recover and keep going): ${task.error}`);
   }
   if (completedTasks.length > 0) {
-    const recent = completedTasks.slice(-3).map((t) => `- ${t.title}: ${(t.result || 'completed').slice(0, 420)}`);
-    lines.push(`Prior Completed Work (continue directly from your stated next step):\n${recent.join('\n')}`);
+    const recent = completedTasks
+      .filter((t) => asNonEmptyString(t.result) && t.result !== 'Turn completed')
+      .slice(-2)
+      .map((t) => `- ${t.title}: ${t.result.slice(0, 500)}`);
+    if (recent.length > 0) {
+      lines.push(`Prior Completed Work (continue directly from your stated next step):\n${recent.join('\n')}`);
+    }
   }
   lines.push(
+    'Scope Guardrail: Stay strictly within your stated goal and the user\'s instructions. Do NOT edit, patch, or try to fix unrelated third-party/reference repositories, vendored folders, or files you were not asked to modify. If any automated check fails on unrelated files, ignore those unrelated failures, note why they are out of scope, and keep working on your actual goal.',
     'Continue working directly in this session without spawning unnecessary extra team chats unless explicitly requested.',
     'Do concrete work on the next unresolved step, verify your findings, use research.search / research.registerSource for docs, and call memfs.save for verified discoveries.',
     'End with concrete verified evidence, files touched, and the exact next concrete step if more work remains.',
@@ -151,7 +188,7 @@ export const createAutonomySessionExecutor = ({
           return { ok: false, error: 'Objective paused or cancelled while waiting for session' };
         }
         const status = await readSessionStatus(sessionId, directory).catch(() => null);
-        if (!status || status.type === 'idle') break;
+        if (status?.type === 'idle') break;
         await wait(pollIntervalMs);
       }
     }
@@ -182,8 +219,8 @@ export const createAutonomySessionExecutor = ({
       const status = readSessionStatus
         ? await readSessionStatus(sessionId, directory).catch(() => null)
         : { type: 'idle' };
-      if (status?.type === 'busy') {
-        seenBusy = true;
+      if (!status || status.type === 'busy') {
+        if (status?.type === 'busy') seenBusy = true;
         idleTicks = 0;
         store.updateTask(task.id, { heartbeatAt: now() });
         continue;
@@ -198,7 +235,7 @@ export const createAutonomySessionExecutor = ({
         return { ok: true, result: (latest.text || 'Turn completed').slice(0, 4000) };
       }
       idleTicks += 1;
-      if ((seenBusy && idleTicks >= 3) || (!seenBusy && idleTicks >= 15)) {
+      if ((seenBusy && idleTicks >= 4) || (!seenBusy && idleTicks >= 45)) {
         return { ok: true, result: latest?.text?.slice(0, 4000) || `Session ${sessionId} completed turn` };
       }
     }

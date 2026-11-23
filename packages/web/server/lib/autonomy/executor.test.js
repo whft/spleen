@@ -6,7 +6,7 @@ import express from 'express';
 import { createAutonomyStore } from './store.js';
 import { createEvidenceVerifier } from './verifier.js';
 import { createAutonomySupervisor } from './supervisor.js';
-import { createAutonomySessionExecutor } from './executor.js';
+import { createAutonomySessionExecutor, createOpenCodeSessionAdapter } from './executor.js';
 import { bootstrapAutonomyPlatform } from './bootstrap.js';
 
 const tempDirs = [];
@@ -226,6 +226,52 @@ describe('autonomy live session executor', () => {
     await supervisor.tick();
     expect(sent.length).toBe(4);
     expect(supervisor.getObjective(obj.id).tasks.some((t) => t.status === 'completed' && t.result?.includes('Research wave 4'))).toBe(true);
+    store.close();
+  });
+
+  it('unwraps /api/session/active data envelope, ignores unfinished streaming messages, and never spawns fix tasks on ongoing research', async () => {
+    const adapter = createOpenCodeSessionAdapter({
+      readOpenCodeJson: async (urlPath) => {
+        if (urlPath === '/api/session/active') {
+          return { data: { ses_live: { status: 'running' } } };
+        }
+        return {
+          data: [
+            { type: 'assistant', time: { created: 2000 }, content: [{ type: 'text', text: 'partial stream...' }] },
+            { type: 'assistant', time: { created: 1000, completed: 1500 }, content: [{ type: 'text', text: 'Real finished reply' }] },
+          ],
+        };
+      },
+    });
+
+    expect(await adapter.readSessionStatus('ses_live', '/repo')).toEqual({ type: 'busy' });
+    expect(await adapter.readSessionStatus('ses_other', '/repo')).toEqual({ type: 'idle' });
+    const latest = await adapter.readLastAssistantMessage('ses_live', '/repo');
+    expect(latest.completedAt).toBe(1500);
+    expect(latest.text).toBe('Real finished reply');
+
+    const workDir = createTempDir('spleen-exec-ongoing-noscope-');
+    const store = createAutonomyStore({ dbPath: ':memory:' });
+    const supervisor = createAutonomySupervisor({
+      store,
+      verifier: createEvidenceVerifier({
+        runCommand: async () => ({ command: 'bun test', status: 'failed', exitCode: 1, durationMs: 5, stdout: '', stderr: 'unrelated ref test failed' }),
+        readGit: async () => '',
+      }),
+      executeTask: async () => ({ ok: true, result: 'Research step done' }),
+    });
+
+    const obj = supervisor.createObjective({
+      title: 'Pure research objective',
+      directory: workDir,
+      mode: 'ongoing',
+      verificationCommands: ['bun test'],
+    });
+    await supervisor.tick();
+    await supervisor.tick();
+    const after = supervisor.getObjective(obj.id);
+    expect(after.status).toBe('waiting');
+    expect(after.tasks.some((t) => t.title.startsWith('Fix verification failure'))).toBe(false);
     store.close();
   });
 });
