@@ -77,6 +77,15 @@ export const imageOutputs = async () => {
   const markPng = (size, color = SPLEEN_INK, dot = true) => (
     svgToPng(flatLogoSvg({ size, color, dot }), size)
   );
+  const maskablePng = async (size) => {
+    const inset = Math.ceil(size * 0.05);
+    return composeOnSquare({
+      png: await markPng(size - inset * 2),
+      size,
+      background: { r: 9, g: 9, b: 11, alpha: 1 },
+      inset,
+    });
+  };
   const iconSizes = [16, 24, 32, 48, 64, 128, 256];
   const icoEntries = [];
   for (const size of iconSizes) icoEntries.push({ size, png: await iconPng(size) });
@@ -87,18 +96,8 @@ export const imageOutputs = async () => {
     [at('packages/web/public/favicon.png'), await iconPng(64)],
     [at('packages/web/public/pwa-192.png'), await iconPng(192)],
     [at('packages/web/public/pwa-512.png'), await iconPng(512)],
-    [at('packages/web/public/pwa-maskable-192.png'), await composeOnSquare({
-      png: await iconPng(192),
-      size: 192,
-      background: { r: 9, g: 9, b: 11, alpha: 1 },
-      inset: 0,
-    })],
-    [at('packages/web/public/pwa-maskable-512.png'), await composeOnSquare({
-      png: await iconPng(512),
-      size: 512,
-      background: { r: 9, g: 9, b: 11, alpha: 1 },
-      inset: 0,
-    })],
+    [at('packages/web/public/pwa-maskable-192.png'), await maskablePng(192)],
+    [at('packages/web/public/pwa-maskable-512.png'), await maskablePng(512)],
     [at('packages/web/public/apple-touch-icon.png'), await iconPng(180)],
     [at('packages/web/public/apple-touch-icon-120x120.png'), await iconPng(120)],
     [at('packages/web/public/apple-touch-icon-152x152.png'), await iconPng(152)],

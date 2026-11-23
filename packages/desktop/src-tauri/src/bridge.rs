@@ -294,7 +294,8 @@ pub async fn spleen_desktop_invoke(
                 caller.maximize().map_err(|e| e.to_string())?;
             }
             let now_maximized = caller.is_maximized().unwrap_or(false);
-            let _ = caller.emit(
+            let _ = caller.emit_to(
+                tauri::EventTarget::window(caller.label()),
                 "spleen:window-maximized-changed",
                 json!({ "maximized": now_maximized }),
             );

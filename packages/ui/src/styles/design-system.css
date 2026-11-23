@@ -473,6 +473,30 @@
   background-color: var(--surface-elevated);
 }
 
+.oc-studio-titlebar {
+  box-shadow: inset 0 -1px var(--oc-edge-muted);
+}
+
+.oc-workspace-toolbar {
+  background: color-mix(in srgb, var(--surface-background), var(--surface-muted) 75%);
+  border-block-end: 1px solid var(--oc-edge-muted);
+}
+
+.oc-studio-emblem {
+  box-shadow: inset 0 0 0 1px var(--interactive-border), 0 6px 20px rgb(0 0 0 / 9%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .oc-studio-emblem {
+    animation: oc-studio-emblem-enter 170ms ease-out both;
+  }
+}
+
+@keyframes oc-studio-emblem-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* The composer in light themes: light themes paint --surface-elevated darker
    than the page, which made the app's main raised surface read greyer than
    the canvas, as if recessed or disabled. Like every raised control in a

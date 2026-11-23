@@ -52,11 +52,13 @@ export const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false 
 
     return (
         <div className={cn(
-            'oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
+            'oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-5 text-center transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
             exiting && 'pointer-events-none opacity-0',
         )}>
-            <SpleenLogo width={40} height={40} className="mb-3.5 text-foreground/90" />
-            <h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
+            <div className="oc-studio-emblem mb-5 grid size-16 shrink-0 place-items-center rounded-2xl bg-surface-elevated sm:mb-6 sm:size-[76px]">
+                <SpleenLogo width={46} height={46} />
+            </div>
+            <h1 className="max-w-[24ch] text-balance text-[clamp(1.75rem,4vw,2.875rem)] font-medium leading-[1.08] tracking-[-0.045em] text-foreground">
                 {renderDraftTitle(draftHeading, projectLabel)}
             </h1>
             <DraftPresetChips
@@ -66,7 +68,7 @@ export const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false 
             <button
                 type="button"
                 onClick={openTeamsLauncher}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-card/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
+                className="mt-4 inline-flex min-h-8 items-center gap-2 rounded-lg bg-interactive-hover px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-interactive-selection hover:text-foreground focus-visible:text-foreground motion-reduce:transition-none pointer-coarse:min-h-11"
             >
                 <Icon name="ai-teams" className="h-3.5 w-3.5 text-foreground" />
                 {t('teams.launcher.startAction')}

@@ -1079,7 +1079,7 @@ export const CommandPalette: React.FC = () => {
         <DialogDescription>{t('commandPalette.description')}</DialogDescription>
       </DialogHeader>
       <DialogContent
-        className="gap-0 overflow-hidden p-0 max-w-[min(720px,calc(100vw-2rem))]"
+        className="max-w-[min(720px,calc(100vw-2rem))] gap-0 overflow-hidden rounded-2xl p-0"
         layerClassName="items-start pt-[12vh]"
         showCloseButton={false}
       >

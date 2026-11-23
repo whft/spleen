@@ -763,7 +763,7 @@ export const Header: React.FC = () => {
     <div
       onMouseDown={handleDragStart}
       className={cn(
-        'app-region-drag relative flex h-12 select-none items-center',
+        'app-region-drag oc-studio-titlebar relative flex h-12 select-none items-center',
         endEdgeOwnedByInWindowControls ? 'pe-0' : 'pe-2.5',
         macosHeaderSizeClass
       )}

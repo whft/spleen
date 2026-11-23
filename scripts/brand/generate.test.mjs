@@ -70,6 +70,23 @@ test('the rendered app icon keeps the kit tile, bone blade and ember core', asyn
   expect(at(128, 128)).toEqual(rgb(SPLEEN_ACCENT));
 });
 
+test('the complete mark fits in the PWA maskable safe circle', async () => {
+  for (const size of [192, 512]) {
+    const icon = new URL(`../../packages/web/public/pwa-maskable-${size}.png`, import.meta.url);
+    const pixels = await sharp(readFileSync(icon)).ensureAlpha().raw().toBuffer();
+    let painted = 0;
+    let clipped = 0;
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      if (pixels[offset] < 16) continue;
+      painted++;
+      const pixel = offset / 4;
+      if (Math.hypot(pixel % size + 0.5 - size / 2, Math.floor(pixel / size) + 0.5 - size / 2) > size * 0.4) clipped++;
+    }
+    expect(painted).toBeGreaterThan(size * size * 0.06);
+    expect(clipped).toBe(0);
+  }
+});
+
 test('an .ico directory points at each PNG with its size', () => {
   const pngs = [{ size: 16, png: Buffer.from('a') }, { size: 256, png: Buffer.from('bcd') }];
   const ico = encodeIco(pngs);

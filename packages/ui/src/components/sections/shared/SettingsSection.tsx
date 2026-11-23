@@ -39,7 +39,7 @@ export const SETTINGS_FIELDS_STACK_CLASS = 'space-y-4';
 export const SETTINGS_OPTION_STACK_CLASS = 'space-y-1.5';
 
 export const SETTINGS_PAGE_TITLE_CLASS =
-  'typography-settings-page-title text-muted-foreground';
+  'typography-settings-page-title font-semibold tracking-tight text-foreground';
 export const SETTINGS_SECTION_TITLE_CLASS =
   'typography-settings-section-title text-foreground';
 const SETTINGS_GROUP_TITLE_CLASS =

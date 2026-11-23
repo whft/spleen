@@ -3,8 +3,8 @@
     "id": "spleen-dark",
     "name": "Spleen",
     "variant": "dark",
-    "description": "Spleen Studio: pure obsidian sidebar, calm graphite canvas, crisp translucent hairlines, and high-contrast monochrome precision",
-    "version": "2.0.0",
+    "description": "Graphite workbench with warm text and a muted green interaction accent.",
+    "version": "2.1.0",
     "author": "Spleen",
     "tags": [
       "dark",
@@ -17,31 +17,31 @@
   },
   "colors": {
     "primary": {
-      "base": "#fafafa",
+      "base": "#f3f2ec",
       "hover": "#ffffff",
-      "active": "#e4e4e7",
-      "foreground": "#09090b",
-      "muted": "#a1a1aa80"
+      "active": "#e4e3dc",
+      "foreground": "#0e100f",
+      "muted": "#a5a8a280"
     },
     "surface": {
-      "background": "#101012",
-      "foreground": "#fafafa",
-      "muted": "#060607",
-      "mutedForeground": "#a1a1aa",
-      "elevated": "#1a1a1e",
-      "elevatedForeground": "#fafafa",
-      "overlay": "#151518",
-      "subtle": "#222227"
+      "background": "#131514",
+      "foreground": "#f3f2ec",
+      "muted": "#0c0e0d",
+      "mutedForeground": "#a5a8a2",
+      "elevated": "#1e211f",
+      "elevatedForeground": "#f3f2ec",
+      "overlay": "#252825",
+      "subtle": "#272b28"
     },
     "interactive": {
-      "border": "#2a2a30",
-      "borderHover": "#50505b",
-      "borderFocus": "#5a5a66",
-      "selection": "#26262b",
-      "selectionForeground": "#fafafa",
-      "focus": "#fafafa",
-      "focusRing": "#ffffff33",
-      "cursor": "#fafafa",
+      "border": "#353b35",
+      "borderHover": "#535d54",
+      "borderFocus": "#7e8e7e",
+      "selection": "#303831",
+      "selectionForeground": "#f3f2ec",
+      "focus": "#dbebce",
+      "focusRing": "#dbebce66",
+      "cursor": "#f3f2ec",
       "hover": "#ffffff0d",
       "active": "#ffffff18"
     },
@@ -95,9 +95,9 @@
       "merged": "#a8b0ba"
     },
     "chat": {
-      "userMessageBackground": "#1d1d22",
-      "divider": "#2e2e36",
-      "background": "#101012"
+      "userMessageBackground": "#292922",
+      "divider": "#333731",
+      "background": "#131514"
     },
     "markdown": {
       "link": "#e4e4e7",

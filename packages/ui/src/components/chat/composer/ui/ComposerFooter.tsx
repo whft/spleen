@@ -153,7 +153,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
             className={cn(
                 'bg-transparent flex-shrink-0',
                 footerPaddingClass,
-                !isMobile && !isVSCode && 'pe-2',
+                !isMobile && !isVSCode && 'pe-2.5',
                 isMobile && 'h-12 pe-3.5',
                 isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
             )}

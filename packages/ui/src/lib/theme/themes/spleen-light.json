@@ -3,8 +3,8 @@
     "id": "spleen-light",
     "name": "Spleen Light",
     "variant": "light",
-    "description": "Spleen Studio Daylight: crisp gallery canvas, soft studio sidebar, pure ink contrast, zero visual glare",
-    "version": "2.0.0",
+    "description": "Paper workbench with soft neutral panels and a muted green interaction accent.",
+    "version": "2.1.0",
     "author": "Spleen",
     "tags": [
       "light",
@@ -17,31 +17,31 @@
   },
   "colors": {
     "primary": {
-      "base": "#09090b",
-      "hover": "#18181b",
+      "base": "#212521",
+      "hover": "#313731",
       "active": "#000000",
-      "foreground": "#fafafa",
-      "muted": "#52525b80"
+      "foreground": "#ffffff",
+      "muted": "#545e5480"
     },
     "surface": {
-      "background": "#ffffff",
-      "foreground": "#09090b",
-      "muted": "#f6f6f7",
-      "mutedForeground": "#52525b",
+      "background": "#fafaf6",
+      "foreground": "#212521",
+      "muted": "#efefe9",
+      "mutedForeground": "#535b52",
       "elevated": "#ffffff",
-      "elevatedForeground": "#09090b",
+      "elevatedForeground": "#212521",
       "overlay": "#ffffff",
-      "subtle": "#f0f0f3"
+      "subtle": "#e9ebe3"
     },
     "interactive": {
-      "border": "#e4e4e7",
-      "borderHover": "#c6c6ce",
-      "borderFocus": "#71717a",
-      "selection": "#ececef",
-      "selectionForeground": "#09090b",
-      "focus": "#09090b",
-      "focusRing": "#09090b28",
-      "cursor": "#09090b",
+      "border": "#d9ddd1",
+      "borderHover": "#b7beb1",
+      "borderFocus": "#63775f",
+      "selection": "#e1e8da",
+      "selectionForeground": "#212521",
+      "focus": "#324d33",
+      "focusRing": "#324d3366",
+      "cursor": "#212521",
       "hover": "#0000000a",
       "active": "#00000014"
     },
@@ -96,9 +96,9 @@
       "merged": "#52525b"
     },
     "chat": {
-      "userMessageBackground": "#f4f4f6",
-      "divider": "#d3d3db",
-      "background": "#ffffff"
+      "userMessageBackground": "#eeede1",
+      "divider": "#e0e2d7",
+      "background": "#fafaf6"
     },
     "markdown": {
       "link": "#18181b",

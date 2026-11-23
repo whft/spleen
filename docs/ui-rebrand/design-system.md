@@ -1,5 +1,7 @@
 # SPLEEN STUDIO (v2.0) — Design System Specification
 
+The [Studio refresh](studio-refresh.md) describes the Fold identity and the current Graphite and Paper palettes. The values below describe the earlier Keystone design.
+
 ## 1. Visual Identity & Aesthetic Direction
 
 **SPLEEN STUDIO**: A calm, creative-studio developer workstation inspired by editorial dark-studio interfaces (obsidian rail `#060607`, calm graphite canvas `#101012`, raised composer and cards `#1A1A1E`, active pills `#26262B`), crisp `1px` hairline edges, generous rounded surfaces (`16px` docked panels/sheets, `22px` sculpted composer, pill tabs and primary CTAs), self-hosted `Geist` typography, and an original **Keystone Fold S** brand mark.

@@ -695,7 +695,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
       </ContextPanelHeaderToolbar>
 
       {/* Studio Navigation & Quick Search */}
-      <div className="flex shrink-0 flex-col gap-2 border-b border-edge-muted bg-sidebar/60 px-3 py-2">
+      <div className="oc-workspace-toolbar flex shrink-0 flex-col gap-2 px-3 py-2">
         <div className="flex flex-wrap items-center gap-1">
           {(
             [

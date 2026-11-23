@@ -108,17 +108,14 @@ export const WindowsWindowControls = React.memo(function WindowsWindowControls({
   const order = getDesktopWindowControlsOrder(position);
 
   const activate = (action: DesktopWindowControlAction) => {
-    if (action === 'close') {
-      void invokeDesktop('desktop_close_current_window');
-      return;
-    }
-    if (action === 'minimize') {
-      void invokeDesktop('desktop_minimize_current_window');
-      return;
-    }
-    void invokeDesktop<{ maximized?: boolean }>('desktop_toggle_current_window_maximized')
-      .then((state) => setIsMaximized(Boolean(state?.maximized)))
-      .catch(() => {});
+    const command = action === 'maximize'
+      ? 'desktop_toggle_current_window_maximized'
+      : `desktop_${action}_current_window`;
+    void invokeDesktop<{ maximized?: boolean }>(command)
+      .then((state) => {
+        if (state?.maximized !== undefined) setIsMaximized(state.maximized);
+      })
+      .catch((error) => console.warn('[titlebar] window action failed', action, error));
   };
 
   if (desktopWindowControlsStyle === 'traffic-lights') {
@@ -140,7 +137,7 @@ export const WindowsWindowControls = React.memo(function WindowsWindowControls({
   }
 
   const buttonClassName = cn(
-    'app-region-no-drag inline-flex items-center justify-center text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    'app-region-no-drag inline-flex items-center justify-center text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:bg-interactive-hover focus-visible:text-foreground motion-reduce:transition-none',
     isLeft ? 'h-8 w-8 rounded-md' : 'h-12 w-11',
   );
   const containerClassName = isLeft
@@ -154,7 +151,7 @@ export const WindowsWindowControls = React.memo(function WindowsWindowControls({
           key="minimize"
           type="button"
           className={buttonClassName}
-          onClick={() => { void invokeDesktop('desktop_minimize_current_window'); }}
+          onClick={() => activate(action)}
           title={t('header.windowControls.minimize')}
           aria-label={t('header.windowControls.minimize')}
         >
@@ -169,11 +166,7 @@ export const WindowsWindowControls = React.memo(function WindowsWindowControls({
           key="maximize"
           type="button"
           className={buttonClassName}
-          onClick={() => {
-            void invokeDesktop<{ maximized?: boolean }>('desktop_toggle_current_window_maximized')
-              .then((state) => setIsMaximized(Boolean(state?.maximized)))
-              .catch(() => {});
-          }}
+          onClick={() => activate(action)}
           title={isMaximized ? t('header.windowControls.restore') : t('header.windowControls.maximize')}
           aria-label={isMaximized ? t('header.windowControls.restore') : t('header.windowControls.maximize')}
         >
@@ -190,7 +183,7 @@ export const WindowsWindowControls = React.memo(function WindowsWindowControls({
           buttonClassName,
           'hover:bg-[var(--status-error)] hover:text-[var(--status-error-foreground)]',
         )}
-        onClick={() => { void invokeDesktop('desktop_close_current_window'); }}
+        onClick={() => activate(action)}
         title={t('header.windowControls.close')}
         aria-label={t('header.windowControls.close')}
       >

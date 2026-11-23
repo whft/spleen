@@ -133,9 +133,9 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
             aria-pressed={isActive}
             data-context-surface={surface.id}
             className={cn(
-              'flex h-8 w-8 touch-none select-none items-center justify-center rounded-[10px] transition-colors duration-150',
+              'relative flex size-8 touch-none select-none items-center justify-center rounded-lg transition-colors duration-150 focus-visible:bg-interactive-hover focus-visible:text-foreground motion-reduce:transition-none',
               isActive
-                ? 'oc-selected text-interactive-selection-foreground'
+                ? 'oc-selected text-interactive-selection-foreground before:absolute before:inset-s-0 before:h-3 before:w-0.5 before:rounded-full before:bg-[var(--interactive-focus)]'
                 : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
             )}
           >
@@ -439,7 +439,7 @@ export const ContextPanelRail: React.FC = () => {
       <ScrollShadow
         surface="var(--sidebar)"
         size={RAIL_SCROLL_FADE_PX}
-        className="scrollbar-none flex min-h-0 w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto overflow-x-hidden pt-2"
+        className="scrollbar-none flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden pt-2.5"
       >
       <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={handleDragStart} onDragCancel={handleDragCancel} onDragEnd={handleDragEnd}>
         {groups.map((group, groupIndex) => (

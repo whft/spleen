@@ -54,7 +54,7 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
     >
       <div
         className={cn(
-          'mx-auto max-w-[840px] space-y-0 px-6 py-6 @3xl:px-12 @3xl:py-8',
+          'mx-auto max-w-[840px] space-y-0 px-4 py-5 @md:px-6 @3xl:px-12 @3xl:py-9',
           fillHeight && 'flex w-full flex-1 flex-col',
           '[&>section:first-of-type]:border-t-0 [&>section:first-of-type]:pt-0',
           className
@@ -80,7 +80,7 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
         ) : hasHeader && (
           <div className={cn(
             'flex flex-wrap items-start justify-between gap-x-4 gap-y-3',
-            isMobile && description == null && headerEnd == null && !hasTitleChrome ? 'mb-0' : 'mb-2 pb-6',
+            isMobile && description == null && headerEnd == null && !hasTitleChrome ? 'mb-0' : 'mb-5 border-b border-edge-muted pb-5',
           )}>
             <div className="min-w-0 flex-1 basis-64 space-y-1">
               {title != null ? (

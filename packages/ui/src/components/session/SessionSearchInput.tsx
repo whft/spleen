@@ -20,8 +20,8 @@ type SessionSearchInputProps = {
   quiet?: boolean;
 };
 
-const FIELD_CLASS = 'rounded-md border border-border oc-raised oc-field hover:[&:not(:focus-within)]:[background-image:linear-gradient(var(--interactive-hover),var(--interactive-hover))]';
-const QUIET_REST_CLASS = 'rounded-md border border-transparent hover:bg-interactive-hover';
+const FIELD_CLASS = 'rounded-lg border border-border oc-raised oc-field hover:[&:not(:focus-within)]:[background-image:linear-gradient(var(--interactive-hover),var(--interactive-hover))]';
+const QUIET_REST_CLASS = 'rounded-lg border border-transparent bg-interactive-hover transition-colors hover:bg-interactive-selection motion-reduce:transition-none';
 const BARE_INPUT_CLASS = 'h-6 min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 shadow-none dark:bg-transparent typography-ui-label text-foreground hover:[&:not(:focus)]:[background-image:none]';
 
 export function SessionSearchInput({

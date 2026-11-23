@@ -1,6 +1,7 @@
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from '@/components/icon/Icon';
+import { SpleenLogo } from '@/components/ui/SpleenLogo';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -13,7 +14,7 @@ import { publishTitlebarControlsWidth } from './titlebarControlsWidth';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 
 const ICON_BUTTON_CLASS =
-  'app-region-no-drag inline-flex h-6 w-6 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors';
+  'app-region-no-drag inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:bg-interactive-hover focus-visible:text-foreground motion-reduce:transition-none';
 
 export const TitlebarLeftControls: React.FC = () => {
   const { t, locale, direction } = useI18n();
@@ -82,7 +83,7 @@ export const TitlebarLeftControls: React.FC = () => {
         maxWidth: isSidebarOpen ? 'var(--oc-left-sidebar-width, 100%)' : undefined,
       }}
     >
-      <div ref={clusterRef} className="flex min-w-0 items-center gap-2">
+      <div ref={clusterRef} className="flex min-w-0 items-center gap-1.5">
         {usesFramelessChrome && windowControlsSide === getInlineStartSide(direction) ? (
           <WindowsWindowControls visible position={windowControlsSide} />
         ) : null}
@@ -96,13 +97,20 @@ export const TitlebarLeftControls: React.FC = () => {
                 aria-label={t('header.actions.openAppMenuAria')}
                 className={cn(ICON_BUTTON_CLASS, 'shrink-0')}
               >
-                <Icon name="menu-2" className="h-4 w-4" />
+                <SpleenLogo width={21} height={21} />
               </button>
             </TooltipTrigger>
             <TooltipContent>
               <p>{t('header.actions.openAppMenu')}</p>
             </TooltipContent>
           </Tooltip>
+        ) : null}
+
+        {isSidebarOpen ? (
+          <span className="me-1 inline-flex min-w-0 items-center gap-1.5 font-semibold tracking-tight text-foreground">
+            {usesFramelessChrome ? null : <SpleenLogo width={21} height={21} />}
+            <span className="truncate">Spleen</span>
+          </span>
         ) : null}
 
         <Tooltip>

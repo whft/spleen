@@ -441,13 +441,13 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
       {/* Column 3: Messages + Composer + Right Drawer */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top Channel Bar */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge-muted bg-sidebar/60 px-3 py-2 text-xs">
+        <div className="oc-workspace-toolbar flex min-h-10 shrink-0 items-center justify-between gap-2 px-3 text-xs">
           <div className="min-w-0 flex items-center gap-2">
             <button
               type="button"
               onClick={() => setShowChannels((v) => !v)}
               title={showChannels ? 'Hide channels' : 'Show channels'}
-              className="shrink-0 rounded-lg p-1 text-muted-foreground transition hover:bg-interactive-hover hover:text-foreground"
+              className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:text-foreground motion-reduce:transition-none"
             >
               <RiLayoutLeftLine className="h-3.5 w-3.5" />
             </button>

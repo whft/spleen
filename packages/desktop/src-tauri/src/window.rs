@@ -40,15 +40,22 @@ fn init_script(bootstrap: &Bootstrap) -> String {
     }}
     return null;
   }}
-  function invoke(cmd, args) {{
-    var coreInvoke = getCoreInvoke();
-    if (coreInvoke) {{
-      return coreInvoke('spleen_desktop_invoke', {{ cmd: cmd, args: args || {{}} }});
-    }}
-    var curWin = window.__TAURI__ && window.__TAURI__.window && typeof window.__TAURI__.window.getCurrentWindow === 'function'
+  function getCurrentWindow() {{
+    return window.__TAURI__ && window.__TAURI__.window && typeof window.__TAURI__.window.getCurrentWindow === 'function'
       ? window.__TAURI__.window.getCurrentWindow()
       : null;
+  }}
+  function invoke(cmd, args) {{
+    // Tauri permits the scoped core window plugin on the loopback UI origin.
+    var curWin = getCurrentWindow();
     if (curWin) {{
+      if (cmd === 'desktop_get_current_window_state') {{
+        return Promise.all([curWin.isVisible(), curWin.isMaximized(), curWin.isFullscreen(), curWin.isFocused()])
+          .then(function (state) {{
+            return {{ visible: state[0], maximized: state[1], fullscreen: state[2], focused: state[3] }};
+          }});
+      }}
+      if (cmd === 'desktop_is_window_fullscreen') return curWin.isFullscreen();
       if (cmd === 'desktop_minimize_current_window') return curWin.minimize();
       if (cmd === 'desktop_close_current_window') return curWin.close();
       if (cmd === 'desktop_start_window_drag') return curWin.startDragging();
@@ -57,6 +64,10 @@ fn init_script(bootstrap: &Bootstrap) -> String {
           return curWin.isMaximized().then(function (m) {{ return {{ maximized: Boolean(m) }}; }});
         }});
       }}
+    }}
+    var coreInvoke = getCoreInvoke();
+    if (coreInvoke) {{
+      return coreInvoke('spleen_desktop_invoke', {{ cmd: cmd, args: args || {{}} }});
     }}
     return Promise.reject(new Error('tauri ipc unavailable'));
   }}
@@ -78,10 +89,12 @@ fn init_script(bootstrap: &Bootstrap) -> String {
     pickThemeFile: function () {{ return invoke('desktop_pick_theme_file', {{}}); }}
   }};
   function wireMaxState() {{
-    var ev = window.__TAURI__ && window.__TAURI__.event;
-    if (!ev || typeof ev.listen !== 'function') return;
-    ev.listen('spleen:window-maximized-changed', function (e) {{
+    var curWin = getCurrentWindow();
+    if (!curWin) return;
+    curWin.listen('spleen:window-maximized-changed', function (e) {{
       window.dispatchEvent(new CustomEvent('spleen:window-maximized-changed', {{ detail: e.payload }}));
+    }}).catch(function (error) {{
+      console.warn('[spleen] window state listener failed', error);
     }});
   }}
   if (document.readyState === 'loading') {{

@@ -1,17 +1,13 @@
 # Spleen brand identity
 
-The approved identity kit (v2.0, Keystone Fold S + Spleen Studio) is the source of every Spleen mark. Its vectors
+The Fold identity kit is the source of every Spleen mark. Its vectors
 live in `docs/brand/source`; its UI icon set is in `docs/brand/ui-icons`; its
 authored palette is in `docs/brand/tokens.json`. The app never redraws the mark
 by hand.
 
 ## Mark
 
-An exact 180-degree symmetric sculpted S-ribbon ("Keystone Fold S") on a 1000-unit canvas:
-upper and lower alabaster (`#FAFAFA`) sculpted curved arches separated by crisp parallel diagonal
-cuts framing a floating brushed-titanium (`#90969E`) diamond keystone core.
-The app icon sets the mark on an obsidian squircle tile (`#09090B`, border `#27272B`)
-with corner radius 217/1000.
+The Fold is a 180-degree symmetric S with wide alabaster (`#FAFAFA`) ends and a titanium (`#90969E`) diagonal. The two open cuts keep the three pieces distinct at favicon size. The app tile uses `#09090B` with a `#262629` edge and a corner radius of 224/1000.
 
 | Variant | Source | Use |
 |---|---|---|
@@ -27,21 +23,20 @@ with corner radius 217/1000.
 
 | Token | Value | Theme role |
 |---|---|---|
-| Sidebar / Recess | `#060607` | dark `surface.muted`, obsidian left sidebar & right rail |
-| Studio Canvas | `#101012` | dark `surface.background`, calm graphite workspace canvas |
-| Popover / Overlay | `#151518` | dark `surface.overlay`, floating menus & command sheet |
-| Raised Card / Composer | `#1A1A1E` | dark `surface.elevated`, sculpted composer & cards |
-| Subtle / Hover | `#26262B` | dark `surface.subtle`, active pills & tactile hovers |
-| Border | `#27272B` | dark `interactive.border` (`borderHover: #3A3A40`) |
-| Alabaster Ink | `#FAFAFA` | dark `surface.foreground` & monochrome `primary.base` (`#09090B` ink) |
-| Secondary / Titanium | `#A1A1AA` | `surface.mutedForeground` (`#90969E` keystone core) |
-| Status Live / Success | `#34D399` | `status.success` (surgical live dots & connected indicators) |
-| Warning | `#D4A553` | `status.warning` |
-| Danger | `#E06C75` | `status.error` |
-| Focus | `#FAFAFA33` | `interactive.focusRing` |
+| Sidebar / Recess | `#0C0E0D` | Dark sidebar and context rail |
+| Studio Canvas | `#131514` | Dark workspace canvas |
+| Popover / Overlay | `#252825` | Floating menus and command palette |
+| Raised Card / Composer | `#1E211F` | Composer and raised controls |
+| Selection | `#303831` | Selected rows and controls |
+| Border | `#353B35` | `interactive.border` |
+| Primary text and action | `#F3F2EC` | Dark foreground and primary fill |
+| Secondary | `#A5A8A2` | `surface.mutedForeground` |
+| Success | `#7BA85E` | `status.success` |
+| Warning | `#D4A85B` | `status.warning` |
+| Danger | `#D47070` | `status.error` |
+| Focus | `#DBEBCE` | `interactive.focus` |
 
-The default `spleen-dark` theme uses these Spleen Studio Neutral roles. `spleen-light`
-is the clean daylight gallery counterpart (`#FFFFFF` canvas, `#F6F6F7` sidebar, `#09090B` ink) with zero saturated chrome casts.
+`spleen-light` uses `#FAFAF6` for the canvas, `#EFEFE9` for the sidebar, and `#212521` for text. Both built-in themes use a muted green focus color.
 
 ## Geometry and type
 
@@ -50,9 +45,6 @@ is the clean daylight gallery counterpart (`#FFFFFF` canvas, `#F6F6F7` sidebar, 
 - UI font stack: Geist Variable, Geist, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif.
 - Mono stack: Geist Mono Variable, Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace.
 - No gradients, glows, glass panels or decorative shadows in brand artwork.
-- The existing component layout, keyboard navigation and density stay as they
-  are. Branding changes the mark, icons and palette, not the information
-  architecture.
 
 ## Asset rules
 

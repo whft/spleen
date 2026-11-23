@@ -252,7 +252,8 @@ fn main() {
         .on_window_event(|window, event| {
             if let WindowEvent::Resized(_) = event {
                 let maximized = window.is_maximized().unwrap_or(false);
-                let _ = window.emit(
+                let _ = window.emit_to(
+                    tauri::EventTarget::window(window.label()),
                     "spleen:window-maximized-changed",
                     serde_json::json!({ "maximized": maximized }),
                 );

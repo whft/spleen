@@ -544,7 +544,7 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
       </ContextPanelHeaderToolbar>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-3.5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
         {showLauncher ? (
           <TeamLauncher
             directory={effectiveDirectory}
@@ -559,8 +559,8 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
           />
         ) : !activeTeam ? (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col items-center gap-2 pt-2 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-card">
+            <div className="flex flex-col items-center gap-3 rounded-xl bg-interactive-hover px-4 py-8 text-center">
+              <div className="grid size-10 place-items-center rounded-xl bg-surface-elevated">
                 <Icon name="ai-teams" className="h-5 w-5 text-foreground" />
               </div>
               <div className="text-sm font-medium">{t('teams.empty.title')}</div>
