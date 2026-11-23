@@ -40,7 +40,7 @@ export const SPLEEN_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'chat.links', title: 'List connected sessions', description: 'List connected session links for sessionId or all links' },
   { action: 'chat.unlink', title: 'Disconnect linked sessions', description: 'Remove a connected session link by linkId' },
   { action: 'team.list', title: 'List AI Teams', description: 'List all orchestrated AI Teams and task summaries' },
-  { action: 'team.create', title: 'Create an AI Team', description: 'Create an AI Team (name, teamGoal, preset full-stack|research-build|bug-hunt|multi-review|custom, optional members, maxParallel, useWorktrees, initialTasks)' },
+  { action: 'team.create', title: 'Create an AI Team', description: 'Create an AI Team (name, teamGoal, preset full-stack|research-build|autonomous-lab|bug-hunt|multi-review|custom, optional members, maxParallel, useWorktrees, initialTasks)' },
   { action: 'team.get', title: 'Inspect an AI Team', description: 'Read teamId roster, shared message board, and DAG tasks' },
   { action: 'team.addMember', title: 'Add member to AI Team', description: 'Add a specialized member (name, role, model, agent, description) to teamId' },
   { action: 'team.removeMember', title: 'Remove member from AI Team', description: 'Remove memberId from teamId' },

@@ -2863,7 +2863,7 @@ async function main(options = {}) {
   discordClientRuntime = createDiscordClient({ store: discordStore, gateway: discordGateway });
   registerDiscordRoutes(app, { client: discordClientRuntime, gateway: discordGateway, requireAuthorized: authGuard });
   autonomyPlatformRuntime = bootstrapAutonomyPlatform(app, {
-    dataDir: SPLEEN_DATA_DIR, requireAuthorized: authGuard, broadcastEvent: broadcastSpleenUiEvent,
+    dataDir: SPLEEN_DATA_DIR, requireAuthorized: authGuard, broadcastEvent: broadcastSpleenUiEvent, sessionService: spleenSessionService, readOpenCodeJson: readTeamSessionOpenCodeFetch,
     getSessionRecoveryRuntime: () => sessionRecoveryRuntime, getScheduledTasksRuntime: () => scheduledTasksRuntime, getDiscordGateway: () => discordGateway,
   });
   const unknownCheatsStore = createUnknownCheatsStore({ filePath: path.join(SPLEEN_DATA_DIR, 'unknowncheats.json') });

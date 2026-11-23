@@ -1,7 +1,7 @@
 import express from 'express';
 import { asNonEmptyString } from '../shared/guards.js';
 
-export const registerAutonomyRoutes = (app, { supervisor, requireAuthorized = null }) => {
+export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, requireAuthorized = null }) => {
   const wrap = (handler) => async (req, res) => {
     if (requireAuthorized) {
       const ok = await requireAuthorized(req, res);
@@ -19,6 +19,11 @@ export const registerAutonomyRoutes = (app, { supervisor, requireAuthorized = nu
     res.json(supervisor.getStatus());
   }));
 
+  app.get('/api/autonomy/sessions', wrap(async (req, res) => {
+    const sessions = listSessions ? await listSessions(req.query?.limit) : [];
+    res.json({ sessions });
+  }));
+
   app.get('/api/autonomy/objectives', wrap(async (req, res) => {
     const objectives = supervisor.listObjectives({
       status: asNonEmptyString(req.query?.status),
@@ -30,6 +35,9 @@ export const registerAutonomyRoutes = (app, { supervisor, requireAuthorized = nu
 
   app.post('/api/autonomy/objectives', express.json({ limit: '256kb' }), wrap(async (req, res) => {
     const created = supervisor.createObjective(req.body ?? {});
+    if (req.body?.runImmediately !== false) {
+      void supervisor.tick();
+    }
     res.status(201).json(created);
   }));
 
@@ -56,7 +64,21 @@ export const registerAutonomyRoutes = (app, { supervisor, requireAuthorized = nu
   app.post('/api/autonomy/objectives/:id/resume', wrap(async (req, res) => {
     const updated = supervisor.resumeObjective(req.params.id);
     if (!updated) return res.status(404).json({ error: 'Objective not found' });
+    void supervisor.tick();
     res.json(updated);
+  }));
+
+  app.post('/api/autonomy/objectives/:id/attach-session', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    const updated = supervisor.attachSession(req.params.id, req.body?.sessionId ?? null);
+    if (!updated) return res.status(404).json({ error: 'Objective not found' });
+    res.json(updated);
+  }));
+
+  app.post('/api/autonomy/objectives/:id/run-now', wrap(async (req, res) => {
+    const existing = supervisor.getObjective(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Objective not found' });
+    void supervisor.tick();
+    res.json({ ok: true, id: existing.id });
   }));
 
   app.post('/api/autonomy/objectives/:id/cancel', express.json({ limit: '32kb' }), wrap(async (req, res) => {

@@ -43,6 +43,7 @@ export const AutonomyLabView: React.FC = () => {
   const [tab, setTab] = React.useState<AutonomyLabTab>('objectives');
   const [newTitle, setNewTitle] = React.useState('');
   const [newDir, setNewDir] = React.useState('');
+  const [newSessionId, setNewSessionId] = React.useState('');
   const [newVerifyCmd, setNewVerifyCmd] = React.useState('');
   const [newMode, setNewMode] = React.useState<'finite' | 'ongoing'>('finite');
   const [sourceName, setSourceName] = React.useState('');
@@ -63,6 +64,7 @@ export const AutonomyLabView: React.FC = () => {
         title: newTitle.trim(),
         description: newTitle.trim(),
         directory: newDir.trim() || undefined,
+        sessionId: newSessionId.trim() || undefined,
         mode: newMode,
         verificationCommands: newVerifyCmd.trim() ? [newVerifyCmd.trim()] : [],
       });
@@ -76,13 +78,45 @@ export const AutonomyLabView: React.FC = () => {
     }
   };
 
-  const handleObjectiveAction = async (id: string, action: 'pause' | 'resume' | 'cancel' | 'verify') => {
+  const handleSelectTargetSession = (sessionId: string) => {
+    setNewSessionId(sessionId);
+    const matched = data.sessions.find((s) => s.id === sessionId);
+    if (matched?.directory && !newDir.trim()) {
+      setNewDir(matched.directory);
+    }
+  };
+
+  const handleObjectiveAction = async (id: string, action: 'pause' | 'resume' | 'cancel' | 'verify' | 'run-now') => {
     setBusyAction(true);
     try {
       await autonomyLabApi.actionObjective(id, action);
       await data.refresh('objectives');
     } catch (err) {
       data.setError(err instanceof Error ? err.message : `Action ${action} failed`);
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleAttachSession = async (id: string, sessionId: string) => {
+    setBusyAction(true);
+    try {
+      await autonomyLabApi.attachSession(id, sessionId.trim() || null);
+      await data.refresh('objectives');
+    } catch (err) {
+      data.setError(err instanceof Error ? err.message : 'Failed to attach chat session');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleStopTeam = async (teamId: string) => {
+    setBusyAction(true);
+    try {
+      await autonomyLabApi.stopTeam(teamId);
+      await data.refresh('objectives');
+    } catch (err) {
+      data.setError(err instanceof Error ? err.message : 'Failed to stop team');
     } finally {
       setBusyAction(false);
     }
@@ -195,10 +229,28 @@ export const AutonomyLabView: React.FC = () => {
                     <option value="ongoing">Ongoing research</option>
                   </select>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={data.sessions.some((s) => s.id === newSessionId) ? newSessionId : ''}
+                    onChange={(e) => handleSelectTargetSession(e.target.value)}
+                    className="rounded-md border border-border bg-background px-2.5 py-1.5 typography-micro"
+                  >
+                    <option value="">Target chat: Auto-create new</option>
+                    {data.sessions.map((s) => (
+                      <option key={s.id} value={s.id}>{s.title.slice(0, 42)} ({s.id.slice(0, 10)})</option>
+                    ))}
+                  </select>
+                  <input
+                    value={newSessionId}
+                    onChange={(e) => setNewSessionId(e.target.value)}
+                    placeholder="Or paste session ID (ses_...)"
+                    className="rounded-md border border-border bg-background px-2.5 py-1.5 typography-micro"
+                  />
+                </div>
                 <input
                   value={newVerifyCmd}
                   onChange={(e) => setNewVerifyCmd(e.target.value)}
-                  placeholder="Verification command (e.g. bun test)"
+                  placeholder="Verification command (optional, e.g. bun test)"
                   className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 typography-micro"
                 />
                 <button
@@ -206,9 +258,37 @@ export const AutonomyLabView: React.FC = () => {
                   disabled={busyAction || !newTitle.trim()}
                   className="w-full rounded-md bg-primary px-3 py-1.5 typography-meta font-medium text-primary-foreground disabled:opacity-50"
                 >
-                  Create Objective
+                  Create & Start Objective
                 </button>
               </form>
+
+              {data.teams.length > 0 ? (
+                <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+                  <h3 className="typography-micro font-semibold uppercase tracking-wide text-muted-foreground">
+                    AI Teams ({data.teams.length})
+                  </h3>
+                  {data.teams.map((team) => (
+                    <div key={team.id} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5">
+                      <div className="min-w-0">
+                        <p className="truncate typography-micro font-medium">{team.name}</p>
+                        <p className="typography-micro text-muted-foreground">
+                          {team.status} · {team.members?.length ?? team.memberCount ?? 0} chats
+                        </p>
+                      </div>
+                      {team.status !== 'stopped' ? (
+                        <button
+                          type="button"
+                          disabled={busyAction}
+                          onClick={() => void handleStopTeam(team.id)}
+                          className="rounded-md border border-[var(--status-error-border)] px-2 py-0.5 typography-micro text-[var(--status-error)] hover:bg-[var(--status-error-background)]"
+                        >
+                          Stop Team
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 {data.objectives.length === 0 ? (
@@ -250,6 +330,7 @@ export const AutonomyLabView: React.FC = () => {
                       <p className="typography-micro text-muted-foreground">{data.selectedObjective.directory}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
+                      <button type="button" onClick={() => void handleObjectiveAction(data.selectedObjective!.id, 'run-now')} className="rounded-md border border-border px-2.5 py-1 typography-micro hover:bg-interactive-hover/50">Run Turn Now</button>
                       <button type="button" onClick={() => void handleObjectiveAction(data.selectedObjective!.id, 'verify')} className="rounded-md border border-border px-2.5 py-1 typography-micro hover:bg-interactive-hover/50">Verify Now</button>
                       {data.selectedObjective.status === 'active' ? (
                         <button type="button" onClick={() => void handleObjectiveAction(data.selectedObjective!.id, 'pause')} className="rounded-md border border-border px-2.5 py-1 typography-micro hover:bg-interactive-hover/50">Pause</button>
@@ -258,6 +339,22 @@ export const AutonomyLabView: React.FC = () => {
                       )}
                       <button type="button" onClick={() => void handleObjectiveAction(data.selectedObjective!.id, 'cancel')} className="rounded-md border border-[var(--status-error-border)] px-2.5 py-1 typography-micro text-[var(--status-error)]">Cancel</button>
                     </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                    <span className="typography-micro text-muted-foreground">Target Chat:</span>
+                    <select
+                      value={data.selectedObjective.sessionId ?? ''}
+                      onChange={(e) => void handleAttachSession(data.selectedObjective!.id, e.target.value)}
+                      className="min-w-0 flex-1 rounded-md border border-border bg-card px-2 py-1 typography-micro"
+                    >
+                      <option value="">Auto-create dedicated chat</option>
+                      {data.selectedObjective.sessionId && !data.sessions.some((s) => s.id === data.selectedObjective?.sessionId) ? (
+                        <option value={data.selectedObjective.sessionId}>{data.selectedObjective.sessionId}</option>
+                      ) : null}
+                      {data.sessions.map((s) => (
+                        <option key={s.id} value={s.id}>{s.title.slice(0, 48)} ({s.id.slice(0, 12)})</option>
+                      ))}
+                    </select>
                   </div>
                   {data.selectedObjective.lastError ? (
                     <p className="rounded-md border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] px-3 py-1.5 typography-micro text-[var(--status-warning)]">

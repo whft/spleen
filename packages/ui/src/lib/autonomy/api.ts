@@ -14,6 +14,7 @@ export type AutonomyObjective = {
   status: 'active' | 'paused' | 'waiting' | 'blocked' | 'completed' | 'failed' | 'cancelled';
   priority: number;
   loopPhase: string;
+  sessionId: string | null;
   turnsUsed: number;
   failureStreak: number;
   lastError: string | null;
@@ -106,11 +107,28 @@ export type CreateObjectiveInput = {
   title: string;
   description?: string;
   directory?: string;
+  sessionId?: string;
   mode?: 'finite' | 'ongoing';
   priority?: number;
   verificationCommands?: string[];
   acceptanceCriteria?: string[];
   budget?: { maxTurns?: number; maxRuntimeMs?: number; maxParallel?: number; reviewIntervalMs?: number };
+};
+
+export type AutonomySessionSummary = {
+  id: string;
+  title: string;
+  directory: string;
+  updatedAt: number;
+};
+
+export type ActiveTeamSummary = {
+  id: string;
+  name: string;
+  status: string;
+  directory?: string;
+  memberCount?: number;
+  members?: Array<{ id: string; name: string; role: string; status?: string }>;
 };
 
 export type SaveMemoryInput = {
@@ -169,12 +187,30 @@ export const autonomyLabApi = {
       body: JSON.stringify(payload),
     }))
   ),
-  actionObjective: async (id: string, action: 'pause' | 'resume' | 'cancel' | 'verify'): Promise<ObjectiveActionResult> => (
+  actionObjective: async (id: string, action: 'pause' | 'resume' | 'cancel' | 'verify' | 'run-now'): Promise<ObjectiveActionResult> => (
     readJson<ObjectiveActionResult>(await apiFetch(`/api/autonomy/objectives/${encodeURIComponent(id)}/${action}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     }))
+  ),
+  attachSession: async (id: string, sessionId: string | null): Promise<AutonomyObjective> => (
+    readJson<AutonomyObjective>(await apiFetch(`/api/autonomy/objectives/${encodeURIComponent(id)}/attach-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }))
+  ),
+  listSessions: async (): Promise<AutonomySessionSummary[]> => {
+    const res = await readJson<{ sessions: AutonomySessionSummary[] }>(await apiFetch('/api/autonomy/sessions'));
+    return res.sessions ?? [];
+  },
+  listTeams: async (): Promise<ActiveTeamSummary[]> => {
+    const res = await readJson<{ teams: ActiveTeamSummary[] }>(await apiFetch('/api/teams'));
+    return res.teams ?? [];
+  },
+  stopTeam: async (id: string): Promise<ObjectiveActionResult> => (
+    readJson<ObjectiveActionResult>(await apiFetch(`/api/teams/${encodeURIComponent(id)}/stop`, { method: 'POST' }))
   ),
   emergencyStop: async (): Promise<EmergencyStopResult> => (
     readJson<EmergencyStopResult>(await apiFetch('/api/autonomy/emergency-stop', {

@@ -61,7 +61,16 @@ export const createAutonomySupervisor = ({
 
   const createObjective = (input = {}) => {
     const objective = store.createObjective(input);
-    const initialTasks = Array.isArray(input.tasks) ? input.tasks : [];
+    const initialTasks = Array.isArray(input.tasks) && input.tasks.length > 0
+      ? input.tasks
+      : (input.autoSeedTask === false
+        ? []
+        : [{
+          title: objective.mode === 'ongoing' ? `Research cycle: ${objective.title}` : `Execute objective: ${objective.title}`,
+          role: objective.mode === 'ongoing' ? 'researcher' : 'supervisor',
+          kind: objective.mode === 'ongoing' ? 'research' : 'code',
+          prompt: objective.description,
+        }]);
     const createdTasks = [];
     for (const taskSpec of initialTasks) {
       createdTasks.push(store.addTask(objective.id, taskSpec));
@@ -127,6 +136,20 @@ export const createAutonomySupervisor = ({
     });
     emit('autonomy:replanned', { objectiveId });
     return getObjectiveDetail(objectiveId);
+  };
+
+  const attachSession = (id, sessionId) => {
+    const clean = asNonEmptyString(sessionId);
+    const updated = store.updateObjective(id, { sessionId: clean });
+    if (updated) {
+      store.recordDecision({
+        objectiveId: id,
+        kind: 'policy',
+        summary: clean ? `Attached target chat session ${clean}` : 'Cleared target chat session (auto-create mode)',
+      });
+      emit('autonomy:updated', { objectiveId: id, sessionId: clean });
+    }
+    return updated;
   };
 
   const pauseObjective = (id, reason = 'Paused by user') => {
@@ -400,6 +423,13 @@ export const createAutonomySupervisor = ({
       for (const obj of waitingOngoing) {
         if (obj.mode === 'ongoing' && obj.nextReviewAt && at >= obj.nextReviewAt) {
           store.updateObjective(obj.id, { status: 'active', loopPhase: 'research' });
+          store.addTask(obj.id, {
+            title: `Ongoing review cycle #${obj.turnsUsed + 1}: ${obj.title}`,
+            role: 'researcher',
+            kind: 'research',
+            prompt: obj.description,
+            idempotencyKey: `ongoing_${obj.id}_${obj.turnsUsed + 1}`,
+          });
         }
       }
       const active = store.listObjectives({ status: 'active' });
@@ -444,6 +474,7 @@ export const createAutonomySupervisor = ({
     getObjective: getObjectiveDetail,
     listObjectives: (filters) => store.listObjectives(filters),
     addTask,
+    attachSession,
     replanObjective,
     pauseObjective,
     resumeObjective,

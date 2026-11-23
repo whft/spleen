@@ -1,8 +1,10 @@
 import React from 'react';
 import {
   autonomyLabApi,
+  type ActiveTeamSummary,
   type AutonomyObjective,
   type AutonomyObjectiveDetail,
+  type AutonomySessionSummary,
   type DiagnosticsOverview,
   type MemFsEntry,
   type ResearchSearchHit,
@@ -16,6 +18,8 @@ export function useAutonomyLabData(activeTab: AutonomyLabTab) {
   const [error, setError] = React.useState<string | null>(null);
   const [objectives, setObjectives] = React.useState<AutonomyObjective[]>([]);
   const [selectedObjective, setSelectedObjective] = React.useState<AutonomyObjectiveDetail | null>(null);
+  const [sessions, setSessions] = React.useState<AutonomySessionSummary[]>([]);
+  const [teams, setTeams] = React.useState<ActiveTeamSummary[]>([]);
   const [sources, setSources] = React.useState<ResearchSource[]>([]);
   const [searchHits, setSearchHits] = React.useState<ResearchSearchHit[]>([]);
   const [memories, setMemories] = React.useState<MemFsEntry[]>([]);
@@ -27,8 +31,14 @@ export function useAutonomyLabData(activeTab: AutonomyLabTab) {
     setError(null);
     try {
       if (tab === 'objectives') {
-        const list = await autonomyLabApi.listObjectives();
+        const [list, sessionList, teamList] = await Promise.all([
+          autonomyLabApi.listObjectives(),
+          autonomyLabApi.listSessions().catch(() => []),
+          autonomyLabApi.listTeams().catch(() => []),
+        ]);
         setObjectives(list);
+        setSessions(sessionList);
+        setTeams(teamList);
         if (list.length > 0) {
           const targetId = selectedObjective?.id && list.some((o) => o.id === selectedObjective.id)
             ? selectedObjective.id
@@ -89,6 +99,8 @@ export function useAutonomyLabData(activeTab: AutonomyLabTab) {
     setError,
     objectives,
     selectedObjective,
+    sessions,
+    teams,
     sources,
     searchHits,
     memories,

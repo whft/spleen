@@ -3,6 +3,7 @@ import { asNonEmptyString, isRecord } from '../shared/guards.js';
 import { createAutonomyStore } from './store.js';
 import { createEvidenceVerifier } from './verifier.js';
 import { createAutonomySupervisor } from './supervisor.js';
+import { createAutonomySessionExecutor, createOpenCodeSessionAdapter } from './executor.js';
 import { registerAutonomyRoutes } from './routes.js';
 import { createMemFsStore } from '../agent-memory/memfs-store.js';
 import { createMemoryCurator } from '../agent-memory/curator.js';
@@ -18,6 +19,8 @@ export const bootstrapAutonomyPlatform = (app, {
   getSessionRecoveryRuntime = null,
   getScheduledTasksRuntime = null,
   getDiscordGateway = null,
+  sessionService = null,
+  readOpenCodeJson = null,
   executeTask = null,
   autoStart = true,
 } = {}) => {
@@ -27,11 +30,20 @@ export const bootstrapAutonomyPlatform = (app, {
   const researchStore = createResearchStore({ dbPath: path.join(dataDir, 'research.sqlite3') });
   const researchIngestor = createResearchIngestor({ store: researchStore });
   const verifier = createEvidenceVerifier();
+  const openCodeAdapter = createOpenCodeSessionAdapter({ readOpenCodeJson });
+  const resolvedExecutor = executeTask || (sessionService
+    ? createAutonomySessionExecutor({
+      store: autonomyStore,
+      sessionService,
+      readSessionStatus: openCodeAdapter.readSessionStatus,
+      readLastAssistantMessage: openCodeAdapter.readLastAssistantMessage,
+    }).executeTask
+    : null);
 
   const supervisor = createAutonomySupervisor({
     store: autonomyStore,
     verifier,
-    executeTask,
+    executeTask: resolvedExecutor,
     broadcastEvent,
     onObjectiveCompleted: (detail, verifyRes) => {
       memoryCurator.curateFromEpisode({
@@ -47,7 +59,7 @@ export const bootstrapAutonomyPlatform = (app, {
   if (autoStart) {
     supervisor.start();
   }
-  registerAutonomyRoutes(app, { supervisor, requireAuthorized });
+  registerAutonomyRoutes(app, { supervisor, listSessions: openCodeAdapter.listSessions, requireAuthorized });
   registerMemFsRoutes(app, { memfsStore, curator: memoryCurator, requireAuthorized });
   registerResearchRoutes(app, { store: researchStore, ingestor: researchIngestor, requireAuthorized });
 
