@@ -28,7 +28,7 @@ const setupTeams = async () => {
       seq += 1;
       return { sessionId: `ses_${seq}`, directory, title };
     }),
-    send: vi.fn(async ({ sessionId, prompt }) => {
+    send: vi.fn(async (sessionId, { prompt }) => {
       sentPrompts.push({ sessionId, prompt });
       return { id: `msg_${sentPrompts.length}` };
     }),

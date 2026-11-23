@@ -88,14 +88,17 @@ export const buildAutonomyTaskPrompt = (objective, task, completedTasks = []) =>
   if (Array.isArray(objective.verificationCommands) && objective.verificationCommands.length > 0) {
     lines.push(`Verification Commands:\n${objective.verificationCommands.map((c) => `- ${c}`).join('\n')}`);
   }
+  if (asNonEmptyString(task.error)) {
+    lines.push(`Previous Attempt Issue (recover and keep going): ${task.error}`);
+  }
   if (completedTasks.length > 0) {
-    const recent = completedTasks.slice(-4).map((t) => `- ${t.title}: ${(t.result || 'completed').slice(0, 240)}`);
-    lines.push(`Prior Completed Work:\n${recent.join('\n')}`);
+    const recent = completedTasks.slice(-3).map((t) => `- ${t.title}: ${(t.result || 'completed').slice(0, 420)}`);
+    lines.push(`Prior Completed Work (continue directly from your stated next step):\n${recent.join('\n')}`);
   }
   lines.push(
-    'Execute this step directly in this session without spawning unnecessary extra team chats unless explicitly requested.',
-    'Use research.search / research.registerSource for local docs and memfs.save to persist verified discoveries.',
-    'Report concrete verified evidence, files touched, or genuine blockers clearly at the end of your turn.',
+    'Continue working directly in this session without spawning unnecessary extra team chats unless explicitly requested.',
+    'Do concrete work on the next unresolved step, verify your findings, use research.search / research.registerSource for docs, and call memfs.save for verified discoveries.',
+    'End with concrete verified evidence, files touched, and the exact next concrete step if more work remains.',
   );
   return lines.join('\n\n');
 };
@@ -160,7 +163,10 @@ export const createAutonomySessionExecutor = ({
 
     const completedTasks = store.listTasks(objective.id).filter((t) => t.status === 'completed');
     const prompt = buildAutonomyTaskPrompt(objective, task, completedTasks);
-    await sessionService.send({ sessionId, directory, prompt });
+    const sendResult = await sessionService.send(sessionId, { directory, prompt });
+    if (sendResult && sendResult.promptDispatched === false) {
+      return { ok: false, error: asNonEmptyString(sendResult.promptError) || 'Session rejected prompt dispatch' };
+    }
 
     if (!readSessionStatus && !readLastAssistantMessage) {
       return { ok: true, result: `Dispatched to session ${sessionId}` };

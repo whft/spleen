@@ -95,7 +95,7 @@ export const createTeamsService = ({
   const dispatchPrompt = async (sessionId, directory, prompt, meta = {}) => {
     if (!sessionId || !sessionService?.send) return { dispatched: false };
     try {
-      await sessionService.send({ sessionId, directory, prompt, ...meta });
+      await sessionService.send(sessionId, { directory, prompt, ...meta });
       return { dispatched: true };
     } catch (error) {
       return { dispatched: false, error: error instanceof Error ? error.message : String(error) };

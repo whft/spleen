@@ -194,6 +194,13 @@ export const autonomyLabApi = {
       body: JSON.stringify({}),
     }))
   ),
+  continueObjective: async (id: string, note = ''): Promise<ObjectiveActionResult> => (
+    readJson<ObjectiveActionResult>(await apiFetch(`/api/autonomy/objectives/${encodeURIComponent(id)}/continue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note }),
+    }))
+  ),
   attachSession: async (id: string, sessionId: string | null): Promise<AutonomyObjective> => (
     readJson<AutonomyObjective>(await apiFetch(`/api/autonomy/objectives/${encodeURIComponent(id)}/attach-session`, {
       method: 'POST',

@@ -40,12 +40,15 @@ const TABS: ReadonlyArray<{ id: AutonomyLabTab; label: string; icon: 'compass-3'
 ];
 
 export const AutonomyLabView: React.FC = () => {
+  const isOpen = useUIStore((state) => state.isAutonomyLabOpen);
   const [tab, setTab] = React.useState<AutonomyLabTab>('objectives');
   const [newTitle, setNewTitle] = React.useState('');
   const [newDir, setNewDir] = React.useState('');
   const [newSessionId, setNewSessionId] = React.useState('');
   const [newVerifyCmd, setNewVerifyCmd] = React.useState('');
-  const [newMode, setNewMode] = React.useState<'finite' | 'ongoing'>('finite');
+  const [newMode, setNewMode] = React.useState<'finite' | 'ongoing'>('ongoing');
+  const [newCadenceSec, setNewCadenceSec] = React.useState(30);
+  const [continueNote, setContinueNote] = React.useState('');
   const [sourceName, setSourceName] = React.useState('');
   const [sourceLocation, setSourceLocation] = React.useState('');
   const [sourceKind, setSourceKind] = React.useState<'directory' | 'git' | 'file' | 'url'>('directory');
@@ -53,7 +56,9 @@ export const AutonomyLabView: React.FC = () => {
   const [memoryQuery, setMemoryQuery] = React.useState('');
   const [busyAction, setBusyAction] = React.useState(false);
 
-  const data = useAutonomyLabData(tab);
+  const data = useAutonomyLabData(tab, isOpen);
+
+  if (!isOpen) return null;
 
   const handleCreateObjective = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,12 +72,28 @@ export const AutonomyLabView: React.FC = () => {
         sessionId: newSessionId.trim() || undefined,
         mode: newMode,
         verificationCommands: newVerifyCmd.trim() ? [newVerifyCmd.trim()] : [],
+        budget: newMode === 'ongoing' ? { reviewIntervalMs: newCadenceSec * 1000, maxTurns: 100 } : undefined,
       });
       setNewTitle('');
       setNewVerifyCmd('');
       await data.refresh('objectives');
     } catch (err) {
       data.setError(err instanceof Error ? err.message : 'Failed to create objective');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleContinueObjective = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!data.selectedObjective) return;
+    setBusyAction(true);
+    try {
+      await autonomyLabApi.continueObjective(data.selectedObjective.id, continueNote.trim());
+      setContinueNote('');
+      await data.refresh('objectives');
+    } catch (err) {
+      data.setError(err instanceof Error ? err.message : 'Failed to send continuation');
     } finally {
       setBusyAction(false);
     }
@@ -247,12 +268,32 @@ export const AutonomyLabView: React.FC = () => {
                     className="rounded-md border border-border bg-background px-2.5 py-1.5 typography-micro"
                   />
                 </div>
-                <input
-                  value={newVerifyCmd}
-                  onChange={(e) => setNewVerifyCmd(e.target.value)}
-                  placeholder="Verification command (optional, e.g. bun test)"
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 typography-micro"
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={newVerifyCmd}
+                    onChange={(e) => setNewVerifyCmd(e.target.value)}
+                    placeholder="Verification cmd (optional, e.g. bun test)"
+                    className="rounded-md border border-border bg-background px-2.5 py-1.5 typography-micro"
+                  />
+                  {newMode === 'ongoing' ? (
+                    <select
+                      value={newCadenceSec}
+                      onChange={(e) => setNewCadenceSec(Number(e.target.value) || 30)}
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 typography-micro"
+                    >
+                      <option value={15}>Continue every 15s (continuous)</option>
+                      <option value={30}>Continue every 30s (fast)</option>
+                      <option value={60}>Continue every 1 min</option>
+                      <option value={300}>Continue every 5 min</option>
+                      <option value={900}>Continue every 15 min</option>
+                      <option value={3600}>Continue every 60 min</option>
+                    </select>
+                  ) : (
+                    <div className="flex items-center rounded-md border border-dashed border-border px-2.5 py-1.5 typography-micro text-muted-foreground">
+                      Stops when verified
+                    </div>
+                  )}
+                </div>
                 <button
                   type="submit"
                   disabled={busyAction || !newTitle.trim()}
@@ -356,6 +397,21 @@ export const AutonomyLabView: React.FC = () => {
                       ))}
                     </select>
                   </div>
+                  <form onSubmit={handleContinueObjective} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-2">
+                    <input
+                      value={continueNote}
+                      onChange={(e) => setContinueNote(e.target.value)}
+                      placeholder="Optional note (e.g. keep researching next step, retry error)..."
+                      className="min-w-0 flex-1 rounded-md border border-border bg-card px-2.5 py-1 typography-micro"
+                    />
+                    <button
+                      type="submit"
+                      disabled={busyAction}
+                      className="rounded-md bg-primary px-3 py-1 typography-micro font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      Continue / Retry Now
+                    </button>
+                  </form>
                   {data.selectedObjective.lastError ? (
                     <p className="rounded-md border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] px-3 py-1.5 typography-micro text-[var(--status-warning)]">
                       {data.selectedObjective.lastError}
@@ -367,16 +423,41 @@ export const AutonomyLabView: React.FC = () => {
                       {data.selectedObjective.tasks.length === 0 ? (
                         <p className="typography-micro text-muted-foreground">No tasks queued yet.</p>
                       ) : data.selectedObjective.tasks.map((task) => (
-                        <div key={task.id} className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2">
-                          <div className="min-w-0">
-                            <p className="truncate typography-meta font-medium">{task.title}</p>
-                            <p className="typography-micro text-muted-foreground">Role: {task.role} · Kind: {task.kind} · Attempts: {task.attempts}/{task.maxAttempts}</p>
+                        <div key={task.id} className="space-y-1 rounded-lg border border-border bg-background px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate typography-meta font-medium">{task.title}</p>
+                              <p className="typography-micro text-muted-foreground">Role: {task.role} · Kind: {task.kind} · Attempts: {task.attempts}/{task.maxAttempts}</p>
+                            </div>
+                            <span className={cn('rounded-full border px-2 py-0.5 typography-micro', getStatusBadge(task.status))}>{task.status}</span>
                           </div>
-                          <span className={cn('rounded-full border px-2 py-0.5 typography-micro', getStatusBadge(task.status))}>{task.status}</span>
+                          {task.error ? (
+                            <p className="rounded border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-2 py-1 typography-micro text-[var(--status-error)]">
+                              Error: {task.error}
+                            </p>
+                          ) : null}
+                          {task.result ? (
+                            <p className="line-clamp-3 rounded bg-surface-muted px-2 py-1 typography-micro text-muted-foreground">
+                              {task.result}
+                            </p>
+                          ) : null}
                         </div>
                       ))}
                     </div>
                   </div>
+                  {data.selectedObjective.decisions.length > 0 ? (
+                    <div>
+                      <h3 className="mb-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">Recent Activity ({data.selectedObjective.decisions.length})</h3>
+                      <div className="space-y-1">
+                        {data.selectedObjective.decisions.slice(0, 6).map((dec) => (
+                          <div key={dec.id} className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-2.5 py-1.5 typography-micro">
+                            <span className="truncate">{dec.summary}</span>
+                            <span className="shrink-0 text-muted-foreground">{dec.kind}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div>
                     <h3 className="mb-2 typography-micro font-semibold uppercase tracking-wide text-muted-foreground">Verification Evidence ({data.selectedObjective.verifications.length})</h3>
                     <div className="space-y-1.5">

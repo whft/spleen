@@ -68,6 +68,13 @@ export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, r
     res.json(updated);
   }));
 
+  app.post('/api/autonomy/objectives/:id/continue', express.json({ limit: '64kb' }), wrap(async (req, res) => {
+    const updated = supervisor.continueObjective(req.params.id, req.body?.note ?? '');
+    if (!updated) return res.status(404).json({ error: 'Objective not found' });
+    void supervisor.tick();
+    res.json(updated);
+  }));
+
   app.post('/api/autonomy/objectives/:id/attach-session', express.json({ limit: '32kb' }), wrap(async (req, res) => {
     const updated = supervisor.attachSession(req.params.id, req.body?.sessionId ?? null);
     if (!updated) return res.status(404).json({ error: 'Objective not found' });

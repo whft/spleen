@@ -10,10 +10,12 @@ import {
   type ResearchSearchHit,
   type ResearchSource,
 } from '@/lib/autonomy/api';
+import { subscribeSpleenEvents } from '@/lib/spleenEvents';
+import { useUIStore } from '@/stores/useUIStore';
 
 export type AutonomyLabTab = 'objectives' | 'research' | 'memory' | 'diagnostics';
 
-export function useAutonomyLabData(activeTab: AutonomyLabTab) {
+export function useAutonomyLabData(activeTab: AutonomyLabTab, isOpen = true) {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [objectives, setObjectives] = React.useState<AutonomyObjective[]>([]);
@@ -26,8 +28,8 @@ export function useAutonomyLabData(activeTab: AutonomyLabTab) {
   const [memoryTier, setMemoryTier] = React.useState<string>('all');
   const [diagnostics, setDiagnostics] = React.useState<DiagnosticsOverview | null>(null);
 
-  const refresh = React.useCallback(async (tab: AutonomyLabTab = activeTab) => {
-    setLoading(true);
+  const refresh = React.useCallback(async (tab: AutonomyLabTab = activeTab, silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       if (tab === 'objectives') {
@@ -57,13 +59,40 @@ export function useAutonomyLabData(activeTab: AutonomyLabTab) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workspace data');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [activeTab, memoryTier, selectedObjective?.id]);
 
   React.useEffect(() => {
+    if (!isOpen) return;
     void refresh(activeTab);
-  }, [activeTab, memoryTier, refresh]);
+  }, [activeTab, isOpen, memoryTier, refresh]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const unsubscribe = subscribeSpleenEvents((event) => {
+      if (event.type.startsWith('autonomy:') || event.type.startsWith('team:') || event.type === 'event-stream-ready') {
+        void refresh(activeTab, true);
+      }
+    });
+    const onFocus = () => { void refresh(activeTab, true); };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [activeTab, isOpen, refresh]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        useUIStore.getState().setAutonomyLabOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen]);
 
   const selectObjective = React.useCallback(async (id: string) => {
     try {

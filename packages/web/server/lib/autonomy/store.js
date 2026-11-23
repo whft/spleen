@@ -147,13 +147,13 @@ export const createAutonomyStore = ({ dbPath = ':memory:', now = () => Date.now(
     const at = now();
     const id = asNonEmptyString(input.id) || `obj_${crypto.randomBytes(6).toString('hex')}`;
     const budget = isRecord(input.budget) ? input.budget : {};
+    const mode = input.mode === 'ongoing' ? 'ongoing' : 'finite';
     const normalizedBudget = {
-      maxTurns: Math.max(1, Math.min(200, Number(budget.maxTurns) || 25)),
+      maxTurns: Math.max(1, Math.min(500, Number(budget.maxTurns) || (mode === 'ongoing' ? 100 : 25))),
       maxRuntimeMs: Math.max(60_000, Number(budget.maxRuntimeMs) || 3_600_000),
       maxParallel: Math.max(1, Math.min(8, Number(budget.maxParallel) || 2)),
-      reviewIntervalMs: Math.max(60_000, Number(budget.reviewIntervalMs) || 900_000),
+      reviewIntervalMs: Math.max(10_000, Number(budget.reviewIntervalMs) || 30_000),
     };
-    const mode = input.mode === 'ongoing' ? 'ongoing' : 'finite';
     db.run(
       `INSERT INTO objectives (
         id, title, description, directory, mode, status, priority,
@@ -268,7 +268,7 @@ export const createAutonomyStore = ({ dbPath = ':memory:', now = () => Date.now(
         JSON.stringify(Array.isArray(input.dependsOn) ? input.dependsOn.map(String) : []),
         idem,
         input.checkpoint ? JSON.stringify(input.checkpoint) : null,
-        Math.max(1, Math.min(10, Number(input.maxAttempts) || 3)),
+        Math.max(1, Math.min(10, Number(input.maxAttempts) || 5)),
         asNonEmptyString(input.sessionId),
         at,
         at,

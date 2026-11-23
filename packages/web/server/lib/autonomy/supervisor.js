@@ -164,8 +164,62 @@ export const createAutonomySupervisor = ({
   const resumeObjective = (id) => {
     const current = store.getObjective(id);
     if (!current) return null;
-    const updated = store.updateObjective(id, { status: 'active', failureStreak: 0, lastError: null });
-    store.recordDecision({ objectiveId: id, kind: 'recovery', summary: 'Objective resumed' });
+    const at = now();
+    const tasks = store.listTasks(id);
+    let requeued = 0;
+    for (const task of tasks) {
+      if (task.status === 'failed' || task.status === 'blocked') {
+        store.updateTask(task.id, {
+          status: 'pending',
+          attempts: 0,
+          leaseOwner: null,
+          leaseUntil: null,
+          nextRetryAt: at,
+          error: null,
+        });
+        requeued += 1;
+      }
+    }
+    const hasPendingOrRunning = tasks.some((t) => t.status === 'pending' || t.status === 'running') || requeued > 0;
+    if (!hasPendingOrRunning) {
+      store.addTask(id, {
+        title: `Continue working on: ${current.title}`,
+        role: current.mode === 'ongoing' ? 'researcher' : 'supervisor',
+        kind: current.mode === 'ongoing' ? 'research' : 'code',
+        prompt: current.description,
+        idempotencyKey: `resume_${id}_${current.turnsUsed}_${at}`,
+      });
+    }
+    const updated = store.updateObjective(id, { status: 'active', failureStreak: 0, lastError: null, nextReviewAt: null });
+    store.recordDecision({ objectiveId: id, kind: 'recovery', summary: requeued > 0 ? `Resumed and retried ${requeued} failed/blocked task(s)` : 'Objective resumed with next continuation turn' });
+    emit('autonomy:updated', { objectiveId: id, status: 'active' });
+    return updated;
+  };
+
+  const continueObjective = (id, note = '') => {
+    const current = store.getObjective(id);
+    if (!current) return null;
+    const at = now();
+    const guidance = asNonEmptyString(note);
+    const tasks = store.listTasks(id);
+    for (const task of tasks) {
+      if (task.status === 'failed' || task.status === 'blocked') {
+        store.updateTask(task.id, {
+          status: 'cancelled',
+          leaseOwner: null,
+          leaseUntil: null,
+        });
+      }
+    }
+    store.addTask(id, {
+      title: guidance ? `Continue: ${guidance.slice(0, 72)}` : `Continue research & execution: ${current.title}`,
+      role: current.mode === 'ongoing' ? 'researcher' : 'supervisor',
+      kind: current.mode === 'ongoing' ? 'research' : 'code',
+      prompt: guidance ? `${current.description}\n\nUser continuation note: ${guidance}` : current.description,
+      idempotencyKey: `continue_${id}_${at}`,
+    });
+    const updated = store.updateObjective(id, { status: 'active', failureStreak: 0, lastError: null, nextReviewAt: null, loopPhase: 'research' });
+    store.recordDecision({ objectiveId: id, kind: 'recovery', summary: guidance ? `Queued continuation turn: ${guidance}` : 'Queued continuation turn' });
     emit('autonomy:updated', { objectiveId: id, status: 'active' });
     return updated;
   };
@@ -384,10 +438,16 @@ export const createAutonomySupervisor = ({
       }
 
       const verifyRes = await verifyObjectiveNow(objective.id);
-      if (verifyRes.status === 'passed') {
+      if (verifyRes.status === 'passed' || (objective.mode === 'ongoing' && verifyRes.status === 'unverified')) {
         if (objective.mode === 'ongoing') {
-          const nextReview = now() + (Number(budget.reviewIntervalMs) || 900_000);
-          store.updateObjective(objective.id, { status: 'waiting', loopPhase: 'remember', nextReviewAt: nextReview });
+          const intervalMs = Math.max(10_000, Number(budget.reviewIntervalMs) || 30_000);
+          const nextReview = now() + intervalMs;
+          store.updateObjective(objective.id, { status: 'waiting', loopPhase: 'remember', nextReviewAt: nextReview, lastError: null });
+          store.recordDecision({
+            objectiveId: objective.id,
+            kind: 'verify',
+            summary: `Ongoing cycle finished (${verifyRes.status}); next continuation scheduled in ${Math.round(intervalMs / 1000)}s`,
+          });
         } else {
           store.updateObjective(objective.id, { status: 'completed', loopPhase: 'remember', completedAt: now(), lastError: null });
         }
@@ -478,6 +538,7 @@ export const createAutonomySupervisor = ({
     replanObjective,
     pauseObjective,
     resumeObjective,
+    continueObjective,
     cancelObjective,
     emergencyStopAll,
     verifyObjective: verifyObjectiveNow,

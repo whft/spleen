@@ -207,7 +207,7 @@ export const MainLayout: React.FC = () => {
                                                     <ErrorBoundary><OnDemand needed load={loadUsageStatsView} onFailure={closeMainSurfaces} /></ErrorBoundary>
                                                 </div>
                                             )}
-                                            <ErrorBoundary><OnDemand needed={isAutonomyLabOpen} load={loadAutonomyLabView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+                                            {isAutonomyLabOpen ? <ErrorBoundary><OnDemand needed load={loadAutonomyLabView} onFailure={closeMainSurfaces} /></ErrorBoundary> : null}
                                             <OnDemand needed={isSourceBoardOpen} load={loadSourceBoardView} onFailure={closeMainSurfaces} />
                                             <ErrorBoundary><OnDemand needed={isOverviewOpen} load={loadOverviewView} onFailure={closeMainSurfaces} /></ErrorBoundary>
                                             <ErrorBoundary><OnDemand needed={Boolean(worktreesPageProjectId)} load={loadWorktreesView} onFailure={closeMainSurfaces} /></ErrorBoundary>

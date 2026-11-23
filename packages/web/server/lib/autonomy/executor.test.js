@@ -38,10 +38,11 @@ describe('autonomy live session executor', () => {
         createdCount += 1;
         return { sessionId: `ses_new_${createdCount}` };
       },
-      send: async (payload) => {
-        sent.push(payload);
+      send: async (sessionId, payload) => {
+        sent.push({ sessionId, ...payload });
         assistantTs = 500;
         statusCalls = 0;
+        return { promptDispatched: true };
       },
     };
 
@@ -108,9 +109,10 @@ describe('autonomy live session executor', () => {
           createdCount += 1;
           return { sessionId: `ses_auto_${createdCount}` };
         },
-        send: async (payload) => {
-          sent.push(payload);
+        send: async (sessionId, payload) => {
+          sent.push({ sessionId, ...payload });
           turnTs += 100;
+          return { promptDispatched: true };
         },
       },
       readSessionStatus: async () => ({ type: 'idle' }),
@@ -163,5 +165,67 @@ describe('autonomy live session executor', () => {
     );
     expect(switched.sessionId).toBe('ses_other_99');
     platform.stop();
+  });
+
+  it('continues ongoing research without verification commands and recovers on resume/continue after failure', async () => {
+    const workDir = createTempDir('spleen-exec-ongoing-');
+    let clock = 10_000;
+    const store = createAutonomyStore({ dbPath: ':memory:', now: () => clock });
+    const sent = [];
+    let turnTs = 0;
+    let shouldFail = false;
+
+    const executor = createAutonomySessionExecutor({
+      store,
+      sessionService: {
+        send: async (sessionId, payload) => {
+          sent.push({ sessionId, ...payload });
+          if (shouldFail) return { promptDispatched: false, promptError: 'Transient rate limit' };
+          turnTs += 100;
+          return { promptDispatched: true };
+        },
+      },
+      readSessionStatus: async () => ({ type: 'idle' }),
+      readLastAssistantMessage: async () => ({ completedAt: turnTs, text: `Research wave ${sent.length} complete.`, failed: false, error: null }),
+      now: () => clock,
+      wait: async () => {},
+    });
+
+    const supervisor = createAutonomySupervisor({
+      store,
+      verifier: createEvidenceVerifier({ readGit: async () => '' }),
+      executeTask: executor.executeTask,
+      now: () => clock,
+    });
+
+    const obj = supervisor.createObjective({
+      title: 'Continuous research',
+      directory: workDir,
+      sessionId: 'ses_research_1',
+      mode: 'ongoing',
+      budget: { reviewIntervalMs: 15_000, maxTurns: 10 },
+    });
+
+    await supervisor.tick();
+    await supervisor.tick();
+    const waitingState = supervisor.getObjective(obj.id);
+    expect(waitingState.status).toBe('waiting');
+    expect(waitingState.lastError).toBeNull();
+
+    clock += 16_000;
+    await supervisor.tick();
+    expect(sent.length).toBe(2);
+    expect(sent[1].prompt).toContain('Research wave 1 complete.');
+
+    shouldFail = true;
+    supervisor.continueObjective(obj.id, 'Investigate next routine');
+    await supervisor.tick();
+    shouldFail = false;
+    supervisor.resumeObjective(obj.id);
+    clock += 60_000;
+    await supervisor.tick();
+    expect(sent.length).toBe(4);
+    expect(supervisor.getObjective(obj.id).tasks.some((t) => t.status === 'completed' && t.result?.includes('Research wave 4'))).toBe(true);
+    store.close();
   });
 });
