@@ -19,7 +19,7 @@ const PLUGIN_PACKAGE_JSON = `${JSON.stringify({
 }, null, 2)}\n`;
 
 const PLUGIN_SOURCE = `const LIMIT_ERROR_TYPES = new Set(["provider.quota", "provider.free-limit", "provider.budget-limit", "provider.model-budget-limit", "provider.go-limit", "provider.chatgpt-limit", "provider.rate-limit"])
-const LIMIT_TEXT_RE = /rate.?limit|usage.?limit|quota\\s*(?:exceeded|reached|exhausted)|too many requests|\\b429\\b|overloaded|try again (?:in|at|after)|limit resets/i
+const LIMIT_TEXT_RE = /rate.?limit|usage.?limit|quota\\s*(?:exceeded|reached|exhausted)|too many requests|\\b429\\b|overloaded|try again (?:in|at|after)|limit resets|insufficient credits|out of credits|credit|spending|capacity/i
 const ROUTE = ${JSON.stringify(ROUTE)}
 
 const isLikelyLimitError = (error) => {

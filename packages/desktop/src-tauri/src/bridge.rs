@@ -243,17 +243,41 @@ pub async fn spleen_desktop_open_dialog(
     }
 }
 
-async fn update_payload(app: &AppHandle) -> Result<Value, String> {
-    let updater = app.updater().map_err(|e| e.to_string())?;
+fn build_updater(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<tauri_plugin_updater::Updater, String> {
+    let channel = settings(state).update_channel.clone();
+    if channel.eq_ignore_ascii_case("canary") {
+        let canary_url = url::Url::parse(
+            "https://github.com/whft/spleen/releases/download/canary/latest.json",
+        )
+        .map_err(|e| e.to_string())?;
+        return app
+            .updater_builder()
+            .endpoints(vec![canary_url])
+            .map_err(|e| e.to_string())?
+            .build()
+            .map_err(|e| e.to_string());
+    }
+    app.updater().map_err(|e| e.to_string())
+}
+
+async fn update_payload(app: &AppHandle, state: &AppState) -> Result<Value, String> {
+    let updater = build_updater(app, state)?;
     let current = app.package_info().version.to_string();
     match updater.check().await {
-        Ok(Some(update)) => Ok(json!({
-            "available": true,
-            "version": update.version,
-            "currentVersion": current,
-            "body": update.body,
-            "date": update.date.map(|d| d.to_string()),
-        })),
+        Ok(Some(update)) => {
+            let tag_version = update.version.trim_start_matches('v');
+            Ok(json!({
+                "available": true,
+                "version": update.version,
+                "currentVersion": current,
+                "body": update.body,
+                "date": update.date.map(|d| d.to_string()),
+                "releaseUrl": format!("https://github.com/whft/spleen/releases/tag/v{tag_version}"),
+            }))
+        }
         Ok(None) => Ok(json!({ "available": false, "currentVersion": current })),
         Err(error) => {
             log::warn!("update check failed: {error}");
@@ -666,20 +690,21 @@ pub async fn spleen_desktop_invoke(
                 "logTail": tail,
             }))
         }
-        "desktop_check_for_updates" => update_payload(&app).await,
+        "desktop_check_for_updates" => update_payload(&app, &state).await,
         "desktop_download_and_install_update" => {
-            let updater = app.updater().map_err(|e| e.to_string())?;
+            let updater = build_updater(&app, &state)?;
             let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
-                return Ok(json!({ "available": false }));
+                return Ok(json!({ "available": false, "downloaded": false }));
             };
+            let version = update.version.clone();
             let app_progress = app.clone();
             let app_finish = app.clone();
             let started = Arc::new(AtomicBool::new(false));
             let downloaded_total = Arc::new(AtomicU64::new(0));
             let started_cb = Arc::clone(&started);
             let downloaded_cb = Arc::clone(&downloaded_total);
-            update
-                .download_and_install(
+            let bytes = update
+                .download(
                     move |chunk_length, content_length| {
                         if !started_cb.swap(true, Ordering::SeqCst) {
                             let _ = app_progress.emit(
@@ -713,9 +738,21 @@ pub async fn spleen_desktop_invoke(
                 )
                 .await
                 .map_err(|e| e.to_string())?;
-            app.restart();
+            if let Ok(mut pending) = state.pending_update.lock() {
+                *pending = Some((update, bytes));
+            }
+            Ok(json!({ "downloaded": true, "version": version }))
         }
         "desktop_restart" => {
+            let staged = state
+                .pending_update
+                .lock()
+                .ok()
+                .and_then(|mut guard| guard.take());
+            crate::graceful_stop(app.clone()).await;
+            if let Some((update, bytes)) = staged {
+                update.install(bytes).map_err(|e| e.to_string())?;
+            }
             app.restart();
         }
         "desktop_take_pending_extension_installs"
@@ -1088,5 +1125,6 @@ pub fn load_state(paths: SpleenPaths) -> AppState {
         ssh,
         client_token: Mutex::new(String::new()),
         origin: Mutex::new(String::new()),
+        pending_update: Mutex::new(None),
     }
 }

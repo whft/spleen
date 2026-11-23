@@ -356,13 +356,12 @@ export const createScheduledTasksRuntime = (deps) => {
 
   const clearProjectTimers = (projectID) => {
     const tasks = tasksByProject.get(projectID);
-    if (!tasks) {
-      return;
-    }
+    if (!tasks) return;
     for (const task of tasks.values()) {
       clearTimerForKey(buildTaskKey(projectID, task.id));
       queuedTaskKeys.delete(buildTaskKey(projectID, task.id));
     }
+    for (let idx = queue.length - 1; idx >= 0; idx -= 1) { if (queue[idx]?.projectID === projectID) queue.splice(idx, 1); }
   };
 
   const setProjectTasks = (projectID, tasks) => {

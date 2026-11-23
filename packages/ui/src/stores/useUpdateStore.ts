@@ -267,29 +267,39 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
           checkForWebUpdates('desktop', appVersion),
         ]);
         const desktopInfo = desktopResult.status === 'fulfilled' ? desktopResult.value : null;
-        if (desktopResult.status === 'rejected') throw desktopResult.reason;
-        if (!desktopInfo) {
+        const apiInfo = apiResult.status === 'fulfilled' ? apiResult.value : null;
+        if (!desktopInfo && !apiInfo) {
+          if (desktopResult.status === 'rejected') throw desktopResult.reason;
           throw new Error(formatMessage(useI18nStore.getState().dictionary, 'updateDialog.error.restartUnavailable'));
         }
-        suggestedSec = apiResult.status === 'fulfilled'
-          ? (apiResult.value?.nextSuggestedCheckInSec ?? null)
-          : null;
+        const mergedInfo: UpdateInfo = desktopInfo
+          ? {
+            ...apiInfo,
+            ...desktopInfo,
+            body: desktopInfo.body || apiInfo?.body,
+            releaseUrl: desktopInfo.releaseUrl || apiInfo?.releaseUrl,
+            downloadUrl: desktopInfo.downloadUrl || apiInfo?.downloadUrl,
+          }
+          : apiInfo!;
+        suggestedSec = apiInfo?.nextSuggestedCheckInSec ?? null;
         const previousVersion = get().info?.version ?? null;
-        const offeredVersion = desktopInfo.version ?? null;
+        const offeredVersion = mergedInfo.version ?? null;
         const versionChanged =
           previousVersion !== null &&
           offeredVersion !== null &&
           previousVersion !== offeredVersion;
-        set({
+        const nextState: Partial<UpdateState> = {
           checking: false,
-          available: desktopInfo.available,
-          info: desktopInfo,
+          available: mergedInfo.available,
+          info: mergedInfo,
           lastChecked: Date.now(),
           nextCheckInSec: suggestedSec,
-          ...(!desktopInfo.available || versionChanged
-            ? { downloaded: false, progress: null }
-            : {}),
-        });
+        };
+        if (!mergedInfo.available || versionChanged) {
+          nextState.downloaded = false;
+          nextState.progress = null;
+        }
+        set(nextState);
 
         return suggestedSec;
       } else if (runtime === 'web') {

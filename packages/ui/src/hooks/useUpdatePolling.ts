@@ -15,7 +15,9 @@ export function useUpdatePolling() {
     const defaultIntervalMs = 60 * 60 * 1000;
     const minIntervalMs = 5 * 60 * 1000;
     const maxIntervalMs = 24 * 60 * 60 * 1000;
+    const failureBackoffMs = [30_000, 120_000, 600_000];
     let disposed = false;
+    let failureStreak = 0;
     let timer: number | null = null;
 
     const clampIntervalMs = (seconds: number): number => {
@@ -27,9 +29,17 @@ export function useUpdatePolling() {
       if (disposed) return;
       timer = window.setTimeout(async () => {
         const suggestedSec = await checkForUpdatesRef.current();
-        const nextDelay = typeof suggestedSec === 'number' && Number.isFinite(suggestedSec)
-          ? clampIntervalMs(suggestedSec)
-          : defaultIntervalMs;
+        const hadError = Boolean(useUpdateStore.getState().error);
+        let nextDelay: number;
+        if (hadError) {
+          nextDelay = failureBackoffMs[Math.min(failureStreak, failureBackoffMs.length - 1)];
+          failureStreak += 1;
+        } else {
+          failureStreak = 0;
+          nextDelay = Number.isFinite(suggestedSec) && suggestedSec !== null
+            ? clampIntervalMs(suggestedSec)
+            : defaultIntervalMs;
+        }
         scheduleNext(nextDelay);
       }, delayMs);
     };

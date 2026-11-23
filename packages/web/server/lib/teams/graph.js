@@ -44,17 +44,20 @@ export const validateDag = (tasks) => {
 export const getReadyTasks = (tasks, maxParallel = 3) => {
   const list = Array.isArray(tasks) ? tasks : [];
   const byId = new Map(list.map((task) => [task.id, task]));
-  const runningCount = list.filter((task) => task.status === 'running').length;
-  const slots = Math.max(0, (Number(maxParallel) || 1) - runningCount);
+  const runningTasks = list.filter((task) => task.status === 'running');
+  const busyAssignees = new Set(runningTasks.map((task) => task.assignee).filter(Boolean));
+  const slots = Math.max(0, (Number(maxParallel) || 1) - runningTasks.length);
   if (slots === 0) return [];
 
   const ready = [];
   for (const task of list) {
     if (task.status !== 'pending') continue;
+    if (task.assignee && busyAssignees.has(task.assignee)) continue;
     const deps = Array.isArray(task.dependsOn) ? task.dependsOn : [];
     const depsMet = deps.every((depId) => byId.get(depId)?.status === 'completed');
     if (depsMet) {
       ready.push(task);
+      if (task.assignee) busyAssignees.add(task.assignee);
       if (ready.length >= slots) break;
     }
   }

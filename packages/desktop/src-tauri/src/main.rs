@@ -23,6 +23,7 @@ pub struct AppState {
     pub ssh: ssh::SshManager,
     pub client_token: Mutex<String>,
     pub origin: Mutex<String>,
+    pub pending_update: Mutex<Option<(tauri_plugin_updater::Update, Vec<u8>)>>,
 }
 
 static SHUTDOWN_STARTED: AtomicBool = AtomicBool::new(false);
@@ -150,7 +151,7 @@ async fn boot(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-async fn graceful_stop(app: tauri::AppHandle) {
+pub(crate) async fn graceful_stop(app: tauri::AppHandle) {
     let taken = {
         let state = app.state::<AppState>();
         state.ssh.shutdown_all();

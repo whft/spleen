@@ -532,7 +532,7 @@ export const createSessionRecoveryRuntime = ({
     }
 
     const session = await fetchSession(sessionID, initialDirectory);
-    const directory = normalizeDirectory(session?.directory) || initialDirectory;
+    const directory = normalizeDirectory(session?.location?.directory) || normalizeDirectory(session?.directory) || initialDirectory;
     if (directory && directory !== row.directory) {
       store.noteDirectory(sessionID, directory, now());
     }

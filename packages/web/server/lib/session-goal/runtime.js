@@ -546,6 +546,7 @@ export const createSessionGoalRuntime = ({
         effectiveObjective = fileObjective;
       } else if (!effectiveObjective) {
         console.warn(`[session-goal] ${sessionId} objective file unreadable and no inline fallback`);
+        await settleGoal({ sessionId, directory, goal, status: 'blocked', statusReason: 'Goal objective file is missing or unreadable.', isCurrent });
         return;
       } else {
         console.warn(`[session-goal] ${sessionId} objective file unreadable, using inline fallback`);
@@ -584,7 +585,10 @@ export const createSessionGoalRuntime = ({
     }
 
     const messages = await fetchRecentMessages(sessionId, directory);
-    if (!messages) return;
+    if (!messages) {
+      await retryActivity();
+      return;
+    }
 
     let lastAssistant = null;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -760,28 +764,18 @@ export const createSessionGoalRuntime = ({
       }
     }
 
-    const written = await writeGoal(sessionId, directory, goal.id, (current) => ({
-      tokensUsed,
-      tokensBaseline,
-      tokensCommitted,
-      lastAccountedMessageID,
-      turnsUsed: current.turnsUsed + 1,
-      auditFailStreak,
-      statusReason: '',
-      ...(audit ? { evaluationProviderID: audit.evaluationProviderID ?? '', evaluationModelID: audit.evaluationModelID ?? '' } : {}),
-    }));
-    if (!written) {
-      console.log('[session-goal] goal changed during tick, dropping continuation');
-      return;
-    }
-
     const latest = await fetchRecentMessages(sessionId, directory);
     const latestLastInfo = latest && latest.length > 0 ? latest[latest.length - 1]?.info : null;
     if (!latestLastInfo || latestLastInfo.id !== lastMessageInfo?.id) {
       console.log('[session-goal] tail moved on, dropping continuation');
       return;
     }
-
+    const written = await writeGoal(sessionId, directory, goal.id, (current) => ({
+      tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID,
+      turnsUsed: current.turnsUsed + 1, auditFailStreak, statusReason: '',
+      ...(audit ? { evaluationProviderID: audit.evaluationProviderID ?? '', evaluationModelID: audit.evaluationModelID ?? '' } : {}),
+    }));
+    if (!written) { console.log('[session-goal] goal changed during tick, dropping continuation'); return; }
     console.log(`[session-goal] continuing ${sessionId} (turn ${written.turnsUsed}/${maxAutoTurns}, tokens ${written.tokensUsed}${written.tokenBudget ? `/${written.tokenBudget}` : ''})`);
     await sendContinuation({ sessionId, directory, goal: { ...written, objective: effectiveObjective } });
   };

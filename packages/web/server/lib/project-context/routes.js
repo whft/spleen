@@ -1,5 +1,6 @@
 import { isRecord as isObjectRecord } from '../shared/guards.js';
 import express from 'express';
+import { isString } from '../shared/guards.js';
 import { z } from 'zod';
 
 const parseJsonBody = express.json({ limit: '1mb' });
@@ -162,11 +163,11 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
 
     try {
-      const result = await projectContextRuntime.updateNote(req.params.projectId, req.params.noteId, {
-        ...(body.body !== undefined ? { body: body.body } : {}),
-        ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
-        planId: body.planId,
-      });
+      const notePatch = { planId: body.planId };
+      if (body.body !== undefined) notePatch.body = body.body;
+      if (body.pinned !== undefined) notePatch.pinned = body.pinned;
+      if (isString(body.expectedBody)) notePatch.expectedBody = body.expectedBody;
+      const result = await projectContextRuntime.updateNote(req.params.projectId, req.params.noteId, notePatch);
       if (!result) {
         return res.status(404).json({ error: 'Note not found' });
       }
@@ -234,10 +235,12 @@ export const registerProjectContextRoutes = (app, dependencies) => {
     }
 
     try {
+      const planPatch = { raw: body.raw };
+      if (isString(body.expectedRaw)) planPatch.expectedRaw = body.expectedRaw;
       const result = await projectContextRuntime.updatePlan(
         req.params.projectId,
         req.params.planId,
-        { raw: body.raw },
+        planPatch,
       );
       if (!result) {
         return res.status(404).json({ error: 'Plan not found' });

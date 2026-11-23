@@ -813,12 +813,6 @@ export async function checkForUpdates(options = {}) {
   if (currentVersion !== 'unknown') {
     const remote = await checkForUpdatesFromApi(currentVersion, options);
     if (remote) {
-      if (remote.available && appType === 'web') {
-        const npmLatest = await getLatestVersion();
-        if (!npmLatest || compareVersions(npmLatest, remote.version) < 0) {
-          remote.available = false;
-        }
-      }
       return {
         ...remote,
         packageManager: pm,

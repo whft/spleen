@@ -125,8 +125,13 @@ const providerIdOfMessage = (message) => (
  * after it. Completed tool outcomes are evidence, so a resume never repeats
  * them; a tool still running past the crash is an unknown side effect.
  */
-export const summarizeTail = (messages) => {
-  if (!Array.isArray(messages)) return null;
+export const summarizeTail = (rawMessages) => {
+  if (!Array.isArray(rawMessages)) return null;
+  const firstCreated = Number(rawMessages[0]?.time?.created ?? 0);
+  const lastCreated = Number(rawMessages[rawMessages.length - 1]?.time?.created ?? 0);
+  const messages = rawMessages.length >= 2 && firstCreated > 0 && lastCreated > 0 && firstCreated > lastCreated
+    ? [...rawMessages].reverse()
+    : rawMessages;
   let lastUserIndex = -1;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index]?.type === 'user') {

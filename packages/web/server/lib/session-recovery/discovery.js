@@ -64,7 +64,7 @@ export const createZenSessionDiscoverer = ({
       inspected += 1;
 
       const parentID = sessionParentId(info) || null;
-      const directory = normalizeDirectory(info.directory);
+      const directory = normalizeDirectory(info?.location?.directory) || normalizeDirectory(info.directory);
       const messages = await fetchMessages(sessionID, directory);
       if (!Array.isArray(messages)) continue;
       checkedUpdatedAt.set(sessionID, updatedAt);

@@ -2164,27 +2164,26 @@ const teamsService = createTeamsService({
   sessionService: spleenSessionService,
   readSessionStatus: async (sessionId, directory) => {
     const active = await readTeamSessionOpenCodeFetch('/api/session/active', directory);
-    return active?.[sessionId] ? { type: 'busy' } : { type: 'idle' };
+    return active ? (active[sessionId] ? { type: 'busy' } : { type: 'idle' }) : null;
   },
   readLastAssistantMessage: async (sessionId, directory) => {
     const page = await readTeamSessionOpenCodeFetch(`/api/session/${encodeURIComponent(sessionId)}/message?limit=15`, directory);
     const list = Array.isArray(page?.data) ? page.data : (Array.isArray(page) ? page : []);
-    const lastAssistant = [...list].reverse().find((m) => m?.type === 'assistant');
+    let lastAssistant = null;
+    let bestTs = -1;
+    for (const m of list) {
+      if (m?.type !== 'assistant') continue;
+      const ts = Number(m?.time?.completed) || Number(m?.time?.created) || 0;
+      if (ts >= bestTs) { bestTs = ts; lastAssistant = m; }
+    }
     if (!lastAssistant) return null;
-    const text = (Array.isArray(lastAssistant.content) ? lastAssistant.content : [])
-      .filter((p) => p?.type === 'text' && typeof p.text === 'string')
-      .map((p) => p.text)
-      .join('')
-      .trim();
-    const completedAt = Number(lastAssistant?.time?.completed) || Number(lastAssistant?.time?.created) || 0;
-    return completedAt > 0 ? { completedAt, text } : null;
+    const text = (Array.isArray(lastAssistant.content) ? lastAssistant.content : []).filter((p) => p?.type === 'text' && asNonEmptyString(p.text)).map((p) => p.text).join('').trim();
+    const failed = Boolean(lastAssistant.error || lastAssistant.finish === 'error' || lastAssistant.aborted);
+    return bestTs > 0 ? { completedAt: bestTs, text, failed, error: asNonEmptyString(lastAssistant.error?.message) || (failed ? 'Assistant turn failed' : null) } : null;
   },
   broadcastEvent: (event) => broadcastSpleenUiEvent(event),
 });
-teamsRuntime = createTeamsRuntime({
-  service: teamsService,
-  globalEventHub: globalMessageStreamHub,
-});
+teamsRuntime = createTeamsRuntime({ service: teamsService, globalEventHub: globalMessageStreamHub });
 
 const browserUploadStore = createUploadStore();
 const spleenControlService = createSpleenControlService({

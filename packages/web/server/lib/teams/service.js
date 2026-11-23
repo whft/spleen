@@ -611,7 +611,15 @@ export const createTeamsService = ({
     return updated;
   };
 
+  const activeTickLocks = new Map();
   const tickScheduler = async (onlyTeamId = null) => {
+    const lockKey = onlyTeamId || '__all__';
+    if (activeTickLocks.has(lockKey)) return activeTickLocks.get(lockKey);
+    const run = tickSchedulerInner(onlyTeamId).finally(() => activeTickLocks.delete(lockKey));
+    activeTickLocks.set(lockKey, run);
+    return run;
+  };
+  const tickSchedulerInner = async (onlyTeamId = null) => {
     const state = await store.read();
     const at = now();
     const teams = onlyTeamId
@@ -619,12 +627,9 @@ export const createTeamsService = ({
       : state.teams.filter((t) => t.status === 'active');
 
     let changed = false;
-
     for (const team of teams) {
       const teamTasks = state.tasks.filter((t) => t.teamId === team.id);
       if (teamTasks.length === 0) continue;
-
-      // 1. Poll running tasks for session completion or lease expiration.
       for (const task of teamTasks) {
         if (task.status !== 'running') continue;
         const member = team.members.find((m) => m.id === task.assignee) ?? team.members[0];
@@ -638,8 +643,9 @@ export const createTeamsService = ({
               await store.update((draft) => {
                 const target = draft.tasks.find((t) => t.id === task.id);
                 if (!target || target.status !== 'running') return;
-                target.status = 'completed';
-                target.result = asText(reply.text) || 'Completed';
+                target.status = reply.failed ? 'failed' : 'completed';
+                target.result = reply.failed ? target.result : (asText(reply.text) || 'Completed');
+                if (reply.failed) target.error = asText(reply.error) || 'Assistant turn failed';
                 target.leaseUntil = null;
                 target.updatedAt = at;
                 const m = draft.teams.find((x) => x.id === team.id)?.members.find((x) => x.id === member.id);
@@ -654,22 +660,16 @@ export const createTeamsService = ({
           await store.update((draft) => {
             const target = draft.tasks.find((t) => t.id === task.id);
             if (!target || target.status !== 'running') return;
-            if (target.retries < target.maxRetries) {
-              target.retries += 1;
-              target.status = 'pending';
-              target.error = 'lease expired; retrying';
-            } else {
-              target.status = 'failed';
-              target.error = 'lease expired';
-            }
+            target.status = target.retries < target.maxRetries ? 'pending' : 'failed';
+            if (target.retries < target.maxRetries) { target.retries += 1; target.error = 'lease expired; retrying'; } else { target.error = 'lease expired'; }
             target.leaseUntil = null;
             target.updatedAt = at;
+            const m = draft.teams.find((x) => x.id === team.id)?.members.find((x) => x.id === member?.id);
+            if (m && m.status === 'working') m.status = 'idle';
           });
           changed = true;
         }
       }
-
-      // 2. Propagate blocked status when upstream dependencies failed/cancelled and escalate to Lead.
       const preDispatch = await store.read();
       const preDispatchTeam = preDispatch.teams.find((t) => t.id === team.id);
       if (!preDispatchTeam || preDispatchTeam.status !== 'active') continue;
@@ -693,22 +693,15 @@ export const createTeamsService = ({
           body: `@lead Dependency blocker detected:\n${summaryLines.join('\n')}\nRetry the failed task or add a replacement task to unblock.`,
         }).catch(() => {});
       }
-
-      // 3. Refresh snapshot & dispatch ready tasks.
       const refreshed = await store.read();
       const freshTeam = refreshed.teams.find((t) => t.id === team.id);
       if (!freshTeam || freshTeam.status !== 'active') continue;
       const freshTasks = refreshed.tasks.filter((t) => t.teamId === team.id);
       const ready = getReadyTasks(freshTasks, freshTeam.maxParallel);
-
       for (const task of ready) {
         const assignee = freshTeam.members.find((m) => m.id === task.assignee) ?? freshTeam.members[0];
         if (!assignee) continue;
-        const depOutputs = (task.dependsOn || [])
-          .map((depId) => freshTasks.find((t) => t.id === depId))
-          .filter(Boolean)
-          .map((dep) => `- ${dep.title} (${dep.id}): ${asText(dep.result) || 'done'}`);
-
+        const depOutputs = (task.dependsOn || []).map((depId) => freshTasks.find((t) => t.id === depId)).filter(Boolean).map((dep) => `- ${dep.title} (${dep.id}): ${asText(dep.result) || 'done'}`);
         const promptLines = [
           `[Team Task · ${freshTeam.name}] ${task.title} (id: ${task.id})`,
           freshTeam.goal ? `Team goal: ${freshTeam.goal}` : '',
@@ -716,11 +709,12 @@ export const createTeamsService = ({
           `Task instructions:\n${task.prompt}`,
           task.acceptance ? `Acceptance criteria: ${task.acceptance}` : '',
         ].filter(Boolean);
-
         const dispatchTime = now();
+        let claimed = false;
         await store.update((draft) => {
           const target = draft.tasks.find((t) => t.id === task.id);
           if (!target || target.status !== 'pending') return;
+          claimed = true;
           target.status = 'running';
           target.assignee = assignee.id;
           target.dispatchedAt = dispatchTime;
@@ -729,8 +723,8 @@ export const createTeamsService = ({
           const m = draft.teams.find((x) => x.id === freshTeam.id)?.members.find((x) => x.id === assignee.id);
           if (m) m.status = 'working';
         });
+        if (!claimed) continue;
         changed = true;
-
         if (assignee.sessionId) {
           const sent = await dispatchPrompt(assignee.sessionId, assignee.directory || freshTeam.directory, promptLines.join('\n\n'));
           if (!sent.dispatched) {
