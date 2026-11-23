@@ -1,35 +1,8 @@
 import crypto from 'node:crypto';
 import { detectBlockedTasks, extractMentions, getReadyTasks, summarizeDag, validateDag } from './graph.js';
+import { TEAM_PRESETS } from './presets.js';
 
-export const TEAM_PRESETS = Object.freeze({
-  'full-stack': [
-    { name: 'Lead', role: 'lead', description: 'Coordinates architecture, task breakdown, and integration across members.' },
-    { name: 'Backend', role: 'backend', description: 'Implements APIs, storage, server logic, and backend tests.' },
-    { name: 'Frontend', role: 'frontend', description: 'Implements UI components, stores, styling, and UX polish.' },
-    { name: 'QA', role: 'qa', description: 'Verifies edge cases, writes integration tests, and audits regressions.' },
-  ],
-  'research-build': [
-    { name: 'Lead', role: 'lead', description: 'Synthesizes findings and directs implementation.' },
-    { name: 'Researcher', role: 'researcher', description: 'Explores the codebase, APIs, and constraints.' },
-    { name: 'Builder', role: 'builder', description: 'Applies focused code changes cleanly.' },
-    { name: 'Verifier', role: 'verifier', description: 'Runs test suites, type-checks, and validates behavior.' },
-  ],
-  'bug-hunt': [
-    { name: 'Lead', role: 'lead', description: 'Coordinates reproduction and sign-off.' },
-    { name: 'Investigator', role: 'investigator', description: 'Traces logs, stack frames, and root causes.' },
-    { name: 'Fixer', role: 'fixer', description: 'Implements minimal safe fixes.' },
-    { name: 'Reviewer', role: 'reviewer', description: 'Audits diffs and tests for regressions.' },
-  ],
-  'multi-review': [
-    { name: 'Lead', role: 'lead', description: 'Aggregates audit reports into an actionable summary.' },
-    { name: 'Security', role: 'security', description: 'Audits auth, input validation, path/SSRF safety, and secrets.' },
-    { name: 'Performance', role: 'performance', description: 'Finds bottlenecks, leaks, and unnecessary I/O.' },
-    { name: 'Correctness', role: 'correctness', description: 'Checks edge cases, error handling, and test coverage.' },
-  ],
-  custom: [
-    { name: 'Lead', role: 'lead', description: 'Orchestrates custom team members and shared tasks.' },
-  ],
-});
+export { TEAM_PRESETS };
 
 const LINK_RELATIONS = new Set(['reference', 'supervise', 'delegate']);
 const DEFAULT_LEASE_MS = 10 * 60_000;

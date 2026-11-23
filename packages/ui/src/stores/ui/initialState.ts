@@ -61,6 +61,7 @@ export const createInitialUIState = (): Pick<UIStore,
   | 'isIntegrationsCatalogOpen'
   | 'archivePageOpenCount'
   | 'isUsageStatsPageOpen'
+  | 'isAutonomyLabOpen'
   | 'isSourceBoardOpen'
   | 'isOverviewOpen'
   | 'openGuestPageId'
@@ -286,6 +287,7 @@ export const createInitialUIState = (): Pick<UIStore,
   isIntegrationsCatalogOpen: false,
   archivePageOpenCount: 0,
   isUsageStatsPageOpen: false,
+  isAutonomyLabOpen: false,
   isSourceBoardOpen: false,
   isOverviewOpen: false,
   openGuestPageId: null,

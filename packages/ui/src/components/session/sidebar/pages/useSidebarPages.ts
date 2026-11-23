@@ -8,11 +8,12 @@ import type { ShortcutActionId } from '@/lib/shortcuts';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { useUIStore } from '@/stores/useUIStore';
 
-type BuiltinPageId = 'overview' | 'source-board' | 'scheduled' | 'archive' | 'stats' | 'integrations';
+type BuiltinPageId = 'overview' | 'autonomy-lab' | 'source-board' | 'scheduled' | 'archive' | 'stats' | 'integrations';
 
 function builtinPageIcon(id: BuiltinPageId): IconName {
   switch (id) {
     case 'overview': return 'compass-3';
+    case 'autonomy-lab': return 'compass-3';
     case 'source-board': return 'git-pull-request';
     case 'scheduled': return 'calendar-schedule';
     case 'archive': return 'archive';
@@ -39,6 +40,7 @@ export const useSidebarPages = (enabled: boolean): readonly SidebarPage[] => {
   const isScheduledOpen = useUIStore((state) => state.isScheduledTasksDialogOpen);
   const isArchiveOpen = useUIStore((state) => state.isArchivePageOpen);
   const isUsageOpen = useUIStore((state) => state.isUsageStatsPageOpen);
+  const isAutonomyLabOpen = useUIStore((state) => state.isAutonomyLabOpen);
   const isIntegrationsCatalogOpen = useUIStore((state) => state.isIntegrationsCatalogOpen);
   const openGuestPageId = useUIStore((state) => state.openGuestPageId);
   const enterpriseMode = useEnterpriseMode();
@@ -55,6 +57,7 @@ export const useSidebarPages = (enabled: boolean): readonly SidebarPage[] => {
       pages.push(builtin('overview', t('overview.title'), isOverviewOpen, (open) => ui().setOverviewOpen(open), 'open_overview'));
     }
     pages.push(
+      builtin('autonomy-lab', 'Autonomy & Research Lab', isAutonomyLabOpen, (open) => ui().setAutonomyLabOpen(open)),
       builtin('source-board', t('sourceBoard.title'), isSourceBoardOpen, (open) => ui().setSourceBoardOpen(open), 'toggle_source_board'),
       builtin('scheduled', t('sessions.sidebar.header.actions.scheduledTasks'), isScheduledOpen, (open) => ui().setScheduledTasksDialogOpen(open)),
       builtin('archive', t('sessions.sidebar.nav.archive'), isArchiveOpen, (open) => ui().setArchivePageOpen(open), 'open_archive'),
@@ -76,5 +79,5 @@ export const useSidebarPages = (enabled: boolean): readonly SidebarPage[] => {
       });
     }
     return pages;
-  }, [enabled, enterpriseMode, guestPages, isArchiveOpen, isIntegrationsCatalogOpen, isOverviewOpen, isScheduledOpen, isSourceBoardOpen, isUsageOpen, openGuestPageId, overviewAvailable, t]);
+  }, [enabled, enterpriseMode, guestPages, isArchiveOpen, isAutonomyLabOpen, isIntegrationsCatalogOpen, isOverviewOpen, isScheduledOpen, isSourceBoardOpen, isUsageOpen, openGuestPageId, overviewAvailable, t]);
 };

@@ -23,16 +23,7 @@ import { z } from 'zod';
 import { resolveUploadFiles, UploadRefusedError } from '../browser-control/uploads.js';
 import settingsRegistry from '../opencode/settings-registry.json' with { type: 'json' };
 
-const UI_CONTROL_COMMANDS = new Set([
-  'open_surface',
-  'close_surface',
-  'open_settings',
-  'close_settings',
-  'focus_session',
-  'toggle_sidebar',
-  'set_theme',
-  'notify',
-]);
+const UI_CONTROL_COMMANDS = new Set(['open_surface', 'close_surface', 'open_settings', 'close_settings', 'focus_session', 'toggle_sidebar', 'set_theme', 'notify']);
 
 const isSecretRegistryKey = (key, spec) => Boolean(spec?.secret || /password|token/i.test(key));
 
@@ -324,9 +315,8 @@ export const createSpleenControlService = (dependencies) => {
     teamsService = null,
     sessionRecoveryRuntime = null,
     getSessionRecoveryRuntime = null,
-    getDiscordClient = () => null,
-    getUnknownCheatsClient = () => null,
-    getUnknownCheatsStore = () => null,
+    getDiscordClient = () => null, getAutonomyPlatform = () => null,
+    getUnknownCheatsClient = () => null, getUnknownCheatsStore = () => null,
     agentConfigApi = null,
   } = dependencies;
 
@@ -1378,8 +1368,12 @@ export const createSpleenControlService = (dependencies) => {
         }
       }
       if (action.startsWith('discord.')) {
-        const discord = await Promise.resolve(getDiscordClient());
-        return await handleDiscordControlAction(action, input, discord, { contextDirectory });
+        return await handleDiscordControlAction(action, input, await Promise.resolve(getDiscordClient()), { contextDirectory });
+      }
+      if (action.startsWith('autonomy.') || action.startsWith('memfs.') || action.startsWith('research.')) {
+        const platform = await Promise.resolve(getAutonomyPlatform());
+        if (!platform) throw new SpleenControlError('Autonomy platform is unavailable', 503);
+        return await platform.handleControlAction(action, input, { contextDirectory });
       }
       if (action.startsWith('uc.')) {
         const uc = await Promise.resolve(getUnknownCheatsClient());

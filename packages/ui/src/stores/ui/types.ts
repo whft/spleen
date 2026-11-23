@@ -150,6 +150,7 @@ export interface UIStore {
   isIntegrationsCatalogOpen: boolean;
   archivePageOpenCount: number;
   isUsageStatsPageOpen: boolean;
+  isAutonomyLabOpen: boolean;
   isSourceBoardOpen: boolean;
   isOverviewOpen: boolean;
   openGuestPageId: string | null;
@@ -408,6 +409,7 @@ export interface UIStore {
   setArchivePageOpen: (open: boolean) => void;
   setIntegrationsCatalogOpen: (open: boolean) => void;
   setUsageStatsPageOpen: (open: boolean) => void;
+  setAutonomyLabOpen: (open: boolean) => void;
   setSourceBoardOpen: (open: boolean) => void;
   setOverviewOpen: (open: boolean) => void;
   setOpenGuestPage: (id: string | null) => void;

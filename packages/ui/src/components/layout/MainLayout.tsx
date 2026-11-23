@@ -53,6 +53,7 @@ const loadScheduledTasksDialog = () => import('@/components/session/ScheduledTas
 const loadArchiveView = () => import('@/components/views/ArchiveView').then((m) => m.ArchiveView);
 const loadIntegrationsCatalogView = () => import('@/components/views/IntegrationsCatalogView').then((m) => m.IntegrationsCatalogView);
 const loadUsageStatsView = () => import('@/components/views/usage/UsageStatsView').then((m) => m.UsageStatsView);
+const loadAutonomyLabView = () => import('@/components/views/autonomy/AutonomyLabView').then((m) => m.AutonomyLabView);
 const loadSourceBoardView = () => import('@/components/sourceBoard/SourceBoardView').then((m) => m.SourceBoardView);
 const loadOverviewView = () => import('@/components/overview/OverviewView').then((m) => m.OverviewView);
 const loadWorktreesView = () => import('@/components/views/WorktreesView').then((m) => m.WorktreesView);
@@ -104,6 +105,7 @@ export const MainLayout: React.FC = () => {
     const isArchivePageOpen = useUIStore((state) => state.isArchivePageOpen);
     const isIntegrationsCatalogOpen = useUIStore((state) => state.isIntegrationsCatalogOpen);
     const isUsageStatsPageOpen = useUIStore((state) => state.isUsageStatsPageOpen);
+    const isAutonomyLabOpen = useUIStore((state) => state.isAutonomyLabOpen);
     const isSourceBoardOpen = useUIStore((state) => state.isSourceBoardOpen);
     const isOverviewOpen = useUIStore((state) => state.isOverviewOpen);
     const worktreesPageProjectId = useUIStore((state) => state.worktreesPageProjectId);
@@ -123,7 +125,7 @@ export const MainLayout: React.FC = () => {
     }, [openGuestPageId, guestPage]);
     React.useEffect(() => subscribeRuntimeEndpointChanged(() => useUIStore.getState().setOpenGuestPage(null)), []);
     React.useEffect(() => followZonePlacementOfOtherWindows(), []);
-    const isSurfacePageOpen = isScheduledTasksPageOpen || isArchivePageOpen || isIntegrationsCatalogOpen || isUsageStatsPageOpen || isSourceBoardOpen || isOverviewOpen || Boolean(worktreesPageProjectId) || isSpacesPageOpen || isRunOverviewOpen || Boolean(guestPage);
+    const isSurfacePageOpen = isScheduledTasksPageOpen || isArchivePageOpen || isIntegrationsCatalogOpen || isUsageStatsPageOpen || isAutonomyLabOpen || isSourceBoardOpen || isOverviewOpen || Boolean(worktreesPageProjectId) || isSpacesPageOpen || isRunOverviewOpen || Boolean(guestPage);
     const mainRef = React.useRef<HTMLElement | null>(null);
     React.useEffect(() => {
         if (!isSurfacePageOpen) return;
@@ -205,6 +207,7 @@ export const MainLayout: React.FC = () => {
                                                     <ErrorBoundary><OnDemand needed load={loadUsageStatsView} onFailure={closeMainSurfaces} /></ErrorBoundary>
                                                 </div>
                                             )}
+                                            <ErrorBoundary><OnDemand needed={isAutonomyLabOpen} load={loadAutonomyLabView} onFailure={closeMainSurfaces} /></ErrorBoundary>
                                             <OnDemand needed={isSourceBoardOpen} load={loadSourceBoardView} onFailure={closeMainSurfaces} />
                                             <ErrorBoundary><OnDemand needed={isOverviewOpen} load={loadOverviewView} onFailure={closeMainSurfaces} /></ErrorBoundary>
                                             <ErrorBoundary><OnDemand needed={Boolean(worktreesPageProjectId)} load={loadWorktreesView} onFailure={closeMainSurfaces} /></ErrorBoundary>

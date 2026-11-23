@@ -89,6 +89,7 @@ import { createDiscordStore } from './lib/discord/store.js';
 import { createDiscordClient } from './lib/discord/client.js';
 import { createDiscordGateway } from './lib/discord/gateway.js';
 import { registerDiscordRoutes } from './lib/discord/routes.js';
+import { bootstrapAutonomyPlatform } from './lib/autonomy/bootstrap.js';
 import { createUnknownCheatsStore } from './lib/unknowncheats/store.js';
 import { createUnknownCheatsClient } from './lib/unknowncheats/client.js';
 import { registerUnknownCheatsRoutes } from './lib/unknowncheats/routes.js';
@@ -771,6 +772,7 @@ let sessionRecoveryRuntime = null;
 let recoveryStore = null;
 let teamsRuntime = null;
 let discordClientRuntime = null;
+let autonomyPlatformRuntime = null;
 let unknownCheatsRuntime = null;
 let unknownCheatsStoreRuntime = null;
 let spacesHost = null;
@@ -2200,15 +2202,10 @@ const spleenControlService = createSpleenControlService({
   teamsService: teamsRuntime,
   getSessionRecoveryRuntime: () => sessionRecoveryRuntime,
   getDiscordClient: () => discordClientRuntime,
+  getAutonomyPlatform: () => autonomyPlatformRuntime,
   getUnknownCheatsClient: () => unknownCheatsRuntime,
   getUnknownCheatsStore: () => unknownCheatsStoreRuntime,
-  agentConfigApi: {
-    listConfiguredAgents,
-    getAgentConfig,
-    createAgent,
-    updateAgent,
-    deleteAgent,
-  },
+  agentConfigApi: { listConfiguredAgents, getAgentConfig, createAgent, updateAgent, deleteAgent },
   sanitizeProjects,
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
@@ -2354,6 +2351,8 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   sessionWorkRuntime,
   sessionGoalRuntime,
   getSessionRecoveryRuntime: () => sessionRecoveryRuntime,
+  getAutonomyPlatform: () => autonomyPlatformRuntime,
+  teamsRuntime,
   contextObligatoryRuntime,
   sessionWarmingRuntime,
   sessionTodosRuntime,
@@ -2856,27 +2855,21 @@ async function main(options = {}) {
     }
     res.json(sessionRecoveryRuntime?.wakeWaitingProvider?.() ?? { ok: false, updated: 0 });
   });
-  registerTeamsRoutes(app, {
-    service: teamsRuntime,
-    requireAuthorized: (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }),
-  });
+  const authGuard = (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
+  registerTeamsRoutes(app, { service: teamsRuntime, requireAuthorized: authGuard });
   teamsRuntime.start();
   const discordStore = createDiscordStore({ filePath: path.join(SPLEEN_DATA_DIR, 'discord.json') });
   const discordGateway = createDiscordGateway({ store: discordStore });
   discordClientRuntime = createDiscordClient({ store: discordStore, gateway: discordGateway });
-  registerDiscordRoutes(app, {
-    client: discordClientRuntime,
-    gateway: discordGateway,
-    requireAuthorized: (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }),
+  registerDiscordRoutes(app, { client: discordClientRuntime, gateway: discordGateway, requireAuthorized: authGuard });
+  autonomyPlatformRuntime = bootstrapAutonomyPlatform(app, {
+    dataDir: SPLEEN_DATA_DIR, requireAuthorized: authGuard, broadcastEvent: broadcastSpleenUiEvent,
+    getSessionRecoveryRuntime: () => sessionRecoveryRuntime, getScheduledTasksRuntime: () => scheduledTasksRuntime, getDiscordGateway: () => discordGateway,
   });
   const unknownCheatsStore = createUnknownCheatsStore({ filePath: path.join(SPLEEN_DATA_DIR, 'unknowncheats.json') });
   unknownCheatsStoreRuntime = unknownCheatsStore;
   unknownCheatsRuntime = createUnknownCheatsClient({ store: unknownCheatsStore });
-  registerUnknownCheatsRoutes(app, {
-    client: unknownCheatsRuntime,
-    store: unknownCheatsStore,
-    requireAuthorized: (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }),
-  });
+  registerUnknownCheatsRoutes(app, { client: unknownCheatsRuntime, store: unknownCheatsStore, requireAuthorized: authGuard });
   app.use(spaceArchive.guard);
   app.use((req, res, next) => (spacesHost ? spacesHost.middleware(req, res, next) : next()));
   server.prependListener('upgrade', (...args) => { spacesHost?.upgradeHandler(...args); });
