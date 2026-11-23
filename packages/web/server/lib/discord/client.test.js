@@ -56,4 +56,30 @@ describe('discord client', () => {
     });
     expect(uploaded.attachments[0].filename).toBe('pic.png');
   });
+
+  it('supports extended Discord REST v10 actions (polls, roles, rawApi) and rejects unsafe rawApi paths', async () => {
+    const store = createDiscordStore();
+    const calls = [];
+    const fetchImpl = vi.fn(async (url, init) => {
+      calls.push({ url, method: init?.method ?? 'GET', body: init?.body, headers: init?.headers });
+      if (url.endsWith('/users/@me')) {
+        return new Response(JSON.stringify({ id: '1', username: 'bot', discriminator: '0' }), { status: 200 });
+      }
+      if (url.endsWith('/channels/c1/messages') && init?.method === 'POST') {
+        return new Response(JSON.stringify({ id: 'p1', channel_id: 'c1', content: '', author: { id: '1', username: 'bot' } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    const client = createDiscordClient({ store, fetchImpl });
+    await client.connect({ token: 'tok-123456', tokenType: 'bot' });
+
+    const poll = await client.createPoll('c1', { question: 'Ship it?', answers: ['Yes', 'Now'], durationHours: 4 });
+    expect(poll.id).toBe('p1');
+
+    await client.rawApi({ method: 'GET', path: '/guilds/g1/emojis', query: { limit: 10 } });
+    expect(calls.some((c) => c.url.endsWith('/guilds/g1/emojis?limit=10'))).toBe(true);
+
+    await expect(client.rawApi({ method: 'GET', path: 'https://evil.example/steal' })).rejects.toThrow(/relative path/i);
+  });
 });

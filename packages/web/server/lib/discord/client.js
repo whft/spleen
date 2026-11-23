@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { createExtendedDiscordApi } from './extended-api.js';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 const DISCORD_CDN_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
@@ -256,12 +257,22 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     }
   };
 
-  const sendMessage = async (channelId, { content = '', replyToMessageId, files = [] } = {}) => {
+  const sendMessage = async (
+    channelId,
+    { content = '', replyToMessageId, files = [], embeds, components, poll, tts, stickerIds, flags, allowedMentions } = {},
+  ) => {
     const text = typeof content === 'string' ? content : '';
     const fileList = Array.isArray(files) ? files : [];
     const payload = {
-      content: text,
+      ...(text ? { content: text } : {}),
       ...(replyToMessageId ? { message_reference: { message_id: String(replyToMessageId) } } : {}),
+      ...(Array.isArray(embeds) && embeds.length > 0 ? { embeds } : {}),
+      ...(Array.isArray(components) && components.length > 0 ? { components } : {}),
+      ...(poll && typeof poll === 'object' ? { poll } : {}),
+      ...(tts ? { tts: true } : {}),
+      ...(Array.isArray(stickerIds) && stickerIds.length > 0 ? { sticker_ids: stickerIds.map(String) } : {}),
+      ...(flags !== undefined ? { flags: Number(flags) } : {}),
+      ...(allowedMentions && typeof allowedMentions === 'object' ? { allowed_mentions: allowedMentions } : {}),
     };
 
     if (fileList.length > 0 && typeof FormData !== 'undefined') {
@@ -281,7 +292,8 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
       return normalizeMessage(created);
     }
 
-    if (!text.trim()) throw new DiscordApiError('Message content or files required', 400, 'EMPTY_MESSAGE');
+    const hasStructured = Boolean(payload.embeds || payload.components || payload.poll || payload.sticker_ids);
+    if (!text.trim() && !hasStructured) throw new DiscordApiError('Message content, embeds, poll, or files required', 400, 'EMPTY_MESSAGE');
     const created = await apiFetch(`/channels/${encodeURIComponent(channelId)}/messages`, {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -428,7 +440,10 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
 
   const updatePreferences = (patch) => store.saveConfig(patch).then(() => store.getPublicStatus());
 
+  const extended = createExtendedDiscordApi({ apiFetch, encodeEmoji });
+
   return {
+    ...extended,
     getStatus,
     connect,
     disconnect,
