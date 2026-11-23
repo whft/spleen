@@ -90,7 +90,7 @@
     },
     "packages/desktop": {
       "name": "@spleen/desktop",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "devDependencies": {
         "@tauri-apps/cli": "^2.9.1",
       },
@@ -245,7 +245,7 @@
     },
     "packages/ui": {
       "name": "@spleen/ui",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@base-ui/react": "^1.4.0",
@@ -386,7 +386,7 @@
     },
     "packages/web": {
       "name": "@spleen/web",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "bin": {
         "spleen": "./bin/cli.js",
       },
