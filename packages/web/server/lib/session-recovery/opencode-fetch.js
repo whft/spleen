@@ -14,7 +14,7 @@ export const createRecoveryOpenCodeFetch = ({
 }) => async (fetchPath, { directory = null, method = 'GET', body = null, query = null } = {}) => {
   const base = buildOpenCodeUrl(fetchPath, '');
   const params = new URLSearchParams(query || {});
-  if (directory) params.set('directory', directory);
+  if (directory && directory !== 'global') params.set('directory', directory);
   const search = params.toString();
   const response = await fetchImpl(search ? `${base}?${search}` : base, {
     method,

@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { asNonEmptyString } from '../shared/guards.js';
+
+const normalizeStoredDirectory = (value) => {
+  const trimmed = asNonEmptyString(value);
+  return trimmed && trimmed !== 'global' ? trimmed : null;
+};
 
 const SCHEMA_VERSION = 3;
 
@@ -156,6 +162,7 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
     event: db.prepare('INSERT INTO recovery_events (at, type, session_id, detail) VALUES (?, ?, ?, ?)'),
     recentEvents: db.prepare('SELECT * FROM recovery_events ORDER BY id DESC LIMIT 100'),
     parent: db.prepare('UPDATE executions SET parent_session_id = ?, updated_at = ? WHERE session_id = ?'),
+    directory: db.prepare('UPDATE executions SET directory = ?, updated_at = ? WHERE session_id = ?'),
     acquire: db.prepare(`
       INSERT INTO recovery_lease (id, owner, expires_at) VALUES (1, ?, ?)
       ON CONFLICT(id) DO UPDATE SET owner = excluded.owner, expires_at = excluded.expires_at
@@ -175,10 +182,11 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
     filePath,
 
     beginExecution({ sessionID, parentSessionID = null, directory = null, seq = null, at = now() }) {
+      const cleanDir = normalizeStoredDirectory(directory);
       statements.upsertExecution.run(
         sessionID,
         parentSessionID,
-        directory,
+        cleanDir,
         Number.isFinite(seq) ? Math.trunc(seq) : null,
         at,
         at,
@@ -243,6 +251,12 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
       if (!sessionID || !parentSessionID || sessionID === parentSessionID) return;
       statements.parent.run(parentSessionID, at, sessionID);
       recordEvent('parent.linked', sessionID, { parentSessionID }, at);
+    },
+
+    noteDirectory(sessionID, directory, at = now()) {
+      const cleanDir = normalizeStoredDirectory(directory);
+      if (!sessionID || !cleanDir) return;
+      statements.directory.run(cleanDir, at, sessionID);
     },
 
     saveCheckpoint(sessionID, checkpoint, at = now()) {

@@ -26,7 +26,7 @@ const ZEN_CONTINUE_BACKOFF_MS = Object.freeze([
 export const MANUAL_LIMIT_REASON = 'provider limit (manual resume)';
 
 const EXTERNAL_TOOL = /bash|shell|write|edit|patch|git|task|fetch|publish|deploy|push|delete|move/i;
-const TEXT_USAGE_STOP_RE = /^(?:error:\s*)?(?:you(?:'ve| have)\s+reached|free\s+usage\s+limit|opencode\s+(?:zen|go)\b.*limit|usage\s+limit|daily\s+(?:usage\s+)?limit|weekly\s+(?:usage\s+)?limit|monthly\s+(?:usage\s+)?limit|rate\s+limit\s+(?:exceeded|reached)|quota\s*(?:exceeded|reached|exhausted)|too\s+many\s+requests|insufficient\s+credits|out\s+of\s+credits)/i;
+const TEXT_USAGE_STOP_RE = /^(?:(?:opencode\s+failed\s+to\s+send\s+message\s+with\s+)?error:\s*)?(?:you(?:'ve| have)\s+reached|free\s+usage\s+limit|opencode\s+(?:zen|go)\b.*limit|usage\s+limit|daily\s+(?:usage\s+)?limit|weekly\s+(?:usage\s+)?limit|monthly\s+(?:usage\s+)?limit|rate\s+limit\s+(?:exceeded|reached)|quota\s*(?:exceeded|reached|exhausted)|too\s+many\s+requests|insufficient\s+credits|out\s+of\s+credits)/i;
 
 export const isExternalTool = (name) => EXTERNAL_TOOL.test(String(name || ''));
 
@@ -147,14 +147,17 @@ export const summarizeTail = (messages) => {
   const pending = assistants.length === 0 || !assistantCompleted(lastAssistant);
   const marker = isRecord(lastUser?.metadata?.spleenRecovery) ? lastUser.metadata.spleenRecovery : null;
   const idle = [...after].reverse().find((message) => message?.type === 'idle');
+  const errorMsg = [...after].reverse().find((message) => message?.type === 'error');
   const contentErrorPart = contentOf(lastAssistant).find((part) => isRecord(part) && part.type === 'error');
   const contentError = contentErrorPart ? (isRecord(contentErrorPart.error) ? contentErrorPart.error : contentErrorPart) : null;
+  const trailingMsgError = errorMsg ? (isRecord(errorMsg.error) ? errorMsg.error : errorMsg) : null;
 
   let error = isRecord(lastAssistant?.error)
     ? lastAssistant.error
-    : (isRecord(idle?.error) ? idle.error : contentError);
+    : (isRecord(idle?.error) ? idle.error : (contentError || trailingMsgError));
 
-  if (!error && lastAssistant && completedTools.length === 0 && unknownTools.length === 0) {
+  const lastAssistantTools = lastAssistant ? toolPartsOf(lastAssistant) : [];
+  if (!error && lastAssistant && lastAssistantTools.length === 0) {
     const assistantText = textPartsOf(lastAssistant);
     if (assistantText.length > 0 && assistantText.length <= 420 && TEXT_USAGE_STOP_RE.test(assistantText)) {
       error = { type: 'provider.quota', message: assistantText, fromText: true };
@@ -163,7 +166,7 @@ export const summarizeTail = (messages) => {
 
   const errorAt = isRecord(lastAssistant?.error) || contentError || error?.fromText
     ? (Number(lastAssistant?.time?.completed) || Number(lastAssistant?.time?.created) || null)
-    : (Number(idle?.time?.created) || null);
+    : (Number(idle?.time?.created) || Number(errorMsg?.time?.created) || null);
   const lastAssistantCompletedAt = Number(lastAssistant?.time?.completed) || 0;
   const lastAssistantFailed = Boolean(isRecord(lastAssistant?.error) || contentError || error?.fromText || lastAssistant?.finish === 'error');
   const providerID = extractProviderIdFromError(error)
