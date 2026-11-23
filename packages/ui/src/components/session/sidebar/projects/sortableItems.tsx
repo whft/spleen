@@ -368,7 +368,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               className={cn(
                 'relative flex items-center gap-1 py-1 ps-4 pe-3.5 transition-colors',
                 !disabled && 'cursor-grab active:cursor-grabbing',
-                isSessionDropTarget && 'mx-2 rounded-md bg-[#171B1D] ps-2 pe-2 ring-1 ring-inset ring-[#C8FA62]/70',
+                isSessionDropTarget && 'mx-2 rounded-[10px] bg-surface-subtle ps-2 pe-2 ring-1 ring-inset ring-foreground/35',
               )}
               {...attributes}
               {...listeners}
@@ -440,7 +440,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                       <span className={cn('ms-1 inline-flex flex-shrink-0 items-center', headerCoveredFadeClass)}>{statusIndicator}</span>
                     ) : null}
                     {isSessionDropTarget ? (
-                      <span className="ms-auto shrink-0 rounded border border-[#C8FA62]/50 bg-[#0B0D0F] px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-wide text-[#C8FA62]">
+                      <span className="ms-auto shrink-0 rounded-full border border-edge-strong bg-background px-2 py-0.5 font-mono text-[9px] font-medium tracking-wide text-foreground">
                         Move here
                       </span>
                     ) : projectDirectory ? (

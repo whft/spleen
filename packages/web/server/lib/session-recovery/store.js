@@ -199,7 +199,24 @@ export const createRecoveryStore = ({ filePath, now = Date.now }) => {
         at,
       );
       const existing = statements.getExecution.get(sessionID);
-      if (existing && existing.state === 'running') statements.touch.run(at, null, sessionID);
+      if (existing && existing.state === 'running') {
+        statements.touch.run(at, null, sessionID);
+        // A resumed execution that completes real tool work succeeded; reset its
+        // provider limit backoff so any later burst limit continues quickly again.
+        if (status === 'completed' && Number(existing.provider_waits) > 0) {
+          statements.schedule.run(
+            'running',
+            at,
+            Number(existing.attempts) || 0,
+            null,
+            existing.resume_message_id ?? null,
+            existing.last_error ?? null,
+            0,
+            existing.resumed_at ?? null,
+            sessionID,
+          );
+        }
+      }
       recordEvent(`tool.${status}`, sessionID, { toolID, name }, at);
     },
 

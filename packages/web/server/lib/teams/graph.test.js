@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractMentions, getReadyTasks, summarizeDag, validateDag } from './graph.js';
+import { detectBlockedTasks, extractMentions, getReadyTasks, summarizeDag, validateDag } from './graph.js';
 
 describe('teams DAG graph', () => {
   it('validates topological dependencies and detects missing/cyclic edges', () => {
@@ -34,7 +34,21 @@ describe('teams DAG graph', () => {
       completed: 1,
       failed: 0,
       cancelled: 0,
+      blocked: 0,
     });
+  });
+
+  it('detects transitively blocked tasks when an upstream dependency fails or is cancelled', () => {
+    const tasks = [
+      { id: 't1', status: 'failed', dependsOn: [] },
+      { id: 't2', status: 'pending', dependsOn: ['t1'] },
+      { id: 't3', status: 'pending', dependsOn: ['t2'] },
+      { id: 't4', status: 'pending', dependsOn: [] },
+    ];
+    expect(detectBlockedTasks(tasks)).toEqual([
+      { taskId: 't2', depId: 't1', depStatus: 'failed' },
+      { taskId: 't3', depId: 't2', depStatus: 'blocked' },
+    ]);
   });
 
   it('extracts @member and @all mentions from board messages', () => {

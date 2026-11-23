@@ -133,10 +133,10 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
             aria-pressed={isActive}
             data-context-surface={surface.id}
             className={cn(
-              'flex h-7 w-7 touch-none select-none items-center justify-center rounded-md transition-colors',
+              'flex h-8 w-8 touch-none select-none items-center justify-center rounded-[10px] transition-colors duration-150',
               isActive
                 ? 'oc-selected text-interactive-selection-foreground'
-                : 'text-muted-foreground hover:text-foreground',
+                : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
             )}
           >
             <GuestIcon
@@ -433,18 +433,18 @@ export const ContextPanelRail: React.FC = () => {
     <nav
       ref={railRef}
       aria-label={t('contextRail.aria.rail')}
-      className="flex h-full w-11 flex-shrink-0 flex-col items-center gap-2 bg-background pb-2"
+      className="flex h-full w-12 flex-shrink-0 flex-col items-center gap-2 border-s border-edge-muted bg-sidebar pb-2.5"
     >
       <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <ScrollShadow
-        surface="var(--background)"
+        surface="var(--sidebar)"
         size={RAIL_SCROLL_FADE_PX}
-        className="scrollbar-none flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden pt-2"
+        className="scrollbar-none flex min-h-0 w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto overflow-x-hidden pt-2"
       >
       <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={handleDragStart} onDragCancel={handleDragCancel} onDragEnd={handleDragEnd}>
         {groups.map((group, groupIndex) => (
           <React.Fragment key={contextSurfaceGroup(group[0])}>
-          {groupIndex > 0 ? <div aria-hidden="true" className="h-1.5 shrink-0" /> : null}
+          {groupIndex > 0 ? <div aria-hidden="true" className="my-1 h-px w-5 shrink-0 bg-edge-muted" /> : null}
           <SortableContext items={group.map((surface) => surface.id)} strategy={verticalListSortingStrategy}>
           {group.map((surface) => {
             orderNumber += 1;
@@ -500,7 +500,7 @@ export const ContextPanelRail: React.FC = () => {
         ))}
       </DndContext>
       </ScrollShadow>
-      <ScrollShadowBands surface="var(--background)" size={RAIL_SCROLL_FADE_PX} />
+      <ScrollShadowBands surface="var(--sidebar)" size={RAIL_SCROLL_FADE_PX} />
       </div>
       <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
         <TooltipTrigger asChild>
@@ -508,7 +508,7 @@ export const ContextPanelRail: React.FC = () => {
             type="button"
             aria-label={t('contextRail.configure.open')}
             onClick={() => setIsSurfacesDialogOpen(true)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+            className="flex h-8 w-8 items-center justify-center rounded-[10px] text-muted-foreground transition-colors duration-150 hover:bg-interactive-hover hover:text-foreground"
           >
             <Icon name="list-settings" className="h-[17px] w-[17px]" />
           </button>

@@ -90,13 +90,13 @@ export const imageOutputs = async () => {
     [at('packages/web/public/pwa-maskable-192.png'), await composeOnSquare({
       png: await iconPng(192),
       size: 192,
-      background: { r: 8, g: 9, b: 10, alpha: 1 },
+      background: { r: 9, g: 9, b: 11, alpha: 1 },
       inset: 0,
     })],
     [at('packages/web/public/pwa-maskable-512.png'), await composeOnSquare({
       png: await iconPng(512),
       size: 512,
-      background: { r: 8, g: 9, b: 10, alpha: 1 },
+      background: { r: 9, g: 9, b: 11, alpha: 1 },
       inset: 0,
     })],
     [at('packages/web/public/apple-touch-icon.png'), await iconPng(180)],
@@ -113,7 +113,7 @@ export const imageOutputs = async () => {
     [at('packages/desktop/src-tauri/icons/installer-sidebar.bmp'), await encodeBmp(await svgToPngSize(installerSidebarSvg(), 164, 314))],
     [at('packages/desktop/src-tauri/icons/icon.ico'), encodeIco(icoEntries)],
     [at('packages/vscode/assets/app-icon.png'), await iconPng(256)],
-    [at('packages/mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png'), await flattenTo(await iconPng(1024), { r: 8, g: 9, b: 10, alpha: 1 })],
+    [at('packages/mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png'), await flattenTo(await iconPng(1024), { r: 9, g: 9, b: 11, alpha: 1 })],
   ];
 
   const android = [
@@ -137,7 +137,7 @@ export const imageOutputs = async () => {
       png: await svgToPng(flatLogoSvg({ size, color: SPLEEN_INK }), size),
       width,
       height,
-      background: { r: 8, g: 9, b: 10, alpha: 1 },
+      background: { r: 9, g: 9, b: 11, alpha: 1 },
     });
   };
   const iosSplashDir = 'packages/mobile/ios/App/App/Assets.xcassets/Splash.imageset';

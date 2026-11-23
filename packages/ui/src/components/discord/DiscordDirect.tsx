@@ -40,7 +40,7 @@ export const DiscordDirect: React.FC<{
           type="button"
           title="Start Direct Message"
           onClick={() => setShowNewDm((v) => !v)}
-          className="rounded p-1 text-muted-foreground transition hover:bg-[#171B1D] hover:text-foreground"
+          className="rounded-lg p-1 text-muted-foreground transition hover:bg-interactive-hover hover:text-foreground"
         >
           <RiUserAddLine className="h-3.5 w-3.5" />
         </button>
@@ -52,12 +52,12 @@ export const DiscordDirect: React.FC<{
             onChange={(e) => setNewUserId(e.target.value)}
             placeholder="Discord User ID…"
             autoFocus
-            className="min-w-0 flex-1 rounded border border-border/70 bg-[#08090A] px-2 py-1 text-[11px] text-foreground outline-none focus:border-foreground/50"
+            className="oc-raised oc-field min-w-0 flex-1 rounded-lg px-2.5 py-1 text-[11px] text-foreground outline-none focus:border-foreground/50"
           />
           <button
             type="submit"
             disabled={creating || !newUserId.trim()}
-            className="shrink-0 rounded bg-primary px-2 py-1 text-[10px] font-medium text-primary-foreground disabled:opacity-50"
+            className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[10px] font-medium text-primary-foreground disabled:opacity-45"
           >
             Go
           </button>
@@ -72,8 +72,8 @@ export const DiscordDirect: React.FC<{
               key={dm.id}
               type="button"
               onClick={() => onSelect(dm)}
-              className={`flex w-full shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition ${
-                active ? 'bg-[#171B1D] font-medium text-foreground' : 'text-muted-foreground hover:bg-[#111416] hover:text-foreground'
+              className={`flex w-full shrink-0 items-center gap-2 rounded-[10px] px-2 py-1.5 text-start text-xs transition ${
+                active ? 'bg-interactive-selection font-medium text-foreground' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
               }`}
             >
               <DiscordAvatar user={peer} name={dm.name} size={24} />

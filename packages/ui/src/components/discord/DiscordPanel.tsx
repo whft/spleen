@@ -302,10 +302,10 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
       }}
     >
       {/* Column 1: Server Rail (strictly non-squishable fixed-square icons) */}
-      <div className="flex w-[62px] shrink-0 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden border-r border-border/60 bg-[#0B0D0F] py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex w-[62px] shrink-0 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden border-e border-edge-muted bg-sidebar py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="relative flex w-full shrink-0 items-center justify-center">
           <span
-            className={`absolute left-0 w-1 rounded-r-full bg-[#F1F2EF] transition-all ${
+            className={`absolute start-0 w-1 rounded-e-full bg-foreground transition-all ${
               selectedGuildId === '__dms__' ? 'h-6 opacity-100' : 'h-0 opacity-0'
             }`}
           />
@@ -316,15 +316,15 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
             style={{ width: 40, height: 40, minWidth: 40, minHeight: 40 }}
             className={`flex aspect-square shrink-0 items-center justify-center border transition-all ${
               selectedGuildId === '__dms__'
-                ? 'rounded-[12px] border-foreground/40 bg-[#E5E8E3] text-[#08090A]'
-                : 'rounded-[20px] border-border/70 bg-[#171B1D] text-foreground/85 hover:rounded-[12px] hover:border-foreground/30 hover:text-foreground'
+                ? 'rounded-[12px] border-foreground/40 bg-primary text-primary-foreground'
+                : 'rounded-[20px] border-edge bg-surface-elevated text-foreground/85 hover:rounded-[12px] hover:border-border-hover hover:text-foreground'
             }`}
           >
             <Icon name="discord" className="h-5 w-5 shrink-0" />
           </button>
         </div>
 
-        <div className="h-px w-7 shrink-0 bg-border/70" />
+        <div className="h-px w-7 shrink-0 bg-edge-muted" />
 
         {guilds.map((g) => {
           const active = selectedGuildId === g.id;
@@ -339,7 +339,7 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
           return (
             <div key={g.id} className="group/guild relative flex w-full shrink-0 items-center justify-center">
               <span
-                className={`absolute left-0 w-1 rounded-r-full bg-[#F1F2EF] transition-all ${
+                className={`absolute start-0 w-1 rounded-e-full bg-foreground transition-all ${
                   active ? 'h-6 opacity-100' : 'h-0 opacity-0 group-hover/guild:h-3 group-hover/guild:opacity-60'
                 }`}
               />
@@ -348,10 +348,10 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
                 title={g.name}
                 onClick={() => setSelectedGuildId(g.id)}
                 style={{ width: 40, height: 40, minWidth: 40, minHeight: 40 }}
-                className={`relative flex aspect-square shrink-0 items-center justify-center overflow-hidden border bg-[#171B1D] transition-all ${
+                className={`relative flex aspect-square shrink-0 items-center justify-center overflow-hidden border bg-surface-elevated transition-all ${
                   active
-                    ? 'rounded-[12px] border-[#E5E8E3]/70 ring-1 ring-[#E5E8E3]/30'
-                    : 'rounded-[20px] border-border/60 hover:rounded-[12px] hover:border-foreground/35'
+                    ? 'rounded-[12px] border-foreground/60 ring-1 ring-foreground/25'
+                    : 'rounded-[20px] border-edge hover:rounded-[12px] hover:border-border-hover'
                 }`}
               >
                 {showImg ? (
@@ -389,12 +389,12 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
 
       {/* Column 2: Channels / DMs */}
       {showChannels ? (
-        <div className="flex w-48 shrink-0 flex-col border-r border-border/60 bg-[#0B0D0F]/80">
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2.5 py-2 text-xs font-semibold">
+        <div className="flex w-48 shrink-0 flex-col border-e border-edge-muted bg-sidebar/90">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge-muted px-2.5 py-2 text-xs font-semibold">
             <span className="truncate">{selectedGuildId === '__dms__' ? t('discord.directMessages') : (activeGuild?.name ?? 'Server')}</span>
             <span className="flex items-center gap-1.5 shrink-0">
               <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.gatewayConnected ? 'bg-[var(--spleen-accent,#C8FA62)]' : 'bg-muted-foreground/40'}`}
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.gatewayConnected ? 'bg-[var(--status-success)]' : 'bg-muted-foreground/40'}`}
                 title={status.gatewayConnected ? 'Gateway connected' : 'Gateway disconnected'}
               />
               <Icon name="discord" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -421,14 +421,14 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
             )}
           </div>
           {status.user ? (
-            <div className="flex shrink-0 items-center gap-2 border-t border-border/60 bg-[#08090A] px-2.5 py-2">
+            <div className="flex shrink-0 items-center gap-2 border-t border-edge-muted bg-sidebar px-2.5 py-2">
               <DiscordAvatar user={status.user} size={26} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[11px] font-semibold text-foreground">
                   {status.user.globalName || status.user.username}
                 </div>
                 <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground">
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${status.gatewayConnected ? 'bg-[#C8FA62]' : 'bg-muted-foreground/40'}`} />
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${status.gatewayConnected ? 'bg-[var(--status-success)]' : 'bg-muted-foreground/40'}`} />
                   <span className="truncate">{status.gatewayConnected ? 'LIVE' : 'REST'}</span>
                 </div>
               </div>
@@ -440,13 +440,13 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
       {/* Column 3: Messages + Composer + Right Drawer */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top Channel Bar */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-[#0B0D0F]/60 px-3 py-2 text-xs">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge-muted bg-sidebar/60 px-3 py-2 text-xs">
           <div className="min-w-0 flex items-center gap-2">
             <button
               type="button"
               onClick={() => setShowChannels((v) => !v)}
               title={showChannels ? 'Hide channels' : 'Show channels'}
-              className="shrink-0 rounded p-1 text-muted-foreground transition hover:bg-[#171B1D] hover:text-foreground"
+              className="shrink-0 rounded-lg p-1 text-muted-foreground transition hover:bg-interactive-hover hover:text-foreground"
             >
               <RiLayoutLeftLine className="h-3.5 w-3.5" />
             </button>
@@ -534,10 +534,10 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
                 return (
                   <div
                     key={msg.id}
-                    className={`group relative rounded px-1.5 py-0.5 hover:bg-muted/40 ${grouped ? 'pl-11' : 'pt-2'}`}
+                    className={`group relative rounded px-1.5 py-0.5 hover:bg-muted/40 ${grouped ? 'ps-11' : 'pt-2'}`}
                   >
                     {msg.referencedMessage ? (
-                      <div className="mb-0.5 flex items-center gap-1.5 pl-11 text-[11px] text-muted-foreground">
+                      <div className="mb-0.5 flex items-center gap-1.5 ps-11 text-[11px] text-muted-foreground">
                         <RiReplyLine className="h-3 w-3" />
                         <span className="font-medium">{msg.referencedMessage.author?.username || 'user'}:</span>
                         <span className="truncate">{msg.referencedMessage.content}</span>
@@ -574,7 +574,7 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
                       />
                     )}
 
-                    <div className={!grouped ? 'pl-[42px]' : ''}>
+                    <div className={!grouped ? 'ps-[42px]' : ''}>
                       <DiscordAttachmentList
                         attachments={msg.attachments}
                         onPreviewImage={(url, alt) => setLightboxImage({ url, alt })}
@@ -606,7 +606,7 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
                     </div>
 
                     {/* Hover action toolbar */}
-                    <div className="absolute right-2 top-0.5 hidden items-center gap-0.5 rounded border border-border bg-card px-1 py-0.5 shadow-sm group-hover:flex">
+                    <div className="absolute end-2 top-0.5 hidden items-center gap-0.5 rounded border border-border bg-card px-1 py-0.5 shadow-sm group-hover:flex">
                       <button
                         type="button"
                         title="Reply"
@@ -735,7 +735,7 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
 
           {/* Right Drawer */}
           {rightDrawer !== 'none' ? (
-            <div className="w-56 shrink-0 border-l border-border/60 bg-card/30">
+            <div className="w-56 shrink-0 border-s border-border/60 bg-card/30">
               {rightDrawer === 'members' ? <DiscordMembers members={members} roles={roles} /> : null}
               {rightDrawer === 'threads' ? (
                 <DiscordThreads

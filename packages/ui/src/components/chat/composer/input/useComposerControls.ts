@@ -102,9 +102,9 @@ export function useComposerControls({
 
     const footerGapClass = 'gap-x-1.5 gap-y-0';
 
-    const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
+    const footerPaddingClass = isMobile ? 'px-2 py-2' : (isVSCode ? 'px-1.5 py-1' : 'px-3.5 py-2.5');
 
-    const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
+    const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-7 w-7');
 
     const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
 
@@ -115,7 +115,7 @@ export function useComposerControls({
     // and of the send arrow, so the footer's glyphs read as one row.
     const iconSizeClass = isMobile ? 'h-[18px] w-[18px]' : 'h-4 w-4';
 
-    const iconButtonBaseClass = 'flex cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed';
+    const iconButtonBaseClass = 'flex cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover hover:text-foreground transition-colors duration-150 outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed';
 
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
 

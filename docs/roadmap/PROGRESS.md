@@ -143,25 +143,20 @@ Found only by running the compiled sidecar, each fixed at the cause:
 
 ## In progress
 
-- Clean-install smoke test of the produced NSIS installer (build exists, install
-  not yet run).
-- Parity of the Tauri bridge commands still marked
-  `not_implemented_in_tauri` (multi-window, mini chat, browser panel, SSH,
-  open-in-app).
+- Tauri Windows browser-automation provider (`browser-control/provider.js`) for full `spleen_web` agent DOM/screenshot parity without Electron's `<webview>`.
+- Clean-machine install/upgrade/uninstall verification on a non-dev Windows 11 machine.
 
-## Not started
+## Done (2026-11-20 .. 2026-11-22)
 
-- Data migration wizard from an existing OpenChamber/OpenCode install.
-- Version alignment: the app reports `0.1.0` in Tauri but `2.7.2` in the web
-  package and `spleenVersion` in health.
+- **Signed releases & version alignment**: Aligned manifests across root, `packages/web`, `packages/ui`, `packages/desktop`, `tauri.conf.json`, and `Cargo.toml`; generated Tauri updater keypair outside the repo (`%USERPROFILE%\.spleen-signing\`); published signed public GitHub Releases (`v1.0.0`, `v1.1.0`) on `whft/spleen` with verified `latest.json`.
+- **Tauri bridge parity**: Implemented multi-window (`desktop_new_window*`), mini-chat windows, native popout browser (`desktop_open_browser_window`), UnknownCheats verification bridge (`desktop_uc_*`), OpenSSH tunnel manager (`ssh.rs`, all 8 `desktop_ssh_*` commands), LAN binding (`0.0.0.0:3721`), remote host persistence fix + `desktop_host_probe` / `desktop_remote_password_login` / `desktop_switch_to_local`, and favicon fetching.
+- **OpenCode Zen usage auto-continue**: Scoped automatic usage-limit `Continue.` to OpenCode Zen/Go (`opencode`, `opencode-zen`, `opencode-go`), eliminated the subagent `waiting_parent` deadlock while parents run, added stopped-session discovery, and verified 63/63 tests across `session-recovery` and `limit-failover`.
+- **AI Teams & Project Agents**: Workspace picker, custom per-member agents/models, `.opencode/agents/*.md` CRUD + Recruit, functional `TeamExecutionGraph`, cancellation abort, transitive `blocked` dependency propagation, `@lead` escalation, and auto-unblock on retry (7/7 tests passing).
+- **UI cleanup**: Removed decorative 3D rings, floor circles, wireframe slabs, and spinning constellation objects from Welcome, About, and Teams; updated stale Electron references in `AGENTS.md`, `CONTRIBUTING.md`, and `README.md`; recorded full audit in `docs/audit/PRODUCT_AUDIT_2026.md`.
 
 ## Blockers / owner actions
 
-- Tauri updater `pubkey` is `REPLACE_WITH_SPLEEN_UPDATER_PUBKEY`. The owner must
-  generate the keypair and keep the private key out of the repo. Until then
-  `desktop:build` cannot finish and no updater artifact can be trusted.
-- No Windows code-signing certificate; signed release and upgrade tests cannot
-  be claimed without it.
+- No Windows Authenticode code-signing certificate yet; SmartScreen will warn on third-party machines until signed.
 - The bundled OpenCode server and an already-installed OpenCode desktop can read
   the same user data store. Not yet evaluated for lock contention; treat as a
   product risk until measured.

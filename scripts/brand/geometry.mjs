@@ -77,13 +77,13 @@ export const FLAT_LOGO = {
 };
 
 // Tight viewBox around the mark, for slots that need it to fill the box:
-// 24 units of padding around the sculpted blades (x 246..754, y 172..828).
-export const SPLEEN_MARK_VIEWBOX = '222 148 556 704';
+// 24 units of padding around the keystone fold mark (x 240..760, y 156..844).
+export const SPLEEN_MARK_VIEWBOX = '216 132 568 736';
 
-// Bounds of the master monogram: x 246..754 (width 508), y 172..828 (height 656),
+// Bounds of the master monogram: x 240..760 (width 520), y 156..844 (height 688),
 // centered at (500, 500). Scaled to 21.6 units tall inside a 24-unit icon box.
-const MARK_BOX = { left: 246, top: 172, width: 508, height: 656 };
-const ICON_SCALE = 0.0329;
+const MARK_BOX = { left: 240, top: 156, width: 520, height: 688 };
+const ICON_SCALE = 0.0314;
 const ICON_OFFSET = {
   x: (24 - MARK_BOX.width * ICON_SCALE) / 2 - MARK_BOX.left * ICON_SCALE,
   y: (24 - MARK_BOX.height * ICON_SCALE) / 2 - MARK_BOX.top * ICON_SCALE,
@@ -182,19 +182,19 @@ const installerMark = (scale, x, y) => (
 /** NSIS header strip, 150x57. */
 export const installerHeaderSvg = () => (
   '<svg width="150" height="57" viewBox="0 0 150 57" xmlns="http://www.w3.org/2000/svg">'
-  + '<rect width="150" height="57" fill="#08090A"/>'
+  + '<rect width="150" height="57" fill="#09090B"/>'
   + installerMark(0.056, 4.5, 0.5)
-  + '<text x="53" y="34" font-family="Geist Variable, Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="2.8" fill="#F1F2EF">SPLEEN</text>'
+  + '<text x="53" y="34" font-family="Geist Variable, Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="2.8" fill="#FAFAFA">SPLEEN</text>'
   + '</svg>'
 );
 
 /** NSIS welcome and finish panel, 164x314. */
 export const installerSidebarSvg = () => (
   '<svg width="164" height="314" viewBox="0 0 164 314" xmlns="http://www.w3.org/2000/svg">'
-  + '<rect width="164" height="314" fill="#08090A"/>'
+  + '<rect width="164" height="314" fill="#09090B"/>'
   + installerMark(0.189, -12.5, 11.5)
-  + '<text x="82" y="218" text-anchor="middle" font-family="Geist Variable, Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="650" letter-spacing="4" fill="#F1F2EF">SPLEEN</text>'
-  + '<text x="82" y="242" text-anchor="middle" font-family="Geist Variable, Segoe UI, Inter, Arial, sans-serif" font-size="9" letter-spacing="1.4" fill="#959D9C">AI coding workspace</text>'
+  + '<text x="82" y="218" text-anchor="middle" font-family="Geist Variable, Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="4" fill="#FAFAFA">SPLEEN</text>'
+  + '<text x="82" y="242" text-anchor="middle" font-family="Geist Variable, Segoe UI, Inter, Arial, sans-serif" font-size="9" letter-spacing="1.4" fill="#90969E">AI studio workspace</text>'
   + '</svg>'
 );
 

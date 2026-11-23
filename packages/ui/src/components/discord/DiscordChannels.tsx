@@ -35,9 +35,9 @@ export const DiscordChannels: React.FC<{
         <button
           type="button"
           onClick={() => onSelect(ch)}
-          className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${
-            nested ? 'pl-5' : ''
-          } ${active ? 'bg-[#171B1D] font-medium text-foreground' : 'text-muted-foreground hover:bg-[#111416] hover:text-foreground'}`}
+          className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-start text-xs transition ${
+            nested ? 'ps-5' : ''
+          } ${active ? 'bg-interactive-selection font-medium text-foreground' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'}`}
         >
           <ChannelIcon type={ch.type} nsfw={ch.nsfw} />
           <span className="truncate">{ch.name}</span>
@@ -47,8 +47,8 @@ export const DiscordChannels: React.FC<{
             key={th.id}
             type="button"
             onClick={() => onSelect(th)}
-            className={`flex w-full items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-left text-[11px] transition ${
-              th.id === activeChannelId ? 'bg-[#171B1D] font-medium text-foreground' : 'text-muted-foreground hover:bg-[#111416] hover:text-foreground'
+            className={`flex w-full items-center gap-1.5 rounded-md py-1 ps-7 pe-2 text-start text-[11px] transition ${
+              th.id === activeChannelId ? 'bg-interactive-selection font-medium text-foreground' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
             }`}
           >
             <span className="shrink-0 text-muted-foreground/70">↳</span>
@@ -66,7 +66,7 @@ export const DiscordChannels: React.FC<{
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter channels…"
-          className="w-full rounded-md border border-border/70 bg-[#08090A] px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus:border-foreground/50"
+          className="w-full rounded-lg border border-edge bg-background px-2.5 py-1 text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus:border-border-focus"
         />
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-1.5 pb-2">
@@ -80,7 +80,7 @@ export const DiscordChannels: React.FC<{
               <button
                 type="button"
                 onClick={() => toggleCategory(cat.id)}
-                className="flex w-full items-center gap-1 px-1.5 pt-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                className="flex w-full items-center gap-1 px-1.5 pt-1 text-start text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
               >
                 <span className="inline-block w-3 text-center text-[9px]">{collapsed ? '▸' : '▾'}</span>
                 <span className="truncate">{cat.name}</span>

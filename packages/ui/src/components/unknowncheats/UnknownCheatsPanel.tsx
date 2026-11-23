@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
+import { ContextPanelHeaderToolbar } from '@/components/layout/contextPanelHeaderSlot';
 import { toast } from '@/components/ui/toast';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -31,7 +32,7 @@ const UcSpoilerBlock: React.FC<{ title: string; text: string }> = ({ title, text
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-2.5 py-1.5 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center justify-between px-2.5 py-1.5 text-start text-[11px] font-medium text-muted-foreground hover:text-foreground"
       >
         <span>{title || 'Spoiler'}</span>
         <span className="font-mono text-[10px]">{open ? 'HIDE' : 'SHOW'}</span>
@@ -72,8 +73,8 @@ const UcCodeBlock: React.FC<{
   };
 
   return (
-    <div className="my-2 overflow-hidden rounded-md border border-border/80 bg-[#08090A]">
-      <div className="flex items-center justify-between border-b border-border/70 bg-[#111416] px-2.5 py-1">
+    <div className="my-2 overflow-hidden rounded-xl border border-edge-muted bg-sidebar">
+      <div className="flex items-center justify-between border-b border-edge-muted bg-surface-elevated px-2.5 py-1.5">
         <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
           {language || 'code'} · {code.split('\n').length} lines
         </span>
@@ -81,14 +82,14 @@ const UcCodeBlock: React.FC<{
           <button
             type="button"
             onClick={() => void handleCopy()}
-            className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            className="rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
           >
             Copy
           </button>
           <button
             type="button"
             onClick={handleSendToAi}
-            className="rounded border border-border/80 bg-[#171B1D] px-2 py-0.5 text-[10px] font-medium text-foreground hover:bg-muted/70"
+            className="rounded-md border border-edge-muted bg-surface-subtle px-2 py-0.5 text-[10px] font-medium text-foreground hover:bg-interactive-hover"
           >
             {t('uc.action.analyzeCode')}
           </button>
@@ -495,7 +496,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
 
   const renderLoginBox = (compact = false) => (
     <div className="space-y-3">
-      <form onSubmit={(e) => void handleDirectLogin(e)} className="space-y-2">
+      <form onSubmit={(e) => void handleDirectLogin(e)} className="space-y-2.5">
         <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
           UnknownCheats Account Login
         </div>
@@ -505,7 +506,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
             onChange={(e) => setLoginUsername(e.target.value)}
             placeholder="UC Username"
             autoComplete="username"
-            className="rounded-md border border-border bg-[#08090A] px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
+            className="oc-raised oc-field rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
           />
           <input
             type="password"
@@ -513,17 +514,23 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
             onChange={(e) => setLoginPassword(e.target.value)}
             placeholder="Password"
             autoComplete="current-password"
-            className="rounded-md border border-border bg-[#08090A] px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
+            className="oc-raised oc-field rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" size="sm" disabled={loggingIn || !loginUsername.trim() || !loginPassword}>
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <Button
+            type="submit"
+            size="sm"
+            disabled={loggingIn || !loginUsername.trim() || !loginPassword}
+            className="rounded-full px-4"
+          >
             {loggingIn ? 'Signing in…' : 'Sign In'}
           </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
+            className="rounded-full"
             onClick={() => void handleOpenVerificationWindow(gate?.url || 'https://www.unknowncheats.me/forum/login.php')}
           >
             Interactive Browser Login
@@ -532,6 +539,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
             type="button"
             size="sm"
             variant="outline"
+            className="rounded-full"
             disabled={syncingCookies}
             onClick={() => void handleSyncVerificationCookies()}
           >
@@ -547,21 +555,21 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
     return (
       <div
         key={`${thread.id}-${thread.url}`}
-        className="group flex items-start justify-between gap-2 rounded-md border border-border/60 bg-[#111416] px-3 py-2 transition-colors hover:border-border hover:bg-[#171B1D]"
+        className="group flex items-start justify-between gap-2 rounded-xl border border-edge-muted bg-surface-elevated px-3 py-2.5 transition-colors hover:border-border hover:bg-interactive-hover"
       >
         <button
           type="button"
           onClick={() => void openThread({ tid: /^\d+$/.test(thread.id) ? thread.id : undefined, url: thread.url })}
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 flex-1 text-start"
         >
           <div className="flex flex-wrap items-center gap-1.5">
             {thread.sticky ? (
-              <span className="rounded border border-border/80 bg-[#171B1D] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+              <span className="rounded-full border border-edge-muted bg-surface-subtle px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
                 Sticky
               </span>
             ) : null}
             {thread.prefix ? (
-              <span className="rounded border border-border/80 bg-[#08090A] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-foreground/85">
+              <span className="rounded-full border border-edge-muted bg-sidebar px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-foreground/85">
                 {thread.prefix}
               </span>
             ) : null}
@@ -569,7 +577,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
               {thread.title}
             </span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] text-muted-foreground tabular-nums">
             {thread.author ? <span>by {thread.author}</span> : null}
             {thread.replies ? <span>· {thread.replies} replies</span> : null}
             {thread.views ? <span>· {thread.views} views</span> : null}
@@ -581,8 +589,8 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
             onClick={() => void toggleBookmark({ id: thread.id, title: thread.title, url: thread.url, forum: activeForum?.title ?? null })}
             title={saved ? 'Remove bookmark' : 'Bookmark thread'}
             className={cn(
-              'rounded px-1.5 py-1 text-[11px] transition-colors',
-              saved ? 'bg-[#171B1D] text-foreground' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+              'rounded-lg px-1.5 py-1 text-[11px] transition-colors',
+              saved ? 'bg-interactive-selection text-foreground' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
             )}
           >
             <Icon name="book-marked" className="size-3.5" />
@@ -610,7 +618,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
       return (
         <blockquote
           key={`${post.id}-quote-${idx}`}
-          className="my-1.5 rounded-r border-l-2 border-border bg-[#0B0D0F] px-3 py-1.5 text-[11px] text-muted-foreground"
+          className="my-1.5 rounded-e-lg border-s-2 border-border bg-sidebar px-3 py-1.5 text-[11px] text-muted-foreground"
         >
           {block.author ? <div className="mb-0.5 font-mono text-[10px] text-foreground/80">{block.author} wrote:</div> : null}
           <div className="whitespace-pre-wrap">{block.text}</div>
@@ -626,7 +634,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
           <button
             type="button"
             onClick={() => setLightboxSrc(block.src)}
-            className="overflow-hidden rounded border border-border/70 bg-[#08090A] hover:border-foreground/40"
+            className="overflow-hidden rounded-xl border border-edge-muted bg-sidebar hover:border-foreground/40"
           >
             <img src={block.src} alt="" loading="lazy" className="max-h-64 max-w-full object-contain" />
           </button>
@@ -649,13 +657,46 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
         : 'SIGN IN';
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#08090A] text-foreground">
-      {/* Top Bar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-[#0B0D0F] px-3 py-2">
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="mr-1.5 inline-flex items-center gap-1.5 text-xs font-semibold tracking-tight text-foreground">
+    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+      <ContextPanelHeaderToolbar>
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-1">
+          <div className="flex min-w-0 items-center gap-2">
             <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
-          </span>
+            <span className="truncate typography-ui-label font-medium text-foreground">UnknownCheats</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setTab('session')}
+              title="UnknownCheats Account & Verification"
+              className="inline-flex h-7 items-center gap-1.5 rounded-full border border-edge-muted bg-surface-elevated px-2.5 font-mono text-[10px] text-foreground/90 transition-colors hover:border-border hover:bg-interactive-hover"
+            >
+              <span
+                className={cn(
+                  'inline-block size-1.5 rounded-full',
+                  status?.loggedIn || status?.hasCookies ? 'bg-[var(--status-success)]' : 'bg-muted-foreground/50',
+                )}
+              />
+              {sessionBadgeLabel}
+            </button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 rounded-full"
+              onClick={retryActiveView}
+              disabled={loading}
+              title="Refresh"
+            >
+              <Icon name="refresh" className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      </ContextPanelHeaderToolbar>
+
+      {/* Studio Navigation & Quick Search */}
+      <div className="flex shrink-0 flex-col gap-2 border-b border-edge-muted bg-sidebar/60 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1">
           {(
             [
               { id: 'home', label: t('uc.nav.home') },
@@ -679,10 +720,10 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                 }
               }}
               className={cn(
-                'rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
+                'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
                 tab === item.id
-                  ? 'bg-[#E5E8E3] text-[#08090A]'
-                  : 'text-muted-foreground hover:bg-[#171B1D] hover:text-foreground',
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground',
               )}
             >
               {item.label}
@@ -690,68 +731,46 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
           ))}
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setTab('session')}
-            title="UnknownCheats Account & Verification"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-[#111416] px-2 py-1 font-mono text-[10px] text-foreground/90 hover:border-border"
-          >
-            <span
-              className={cn(
-                'inline-block size-1.5 rounded-full',
-                status?.loggedIn || status?.hasCookies ? 'bg-[#C8FA62]' : 'bg-muted-foreground/50',
-              )}
-            />
-            {sessionBadgeLabel}
-          </button>
-          <button
-            type="button"
-            onClick={retryActiveView}
-            disabled={loading}
-            title="Refresh"
-            className="rounded-md border border-border/70 bg-[#111416] p-1 text-muted-foreground hover:border-border hover:text-foreground disabled:opacity-40"
-          >
-            <Icon name="refresh" className="size-3.5" />
-          </button>
-        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runSearch(searchQuery, 1);
+          }}
+          className="oc-raised oc-field flex h-8 w-full items-center gap-2 rounded-full px-3"
+        >
+          <Icon name="search" className="size-3.5 shrink-0 text-muted-foreground" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('uc.search.placeholder')}
+            className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none"
+          />
+          {searchQuery.trim() ? (
+            <button
+              type="submit"
+              className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground"
+            >
+              Go
+            </button>
+          ) : null}
+        </form>
       </div>
 
-      {/* Quick Search Bar */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void runSearch(searchQuery, 1);
-        }}
-        className="flex shrink-0 items-center gap-1.5 border-b border-border/60 bg-[#0B0D0F] px-3 py-1.5"
-      >
-        <Icon name="search" className="size-3.5 shrink-0 text-muted-foreground" />
-        <input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t('uc.search.placeholder')}
-          className="min-w-0 flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
-        />
-        {searchQuery.trim() ? (
-          <Button type="submit" size="sm" variant="secondary" className="h-6 px-2 text-[11px]">
-            {t('uc.nav.search')}
-          </Button>
-        ) : null}
-      </form>
-
       {/* Main Content Area */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
         {gate && tab !== 'session' ? (
-          <div className="mx-auto my-4 max-w-lg space-y-3 rounded-lg border border-border bg-[#111416] p-4">
-            <div className="flex items-center gap-2">
-              <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">{t('uc.gate.title')}</h3>
+          <div className="mx-auto my-4 max-w-lg space-y-3.5 rounded-2xl border border-edge-muted bg-surface-elevated p-5 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-edge-muted bg-surface-subtle">
+                <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
+              </div>
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">{t('uc.gate.title')}</h3>
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {gate.info.message || t('uc.gate.subtitle')}
             </p>
             {renderLoginBox(true)}
-            <div className="border-t border-border/60 pt-3">
+            <div className="border-t border-edge-muted pt-3.5">
               <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 Or paste Cookie header manually (cf_clearance / bb_userid / bb_sessionhash)
               </div>
@@ -760,9 +779,9 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                   value={cookieInput}
                   onChange={(e) => setCookieInput(e.target.value)}
                   placeholder="cf_clearance=...; bb_userid=...; bb_password=..."
-                  className="min-w-0 flex-1 rounded-md border border-border bg-[#08090A] px-2.5 py-1 font-mono text-[11px] text-foreground focus:border-foreground focus:outline-none"
+                  className="oc-raised oc-field min-w-0 flex-1 rounded-xl px-2.5 py-1.5 font-mono text-[11px] text-foreground focus:border-foreground focus:outline-none"
                 />
-                <Button type="button" size="sm" variant="secondary" onClick={() => void handleSaveManualCookies()}>
+                <Button type="button" size="sm" variant="secondary" className="rounded-full px-3" onClick={() => void handleSaveManualCookies()}>
                   Save
                 </Button>
               </div>
@@ -771,14 +790,14 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
         ) : null}
 
         {error ? (
-          <div className="mb-3 rounded-md border border-border bg-[#111416] p-3 text-xs text-muted-foreground">
+          <div className="mb-3 rounded-xl border border-edge-muted bg-surface-elevated p-3.5 text-xs text-muted-foreground">
             <div className="font-medium text-foreground">Request error</div>
             <div className="mt-0.5">{error}</div>
-            <div className="mt-2 flex gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={retryActiveView}>
+            <div className="mt-2.5 flex gap-2">
+              <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={retryActiveView}>
                 Retry
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => void handleOpenVerificationWindow()}>
+              <Button type="button" size="sm" variant="ghost" className="rounded-full" onClick={() => void handleOpenVerificationWindow()}>
                 {t('uc.action.openVerification')}
               </Button>
             </div>
@@ -800,7 +819,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                 value={forumFilter}
                 onChange={(e) => setForumFilter(e.target.value)}
                 placeholder="Filter subforums…"
-                className="w-48 rounded border border-border/70 bg-[#111416] px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
+                className="oc-raised oc-field w-48 rounded-lg px-2.5 py-1 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
               />
             </div>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -815,10 +834,10 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                       title: f.title,
                     })
                   }
-                  className="flex items-center justify-between rounded-md border border-border/60 bg-[#111416] px-3 py-2 text-left transition-colors hover:border-border hover:bg-[#171B1D]"
+                  className="flex items-center justify-between rounded-xl border border-edge-muted bg-surface-elevated px-3 py-2 text-start transition-colors hover:border-border hover:bg-interactive-hover"
                 >
                   <span className="truncate text-xs font-medium text-foreground">{f.title}</span>
-                  <span className="ml-2 shrink-0 font-mono text-[10px] text-muted-foreground">#{f.id}</span>
+                  <span className="ms-2 shrink-0 font-mono text-[10px] text-muted-foreground">#{f.id}</span>
                 </button>
               ))}
             </div>
@@ -915,11 +934,11 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
         {/* THREAD READER VIEW */}
         {!loading && !gate && tab === 'thread' && activeThread ? (
           <div className="space-y-3">
-            <div className="rounded-lg border border-border/80 bg-[#111416] p-3">
+            <div className="rounded-2xl border border-edge-muted bg-surface-elevated p-3.5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <h2 className="text-sm font-semibold leading-snug text-foreground">{activeThread.title}</h2>
-                  <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                  <div className="mt-1 font-mono text-[10px] text-muted-foreground tabular-nums">
                     Page {activeThread.page} of {activeThread.totalPages} · {activeThread.posts.length} posts
                   </div>
                 </div>
@@ -928,10 +947,10 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                     type="button"
                     onClick={() => setCodeOnly((v) => !v)}
                     className={cn(
-                      'rounded-md border px-2 py-1 font-mono text-[10px] transition-colors',
+                      'rounded-full border px-2.5 py-1 font-mono text-[10px] transition-colors',
                       codeOnly
-                        ? 'border-foreground bg-[#E5E8E3] text-[#08090A]'
-                        : 'border-border/80 bg-[#171B1D] text-muted-foreground hover:text-foreground',
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-edge-muted bg-surface-subtle text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {t('uc.action.codeOnly')}
@@ -939,7 +958,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                   <button
                     type="button"
                     onClick={handleSendFullThreadToAi}
-                    className="rounded-md border border-border/80 bg-[#E5E8E3] px-2.5 py-1 text-[11px] font-medium text-[#08090A] hover:opacity-90"
+                    className="rounded-full bg-primary px-3 py-1 text-[11px] font-medium text-primary-foreground hover:opacity-90"
                   >
                     {t('uc.action.sendThreadToAi')}
                   </button>
@@ -953,7 +972,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                         forum: activeForum?.title ?? null,
                       })
                     }
-                    className="rounded-md border border-border/80 bg-[#171B1D] px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    className="rounded-full border border-edge-muted bg-surface-subtle px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground"
                   >
                     {isBookmarked(activeThread.id) || isBookmarked(activeThread.url) ? 'Saved' : 'Bookmark'}
                   </button>
@@ -961,7 +980,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                     type="button"
                     onClick={() => void openDesktopBrowserWindow(activeThread.url, activeThread.title)}
                     title="Open in Native Window"
-                    className="rounded-md border border-border/80 bg-[#171B1D] px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                    className="rounded-full border border-edge-muted bg-surface-subtle px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground"
                   >
                     Popout
                   </button>
@@ -969,14 +988,14 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
               </div>
 
               {activeThread.totalPages > 1 ? (
-                <div className="mt-2.5 flex items-center gap-1.5 border-t border-border/60 pt-2">
+                <div className="mt-2.5 flex items-center gap-1.5 border-t border-edge-muted pt-2">
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
                     disabled={activeThread.page <= 1}
                     onClick={() => void openThread({ tid: activeThread.id, url: activeThread.url, page: activeThread.page - 1 })}
-                    className="h-6 px-2 text-[11px]"
+                    className="h-6 rounded-full px-2.5 text-[11px]"
                   >
                     Prev Page
                   </Button>
@@ -986,7 +1005,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                     variant="outline"
                     disabled={activeThread.page >= activeThread.totalPages}
                     onClick={() => void openThread({ tid: activeThread.id, url: activeThread.url, page: activeThread.page + 1 })}
-                    className="h-6 px-2 text-[11px]"
+                    className="h-6 rounded-full px-2.5 text-[11px]"
                   >
                     Next Page
                   </Button>
@@ -1000,9 +1019,9 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                 .map((post) => (
                   <article
                     key={post.id}
-                    className="rounded-lg border border-border/70 bg-[#111416] p-3"
+                    className="rounded-2xl border border-edge-muted bg-surface-elevated p-3.5"
                   >
-                    <header className="mb-2 flex items-center justify-between border-b border-border/50 pb-1.5">
+                    <header className="mb-2 flex items-center justify-between border-b border-edge-muted pb-1.5">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-foreground">{post.author}</span>
                         {post.timestamp ? (
@@ -1017,11 +1036,11 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                               `From UnknownCheats "${activeThread.title}" (post #${post.number} by ${post.author}):\n\n${post.rawText}`,
                             )
                           }
-                          className="rounded border border-border/70 bg-[#171B1D] px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                          className="rounded-full border border-edge-muted bg-surface-subtle px-2.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
                         >
                           Ask AI
                         </button>
-                        <span className="font-mono text-[10px] text-muted-foreground">#{post.number}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground tabular-nums">#{post.number}</span>
                       </div>
                     </header>
                     <div>{post.blocks.map((b, i) => renderBlock(b, i, post, activeThread.title))}</div>
@@ -1060,12 +1079,12 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
               bookmarks.map((bm) => (
                 <div
                   key={bm.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-[#111416] px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-edge-muted bg-surface-elevated px-3 py-2"
                 >
                   <button
                     type="button"
                     onClick={() => void openThread({ tid: /^\d+$/.test(bm.id) ? bm.id : undefined, url: bm.url })}
-                    className="min-w-0 flex-1 text-left"
+                    className="min-w-0 flex-1 text-start"
                   >
                     <div className="truncate text-xs font-medium text-foreground">{bm.title}</div>
                     <div className="font-mono text-[10px] text-muted-foreground">{bm.forum || bm.url}</div>
@@ -1073,7 +1092,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                   <button
                     type="button"
                     onClick={() => void toggleBookmark(bm)}
-                    className="rounded px-2 py-1 text-[10px] text-muted-foreground hover:bg-[#171B1D] hover:text-foreground"
+                    className="rounded-lg px-2 py-1 text-[10px] text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
                   >
                     Remove
                   </button>
@@ -1092,7 +1111,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="h-6 px-2 text-[11px]"
+                  className="h-6 rounded-full px-2.5 text-[11px]"
                   onClick={() => void unknownCheatsApi.clearHistory().then(setHistory)}
                 >
                   Clear History
@@ -1107,10 +1126,10 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                   key={`${h.id}-${h.visitedAt}`}
                   type="button"
                   onClick={() => void openThread({ tid: /^\d+$/.test(h.id) ? h.id : undefined, url: h.url })}
-                  className="flex w-full items-center justify-between rounded-md border border-border/60 bg-[#111416] px-3 py-2 text-left hover:bg-[#171B1D]"
+                  className="flex w-full items-center justify-between rounded-xl border border-edge-muted bg-surface-elevated px-3 py-2 text-start hover:bg-interactive-hover"
                 >
                   <span className="truncate text-xs font-medium text-foreground">{h.title}</span>
-                  <span className="ml-2 shrink-0 font-mono text-[10px] text-muted-foreground">#{h.id}</span>
+                  <span className="ms-2 shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">#{h.id}</span>
                 </button>
               ))
             )}
@@ -1119,17 +1138,19 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
 
         {/* SESSION & ACCOUNT LOGIN VIEW */}
         {tab === 'session' ? (
-          <div className="mx-auto max-w-lg space-y-4 rounded-lg border border-border bg-[#111416] p-4">
+          <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-edge-muted bg-surface-elevated p-5 shadow-xs">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
-                <h3 className="text-sm font-semibold text-foreground">UnknownCheats Account & Session</h3>
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-edge-muted bg-surface-subtle">
+                  <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
+                </div>
+                <h3 className="text-sm font-semibold tracking-tight text-foreground">UnknownCheats Account & Session</h3>
               </div>
               <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
                 <span
                   className={cn(
                     'inline-block size-1.5 rounded-full',
-                    status?.loggedIn || status?.hasCookies ? 'bg-[#C8FA62]' : 'bg-muted-foreground/50',
+                    status?.loggedIn || status?.hasCookies ? 'bg-[var(--status-success)]' : 'bg-muted-foreground/50',
                   )}
                 />
                 {status?.username ? `@${status.username}` : status?.hasCookies ? 'COOKIES ACTIVE' : 'GUEST'}
@@ -1140,16 +1161,16 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
             </p>
             {renderLoginBox(false)}
             {status?.hasCookies ? (
-              <div className="flex items-center justify-between rounded-md border border-border/60 bg-[#0B0D0F] px-3 py-2 text-xs">
+              <div className="flex items-center justify-between rounded-xl border border-edge-muted bg-sidebar px-3 py-2 text-xs">
                 <span className="text-muted-foreground">
                   {status.username ? `Signed in as ${status.username}` : 'Verified browser session stored'}
                 </span>
-                <Button type="button" size="sm" variant="ghost" onClick={() => void handleClearCookies()}>
+                <Button type="button" size="sm" variant="ghost" className="rounded-full" onClick={() => void handleClearCookies()}>
                   Sign Out
                 </Button>
               </div>
             ) : null}
-            <div className="border-t border-border/60 pt-3">
+            <div className="border-t border-edge-muted pt-3.5">
               <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 Manual Cookie Header Override
               </div>
@@ -1158,9 +1179,9 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                   value={cookieInput}
                   onChange={(e) => setCookieInput(e.target.value)}
                   placeholder="cf_clearance=...; bb_userid=...; bb_password=..."
-                  className="min-w-0 flex-1 rounded-md border border-border bg-[#08090A] px-2.5 py-1 font-mono text-[11px] text-foreground focus:border-foreground focus:outline-none"
+                  className="oc-raised oc-field min-w-0 flex-1 rounded-xl px-2.5 py-1.5 font-mono text-[11px] text-foreground focus:border-foreground focus:outline-none"
                 />
-                <Button type="button" size="sm" variant="secondary" onClick={() => void handleSaveManualCookies()}>
+                <Button type="button" size="sm" variant="secondary" className="rounded-full px-3" onClick={() => void handleSaveManualCookies()}>
                   Save
                 </Button>
               </div>

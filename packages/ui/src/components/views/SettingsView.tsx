@@ -872,7 +872,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             ? 'flex h-9 items-center gap-2 border-b border-edge-muted px-2.5 text-muted-foreground'
             // The same field as every other search field (Input compact): its
             // height, fill and edge, a 14px magnifier.
-            : 'oc-surface-elevated oc-raised oc-field flex h-7 items-center gap-1.5 rounded-md bg-[var(--surface-elevated)] ps-2 pe-1 text-muted-foreground'}
+            : 'oc-surface-elevated oc-raised oc-field flex h-8 items-center gap-2 rounded-[10px] bg-[var(--surface-elevated)] ps-2.5 pe-1.5 text-muted-foreground'}
           >
             <Icon name="search" className="size-3.5 shrink-0" />
             <input
@@ -991,10 +991,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                             onClick={() => openPage(page.slug)}
                             aria-current={selected ? 'page' : undefined}
                             className={cn(
-                              'flex h-11 w-full items-center gap-2.5 rounded-md px-3 overflow-hidden sm:h-8 sm:gap-2 sm:px-2',
+                              'flex h-11 w-full items-center gap-2.5 rounded-[10px] px-3 overflow-hidden transition-colors duration-150 sm:h-8 sm:gap-2 sm:px-2.5',
                               selected
                                 ? 'oc-selected text-foreground'
-                                : 'text-foreground hover:bg-interactive-hover'
+                                : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
                             )}
                           >
                             {page.slug === 'mcp'

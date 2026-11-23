@@ -25,14 +25,14 @@ export const DiscordAvatar: React.FC<{
         height={size}
         onError={() => setBroken(true)}
         style={{ width: size, height: size, minWidth: size, minHeight: size }}
-        className="aspect-square shrink-0 rounded-full object-cover bg-[#171B1D]"
+        className="aspect-square shrink-0 rounded-full object-cover bg-surface-subtle"
       />
     );
   }
   return (
     <div
       style={{ width: size, height: size, minWidth: size, minHeight: size }}
-      className="flex aspect-square shrink-0 items-center justify-center rounded-full border border-border/70 bg-[#171B1D] text-[11px] font-semibold text-foreground select-none"
+      className="flex aspect-square shrink-0 items-center justify-center rounded-full border border-edge bg-surface-subtle text-[11px] font-semibold text-foreground select-none"
     >
       {initials}
     </div>

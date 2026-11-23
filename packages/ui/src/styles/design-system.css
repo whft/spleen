@@ -103,42 +103,43 @@
     --oc-motion-layout-duration: 294ms;
     --oc-motion-layout-easing: linear(0, 0.0344, 0.1145, 0.2151, 0.3209, 0.423, 0.5166, 0.5995, 0.6712, 0.7322, 0.7832, 0.8255, 0.8602, 0.8885, 0.9114, 0.9298, 0.9445, 0.9563, 0.9657, 0.9731, 0.9789, 0.9835, 0.9872, 0.99, 0.9922, 0.994, 0.9953, 0.9964, 0.9972, 0.9978, 0.9983, 0.9987, 1);
 
-    /* Default Light Theme (Mineral Paper Monochrome) */
-    --background: #F7F8F6;
-    --foreground: #0B0D0F;
+    /* Default Light Theme (Spleen Studio Daylight) */
+    --background: #FFFFFF;
+    --foreground: #09090B;
     --card: #FFFFFF;
-    --card-foreground: #0B0D0F;
+    --card-foreground: #09090B;
     --popover: #FFFFFF;
-    --popover-foreground: #0B0D0F;
-    --primary: #171B1D;
-    --primary-foreground: #F4F5F2;
-    --secondary: #EFF1ED;
-    --secondary-foreground: #0B0D0F;
-    --muted: #EFF1ED;
-    --muted-foreground: #5E6665;
-    --accent: #E7EAE4;
-    --accent-foreground: #0B0D0F;
-    --destructive: #A84646;
+    --popover-foreground: #09090B;
+    --primary: #09090B;
+    --primary-foreground: #FAFAFA;
+    --secondary: #F4F4F6;
+    --secondary-foreground: #09090B;
+    --muted: #F6F6F7;
+    --muted-foreground: #52525B;
+    --accent: #F0F0F3;
+    --accent-foreground: #09090B;
+    --destructive: #B54444;
     --destructive-foreground: #FFFFFF;
-    --border: #D5D8D4;
-    --input: #EFF1ED;
-    --ring: #68706F;
+    --border: #E4E4E7;
+    --input: #F4F4F6;
+    --ring: #71717A;
     --spleen-accent: #C8FA62;
-    --spleen-accent-muted: #829E4B;
-    --radius: 0.5625rem;
-    --chart-1: #3B4241;
-    --chart-2: #4D6B29;
-    --chart-3: #171B1D;
-    --chart-4: #A84646;
-    --chart-5: #8A6823;
-    --sidebar: #EFF1ED;
-    --sidebar-foreground: #0B0D0F;
-    --sidebar-primary: #171B1D;
-    --sidebar-primary-foreground: #F4F5F2;
-    --sidebar-accent: #E7EAE4;
-    --sidebar-accent-foreground: #0B0D0F;
-    --sidebar-border: #D5D8D4;
-    --sidebar-ring: #68706F;
+    --spleen-accent-muted: #7BA85E;
+    --radius: 0.625rem;
+    --radius-composer: 1.375rem;
+    --chart-1: #3F3F46;
+    --chart-2: #486B2B;
+    --chart-3: #09090B;
+    --chart-4: #B54444;
+    --chart-5: #946C1F;
+    --sidebar: #F6F6F7;
+    --sidebar-foreground: #09090B;
+    --sidebar-primary: #09090B;
+    --sidebar-primary-foreground: #FAFAFA;
+    --sidebar-accent: #ECECEF;
+    --sidebar-accent-foreground: #09090B;
+    --sidebar-border: #E4E4E7;
+    --sidebar-ring: #71717A;
   }
 
   /* Shortcuts read in the interface font, the way tooltips show them. The
@@ -148,70 +149,70 @@
   }
 
   .dark {
-    --oc-tile-tone: 3%;
-    --oc-tile-inset-tone: 4.5%;
-    --oc-tile-hover-tone: 5.5%;
-    --oc-elevation-ring: rgb(255 255 255 / 0.11);
+    --oc-tile-tone: 3.5%;
+    --oc-tile-inset-tone: 5.5%;
+    --oc-tile-hover-tone: 6.5%;
+    --oc-elevation-ring: rgb(255 255 255 / 0.13);
     --oc-elevation-button:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
-      inset 0 0 0 0.5px var(--oc-elevation-ring),
-      0 0 0 0.5px rgb(0 0 0 / 0.7),
-      0 1px 2px 0 rgb(0 0 0 / 0.5);
-    --oc-elevation-raised-shadow:
-      0 2px 4px 0 rgb(0 0 0 / 0.35),
-      0 1px 2px 0 rgb(0 0 0 / 0.35);
-    --oc-elevation-raised:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
-      inset 0 0 0 0.5px var(--oc-elevation-ring),
-      0 0 0 0.5px rgb(0 0 0 / 0.7),
-      var(--oc-elevation-raised-shadow);
-    --oc-elevation-floating:
       inset 0 1px 0 0 rgb(255 255 255 / 0.05),
       inset 0 0 0 0.5px var(--oc-elevation-ring),
-      0 0 0 0.5px rgb(0 0 0 / 0.75),
-      0 12px 28px -4px rgb(0 0 0 / 0.65),
-      0 4px 10px -2px rgb(0 0 0 / 0.45);
-    --oc-glass-blur: 18px;
-    --oc-glass-opacity: 72%;
-    --oc-glass-popover-opacity: 98%;
-    --oc-glass-popover-blur: 18px;
-    --oc-glass-tooltip-opacity: 92%;
-    --oc-glass-saturation: 1.04;
-    /* Default Dark Theme (SPLEEN / OBSIDIAN MONOCHROME) */
-    --background: #08090A;
-    --foreground: #F1F2EF;
-    --card: #111416;
-    --card-foreground: #F1F2EF;
-    --popover: #0C0E10;
-    --popover-foreground: #F1F2EF;
-    --primary: #E5E8E3;
-    --primary-foreground: #08090A;
-    --secondary: #171B1D;
-    --secondary-foreground: #F1F2EF;
-    --muted: #0B0D0F;
-    --muted-foreground: #959D9C;
-    --accent: #171B1D;
-    --accent-foreground: #F1F2EF;
-    --destructive: #C46B6B;
-    --destructive-foreground: #F1F2EF;
-    --border: #282D30;
-    --input: #282D30;
-    --ring: #4A5257;
+      0 0 0 0.5px rgb(0 0 0 / 0.72),
+      0 1px 2px 0 rgb(0 0 0 / 0.45);
+    --oc-elevation-raised-shadow:
+      0 6px 20px -4px rgb(0 0 0 / 0.45),
+      0 2px 6px -1px rgb(0 0 0 / 0.35);
+    --oc-elevation-raised:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+      inset 0 0 0 0.5px var(--oc-elevation-ring),
+      0 0 0 0.5px rgb(0 0 0 / 0.72),
+      var(--oc-elevation-raised-shadow);
+    --oc-elevation-floating:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.07),
+      inset 0 0 0 0.5px rgb(255 255 255 / 0.15),
+      0 0 0 0.5px rgb(0 0 0 / 0.78),
+      0 14px 34px -6px rgb(0 0 0 / 0.72),
+      0 4px 12px -2px rgb(0 0 0 / 0.48);
+    --oc-glass-blur: 20px;
+    --oc-glass-opacity: 78%;
+    --oc-glass-popover-opacity: 97%;
+    --oc-glass-popover-blur: 20px;
+    --oc-glass-tooltip-opacity: 94%;
+    --oc-glass-saturation: 1.06;
+    /* Default Dark Theme (SPLEEN STUDIO — Obsidian Sidebar + Graphite Canvas) */
+    --background: #101012;
+    --foreground: #FAFAFA;
+    --card: #1A1A1E;
+    --card-foreground: #FAFAFA;
+    --popover: #151518;
+    --popover-foreground: #FAFAFA;
+    --primary: #FAFAFA;
+    --primary-foreground: #09090B;
+    --secondary: #222227;
+    --secondary-foreground: #FAFAFA;
+    --muted: #060607;
+    --muted-foreground: #A1A1AA;
+    --accent: #222227;
+    --accent-foreground: #FAFAFA;
+    --destructive: #D47070;
+    --destructive-foreground: #FAFAFA;
+    --border: #2A2A30;
+    --input: #2A2A30;
+    --ring: #5A5A66;
     --spleen-accent: #C8FA62;
-    --spleen-accent-muted: #829E4B;
-    --chart-1: #959D9C;
-    --chart-2: #829E4B;
-    --chart-3: #E5E8E3;
-    --chart-4: #C46B6B;
-    --chart-5: #C9A45C;
-    --sidebar: #0B0D0F;
-    --sidebar-foreground: #F1F2EF;
-    --sidebar-primary: #E5E8E3;
-    --sidebar-primary-foreground: #08090A;
-    --sidebar-accent: #171B1D;
-    --sidebar-accent-foreground: #F1F2EF;
-    --sidebar-border: #282D30;
-    --sidebar-ring: #4A5257;
+    --spleen-accent-muted: #7BA85E;
+    --chart-1: #A1A1AA;
+    --chart-2: #7BA85E;
+    --chart-3: #FAFAFA;
+    --chart-4: #D47070;
+    --chart-5: #D4A85B;
+    --sidebar: #060607;
+    --sidebar-foreground: #FAFAFA;
+    --sidebar-primary: #FAFAFA;
+    --sidebar-primary-foreground: #09090B;
+    --sidebar-accent: #26262B;
+    --sidebar-accent-foreground: #FAFAFA;
+    --sidebar-border: #222227;
+    --sidebar-ring: #5A5A66;
   }
 
   * {
@@ -449,9 +450,9 @@
 }
 
 .dark .oc-glass-popover {
-  --oc-glass-color: var(--surface-overlay, #0C0E10);
-  --oc-glass-opacity: 98%;
-  --oc-glass-blur: 18px;
+  --oc-glass-color: var(--surface-overlay, #151518);
+  --oc-glass-opacity: 97%;
+  --oc-glass-blur: 20px;
 }
 
 .oc-glass-tooltip {
@@ -605,8 +606,8 @@ button:enabled:hover > .oc-action-disc:not([data-idle]) {
 }
 
 .dark .oc-panel-edge:not([data-edge-floating]) {
-  --background: var(--surface-muted);
-  --surface-background: var(--surface-muted);
+  --background: color-mix(in srgb, var(--surface-muted) 62%, var(--oc-chat-background));
+  --surface-background: color-mix(in srgb, var(--surface-muted) 62%, var(--oc-chat-background));
 }
 
 /* Dark themes add a faint lit top line to the hairline. */
@@ -869,13 +870,13 @@ button:enabled:hover > .oc-action-disc:not([data-idle]) {
 /* Window corners for modal windows. A squircle needs a larger radius than a
    circular arc to look the same size; it reads as a continuous curve. */
 .oc-window-corners {
-  border-radius: 0.75rem;
+  border-radius: 1rem;
 }
 
 @supports (corner-shape: squircle) {
   .oc-window-corners {
     corner-shape: squircle;
-    border-radius: 1.25rem;
+    border-radius: 1.375rem;
   }
 }
 

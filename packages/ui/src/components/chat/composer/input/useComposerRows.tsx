@@ -32,6 +32,7 @@ import { ComposerStatusStrip } from '@/components/chat/ComposerStatusStrip';
 import { useWorktreeBootstrapPending } from '@/hooks/useWorktreeBootstrapPending';
 import { useShownAfter } from '@/hooks/useShownAfter';
 import { SessionGoalRow } from '@/components/chat/SessionGoalRow';
+import { RecoveryStatusBanner } from '@/components/chat/RecoveryStatusBanner';
 import { MemoMobileModelButton, MemoMobileEffortButton, MemoMobileAgentButton } from './memoComposerControls';
 
 const CREATING_SESSION_LINE_DELAY_MS = 300;
@@ -214,8 +215,13 @@ export function useComposerRows({
         ? <SessionTrustPausedRow directory={trustPausedDirectory} />
         : null;
 
-    const composerTopRows = folderMissingRow || trustPausedRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const recoveryRow = !isBtwActive && !newSessionDraftOpen ? (
+        <RecoveryStatusBanner sessionId={currentSessionId} variant="composerRow" />
+    ) : null;
+
+    const composerTopRows = recoveryRow || folderMissingRow || trustPausedRow || worktreeSetupRow || creatingSessionRow || spaceWaitRow || goalRow || autoReviewRow || prWatchRow || extensionWaitRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
+            {recoveryRow}
             {folderMissingRow}
             {trustPausedRow}
             {worktreeSetupRow}

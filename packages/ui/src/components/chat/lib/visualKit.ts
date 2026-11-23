@@ -16,7 +16,7 @@ export const seriesColor = (index: number) => `var(--oc-series-${(index % SERIES
 const TONES = ['success', 'warning', 'error', 'info'] as const;
 
 export const TILE_TONES = {
-    dark: { '--oc-tile-tone': '3%', '--oc-tile-inset-tone': '4.5%', '--oc-tile-hover-tone': '5.5%' },
+    dark: { '--oc-tile-tone': '3.5%', '--oc-tile-inset-tone': '5.5%', '--oc-tile-hover-tone': '6.5%' },
     light: { '--oc-tile-tone': '4%', '--oc-tile-inset-tone': '6%', '--oc-tile-hover-tone': '7%' },
 } as const;
 

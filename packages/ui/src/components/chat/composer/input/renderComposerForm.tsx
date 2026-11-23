@@ -1,5 +1,5 @@
 import type { useI18n } from '@/lib/i18n';
-import { SpleenMonolith3D } from '@/components/ui/SpleenMonolith3D';
+import { SpleenLogo } from '@/components/ui/SpleenLogo';
 import type { useComposerSessionScope } from './useComposerSessionScope';
 import type { useComposerSessionLifecycle } from './useComposerSessionLifecycle';
 import type { useComposerSendAvailability } from './useComposerSendAvailability';
@@ -228,8 +228,8 @@ export function renderComposerForm({
         >
             {showDesktopDraftPresentation ? (
                 <div className={cn('chat-input-column relative z-10 mb-7 flex flex-col items-center text-center', draftPresentationClassName)}>
-                    <SpleenMonolith3D size={118} className="mb-3" />
-                    <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
+                    <SpleenLogo width={48} height={48} className="mb-4 text-foreground" />
+                    <h1 className="text-balance text-[1.75rem] font-medium tracking-[-0.028em] text-foreground md:text-[2rem]">
                         {renderDraftTitle(draftHeading, draftProjectLabel)}
                     </h1>
                 </div>
@@ -503,12 +503,12 @@ export function renderComposerForm({
                                 boundSelector={isMobile ? '[data-composer-bound]' : undefined}
                                 boundGapPx={MOBILE_COMPOSER_BOUND_GAP_PX}
                                 className={cn(
-                                    'min-h-[52px] px-3 relative z-10',
+                                    'min-h-[54px] px-4 relative z-10',
                                     isComposerExpanded
                                         ? cn('h-full min-h-0', isMobile ? 'py-2.5' : 'py-4')
                                         : isMobile
                                             ? 'pt-4 pb-2.5'
-                                            : 'pt-4 pb-2',
+                                            : 'pt-4 pb-2.5',
                                     inputMode === 'shell' ? 'font-mono' : 'typography-markdown md:typography-ui-label',
                                 )}
                             />

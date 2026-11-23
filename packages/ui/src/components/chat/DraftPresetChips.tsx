@@ -57,7 +57,7 @@ const CHIP_ICON_BUTTON_CLASS =
 // only under the pointer. It is a suggestion, not the loudest control on the
 // draft screen.
 const CHIP_CLASS =
-    'group inline-flex h-6 touch-none select-none items-center gap-1.5 rounded-full px-2.5 typography-meta text-muted-foreground transition-colors hover:bg-[var(--interactive-hover)] hover:text-foreground';
+    'group inline-flex h-7 touch-none select-none items-center gap-1.5 rounded-full border border-edge-muted bg-[color-mix(in_srgb,var(--foreground)_3%,transparent)] px-3 typography-meta text-muted-foreground transition-colors duration-150 hover:border-border-hover hover:bg-[var(--interactive-hover)] hover:text-foreground';
 
 
 const SortableChip: React.FC<{

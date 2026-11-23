@@ -37,7 +37,7 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
   const sectionLayout = useWorkStatusSectionLayout();
   const { allSectionsHidden } = sectionLayout;
   const [sectionsDialogOpen, setSectionsDialogOpen] = React.useState(false);
-  const [renderedSections, setRenderedSections] = React.useState(1);
+  const [renderedSections, setRenderedSections] = React.useState(0);
   const frameRef = React.useRef<number | null>(null);
 
   const [contentMounted, setContentMounted] = React.useState(visible);
@@ -50,7 +50,6 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
   React.useEffect(() => {
     if (visible) {
       setContentMounted(true);
-      setRenderedSections((count) => Math.max(count, 1));
       return undefined;
     }
     const timer = window.setTimeout(() => setContentMounted(false), panelTransitionMs);
@@ -124,7 +123,7 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
           'max-h-[calc(100%-1.5rem)]',
         ],
         'motion-reduce:transition-none',
-        'oc-panel-edge rounded-xl',
+        'oc-panel-edge rounded-2xl',
         !overlay && 'bg-background',
       )}
       data-edge-hidden={overlay && !interactive ? '' : undefined}

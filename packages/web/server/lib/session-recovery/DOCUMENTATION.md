@@ -137,18 +137,14 @@ already marked `failed` with a limit error are parked once at startup (last
 35 days, 30s apart) and continue through the same path; a revived row starts
 with a fresh crash budget and a fresh limit backoff.
 
-## Subagents
+## Subagents and OpenCode Zen usage limits
 
-Children (`parent_session_id`) are resumed only when their parent is not itself
-pending. The link is read from the session's parent fields during
-reconciliation, so subagents wait for their parent even when the execution
-events never named it. A pending parent resumes first and receives the child
-states and summaries in its prompt; resuming a child first risks two agents
-redoing the same work. A child past its parent's recovery stays
-`waiting_parent` until the parent settles, then reconciles on its own. A stored
-parent link defers an idle child before its session is fetched, and the child's
-wake follows the parent's next wake (capped at five minutes), so a parent parked
-for a long reset does not make every child poll the backend.
+Automatic `Continue.` after a provider usage limit is scoped by default to OpenCode Zen / Go providers (`opencode`, `opencode-zen`, `opencode-go`). Non-Zen providers (such as Anthropic, OpenAI, or ChatGPT limits) park as `waiting_provider` with `provider limit (manual resume)` and wait for explicit user resume or configured limit-failover instead of sending automatic continuations.
+
+Children (`parent_session_id`) follow two rules:
+
+- **Crash recovery** resumes the parent first so parent and child do not redo the same work. A child stays `waiting_parent` until its parent settles.
+- **Usage-limit stops** resume every stopped OpenCode Zen chat and subagent once the reset window passes, even while the parent is `running` (waiting on the subagent's task tool) or also resuming. A reconciliation pass also scans recent failed/interrupted Zen sessions and subagents so sessions whose usage stop happened during an SSE gap or before restart are enrolled and continued.
 
 ## Coordinator and DB
 

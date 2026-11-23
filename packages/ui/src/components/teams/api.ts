@@ -30,7 +30,7 @@ export type TeamDagTask = {
   assignee: string | null;
   dependsOn: string[];
   acceptance: string | null;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'blocked';
   retries: number;
   result: string | null;
   error: string | null;
@@ -45,6 +45,7 @@ export type TeamDagSummary = {
   completed: number;
   failed: number;
   cancelled: number;
+  blocked?: number;
 };
 
 export type TeamMemberInput = {

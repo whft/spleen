@@ -1,6 +1,10 @@
 import React from 'react';
-import { RiCloseLine, RiPlayLine, RiTimeLine } from '@remixicon/react';
+import { Icon } from '@/components/icon/Icon';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { useI18n } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { useRecoveryStore } from '@/stores/useRecoveryStore';
 
 const formatRemaining = (targetMs: number, nowMs: number): string => {
@@ -14,15 +18,35 @@ const formatRemaining = (targetMs: number, nowMs: number): string => {
   return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
 };
 
-export const RecoveryStatusBanner: React.FC<{ sessionId?: string | null }> = ({ sessionId }) => {
+interface RecoveryStatusBannerProps {
+  sessionId?: string | null;
+  variant?: 'composerRow' | 'floating';
+}
+
+export const RecoveryStatusBanner: React.FC<RecoveryStatusBannerProps> = ({
+  sessionId,
+  variant = 'composerRow',
+}) => {
   const { t } = useI18n();
   const entry = useRecoveryStore((state) => (sessionId ? state.sessionsById[sessionId] ?? null : null));
+  const pausedChildCount = useRecoveryStore((state) => {
+    if (!sessionId) return 0;
+    let count = 0;
+    for (const item of Object.values(state.sessionsById)) {
+      if (item.parentSessionID === sessionId) count += 1;
+    }
+    return count;
+  });
   const busy = useRecoveryStore((state) => (sessionId ? Boolean(state.busySessionIds[sessionId]) : false));
   const resumeNow = useRecoveryStore((state) => state.resumeNow);
   const dismiss = useRecoveryStore((state) => state.dismiss);
+  const wakeAll = useRecoveryStore((state) => state.wakeAll);
   const [nowMs, setNowMs] = React.useState(() => Date.now());
 
   const nextWakeAt = entry?.nextWakeAt ?? null;
+  const isWaiting = Boolean(entry && (entry.state === 'waiting_provider' || entry.state === 'waiting_parent'));
+  const blinkDimmed = useWaitingBlink(isWaiting);
+
   React.useEffect(() => {
     if (!entry || !nextWakeAt || nextWakeAt <= Date.now()) return;
     setNowMs(Date.now());
@@ -30,61 +54,96 @@ export const RecoveryStatusBanner: React.FC<{ sessionId?: string | null }> = ({ 
     return () => window.clearInterval(id);
   }, [entry, nextWakeAt]);
 
-  if (!entry || !sessionId) return null;
+  if (!sessionId || (!entry && pausedChildCount === 0)) return null;
 
   const countdown = nextWakeAt && nextWakeAt > nowMs ? formatRemaining(nextWakeAt, nowMs) : null;
   let title = t('chat.recovery.waitingProvider');
-  if (entry.state === 'recovering') {
+  if (!entry && pausedChildCount > 0) {
+    title = pausedChildCount === 1
+      ? '1 subagent paused on usage limit'
+      : `${pausedChildCount} subagents paused on usage limit`;
+  } else if (entry?.state === 'recovering') {
     title = t('chat.recovery.recovering');
-  } else if (entry.state === 'needs_review') {
+  } else if (entry?.state === 'needs_review') {
     title = t('chat.recovery.needsReview');
-  } else if (entry.state === 'waiting_parent') {
+  } else if (entry?.state === 'waiting_parent') {
     title = t('chat.recovery.waitingParent');
   } else if (countdown) {
     title = t('chat.recovery.resumingIn', { time: countdown });
   }
 
-  const isWarning = entry.state === 'needs_review';
+  const isWarning = entry?.state === 'needs_review';
+  const isRecovering = entry?.state === 'recovering';
+
+  const handleContinue = () => {
+    if (entry) {
+      void resumeNow(sessionId);
+    } else {
+      void wakeAll();
+    }
+  };
 
   return (
     <div
       role="status"
-      data-recovery-banner={entry.state}
-      className="mx-auto mb-2 flex w-full max-w-3xl items-center justify-between gap-3 rounded-lg border border-border/85 bg-card px-3 py-2 text-xs shadow-sm"
+      data-recovery-banner={entry?.state ?? 'subagents_waiting'}
+      className={cn(
+        'flex min-w-0 items-center justify-between gap-2.5 text-xs',
+        variant === 'composerRow'
+          ? 'oc-composer-row border-b border-edge ps-3 pe-1.5 bg-[var(--status-info-background)]/45'
+          : 'chat-input-column mb-2 rounded-xl border border-edge bg-surface-elevated px-3 py-2 oc-glass-floating',
+      )}
     >
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span
-          aria-hidden="true"
-          className={isWarning ? 'h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--status-warning,#C9A45C)]' : 'h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--spleen-accent,#C8FA62)]'}
-        />
-        <RiTimeLine className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0">
-          <div className="truncate font-medium text-foreground">{title}</div>
-          {entry.reason ? (
-            <div className="truncate text-[11px] text-muted-foreground">{entry.reason}</div>
-          ) : null}
-        </div>
+      <div className="flex min-w-0 items-center gap-2">
+        {isRecovering ? (
+          <Spinner className="h-3.5 w-3.5 shrink-0 text-[var(--status-info)]" aria-hidden="true" />
+        ) : (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'size-1.5 shrink-0 rounded-full transition-opacity duration-200',
+              isWarning ? 'bg-[var(--status-warning)]' : 'bg-[var(--status-success)]',
+              blinkDimmed && 'opacity-35',
+            )}
+          />
+        )}
+        <span className="min-w-0 truncate font-medium tabular-nums text-foreground" title={entry?.reason ?? title}>
+          {title}
+        </span>
+        {entry && pausedChildCount > 0 ? (
+          <span className="shrink-0 rounded-full bg-surface-subtle px-1.5 py-0.5 typography-micro tabular-nums text-muted-foreground">
+            +{pausedChildCount} subagent{pausedChildCount === 1 ? '' : 's'}
+          </span>
+        ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        <button
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
           type="button"
+          variant="ghost"
+          size="xs"
           disabled={busy}
-          onClick={() => void resumeNow(sessionId)}
-          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+          onClick={handleContinue}
+          onMouseDown={(event) => event.preventDefault()}
+          className="h-6 gap-1 px-2 text-foreground hover:bg-interactive-hover"
         >
-          <RiPlayLine className="h-3.5 w-3.5" />
+          <Icon name="play" className="size-3" aria-hidden="true" />
           {t('chat.recovery.continueNow')}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void dismiss(sessionId)}
-          aria-label={t('chat.recovery.dismiss')}
-          title={t('chat.recovery.dismiss')}
-          className="inline-flex items-center justify-center rounded-md border border-border/60 p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
-        >
-          <RiCloseLine className="h-3.5 w-3.5" />
-        </button>
+        </Button>
+        {entry ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={busy}
+            onClick={() => void dismiss(sessionId)}
+            onMouseDown={(event) => event.preventDefault()}
+            aria-label={t('chat.recovery.dismiss')}
+            title={t('chat.recovery.dismiss')}
+            className="h-6 w-6 px-0 text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
+          >
+            <Icon name="close" className="size-3.5" aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
     </div>
   );

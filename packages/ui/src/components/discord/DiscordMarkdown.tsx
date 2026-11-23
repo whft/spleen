@@ -7,7 +7,7 @@ const Spoiler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     <button
       type="button"
       onClick={() => setRevealed((v) => !v)}
-      className={`inline rounded px-1 py-0.5 text-left transition ${
+      className={`inline rounded px-1 py-0.5 text-start transition ${
         revealed ? 'bg-muted/80 text-foreground' : 'bg-foreground/90 text-transparent hover:bg-foreground'
       }`}
     >
@@ -52,15 +52,15 @@ const CodeBlock: React.FC<{
     });
   };
   return (
-    <div className="my-1.5 overflow-hidden rounded-md border border-border/70 bg-muted/50">
-      <div className="flex items-center justify-between border-b border-border/50 bg-muted/80 px-2.5 py-1 text-[10px] text-muted-foreground">
+    <div className="my-1.5 overflow-hidden rounded-xl border border-edge-muted bg-surface-elevated">
+      <div className="flex items-center justify-between border-b border-edge-muted bg-surface-subtle/60 px-2.5 py-1 text-[10px] text-muted-foreground">
         <span className="font-mono uppercase">{lang || 'code'}</span>
         <div className="flex items-center gap-1.5">
           {onAskAi ? (
             <button
               type="button"
               onClick={() => onAskAi(`Explain and analyze this ${lang || 'Discord'} snippet:\n\`\`\`${lang}\n${code}\n\`\`\``)}
-              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/10"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-foreground hover:bg-interactive-hover"
             >
               <RiSparklingLine className="h-3 w-3" />
               Ask AI
@@ -69,9 +69,9 @@ const CodeBlock: React.FC<{
           <button
             type="button"
             onClick={copy}
-            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] hover:bg-background/80"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] hover:bg-interactive-hover hover:text-foreground"
           >
-            {copied ? <RiCheckLine className="h-3 w-3 text-[var(--spleen-accent,#C8FA62)]" /> : <RiFileCopyLine className="h-3 w-3" />}
+            {copied ? <RiCheckLine className="h-3 w-3 text-[var(--status-success)]" /> : <RiFileCopyLine className="h-3 w-3" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
@@ -169,7 +169,7 @@ export const DiscordMarkdown: React.FC<{
       const k = `line-${blockKey++}`;
       if (line.startsWith('> ')) {
         parts.push(
-          <div key={k} className="border-l-2 border-muted-foreground/50 pl-2 text-muted-foreground">
+          <div key={k} className="border-s-2 border-muted-foreground/50 ps-2 text-muted-foreground">
             {renderInlineTokens(line.slice(2), mentionNames, channelNames, roleNames)}
           </div>,
         );

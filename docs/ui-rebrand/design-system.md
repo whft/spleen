@@ -1,38 +1,43 @@
-# SPLEEN / OBSIDIAN — Design System Specification
+# SPLEEN STUDIO (v2.0) — Design System Specification
 
 ## 1. Visual Identity & Aesthetic Direction
 
-**OBSIDIAN MONOCHROME**: A precision dark developer workstation built on true charcoal-obsidian depth (`#08090A` -> `#0B0D0F` -> `#111416` -> `#171B1D`), brushed titanium structural contrast (`#E5E8E3` / `#F1F2EF` / `#959D9C`), crisp `1px` borders, self-hosted `Geist` typography, and ultra-restrained `#C8FA62` micro-signals strictly for active live indicators and grazing 3D metallic highlights.
+**SPLEEN STUDIO**: A calm, creative-studio developer workstation inspired by editorial dark-studio interfaces (obsidian rail `#060607`, calm graphite canvas `#101012`, raised composer and cards `#1A1A1E`, active pills `#26262B`), crisp `1px` hairline edges, generous rounded surfaces (`16px` docked panels/sheets, `22px` sculpted composer, pill tabs and primary CTAs), self-hosted `Geist` typography, and an original **Keystone Fold S** brand mark.
 
-### Monochrome Mandate
-- **Zero vermilion red (`#D9503F`)** and **zero blue (`#5865F2`, `#83A7DC`, `#2F6FB0`, navy `#0B0F14`/`#121821`/`#1A222D`)** across menus, popovers, dropdowns, context menus, command palette, chrome, primary buttons, brand app icons, splash screen, and integrated reader surfaces (`Teams`, `Discord`, `UnknownCheats`).
-- Primary actions and checked states use matte **platinum-bone** (`#E5E8E3` with `#08090A` dark ink) rather than saturated brand colors.
-- Menus & floating popovers are deeper, crisper obsidian (`#0D1012` / `#111416` at 98% fill) so they sit clearly apart from workspace panes without muddy blur bleed.
+### Monochrome-First Discipline
+- **Zero saturated red/blue chrome washes** across menus, popovers, dropdowns, command palette, chrome, primary buttons, brand app icons, splash screen, and integrated surfaces (`AI Teams`, `Discord`, `UnknownCheats`, `Settings`).
+- Primary actions and selected tabs use pure **alabaster** (`#FAFAFA` with `#09090B` dark ink in dark mode; `#09090B` with `#FFFFFF` ink in light mode) so primary CTAs stand out cleanly while inactive and disabled states recede quietly.
+- Every integrated surface (`TeamsPanel`, `TeamLauncher`, `DiscordPanel`, `DiscordConnectForm`, `UnknownCheatsPanel`, `WorkStatusPanel`) binds strictly to semantic CSS variables so Dark and Light modes both maintain full legibility and contrast.
 
 ---
 
-## 2. Color Tokens (Dark Primary & Monochrome Light Pairing)
+## 2. Color Tokens (Dark Primary & Daylight Gallery Pairing)
 
-### Core Obsidian Dark Palette (`spleen-dark.json` & `.dark`)
+### Core Spleen Studio Dark Palette (`spleen-dark.json` & `.dark`)
 
 | Role | Token(s) | Hex | Contrast Note |
 | --- | --- | --- | --- |
-| Root Canvas | `--background`, `--surface-background` | `#08090A` | Near-black neutral obsidian (zero blue cast) |
-| Sidebar / Recess | `--sidebar`, `--surface-muted` | `#0B0D0F` | Subtle depth step below canvas |
-| Cards / Tool Panels | `--card`, `--surface-elevated` | `#111416` | Primary container surface |
-| Floating Menus / Popovers | `--popover`, `--surface-overlay`, `.oc-glass-popover` | `#0D1012` / `#111416` | Deep opaque-obsidian (`98%`), `1px` `#282D30` ring |
-| Elevated Hover / User Bubble | `--surface-subtle`, `--interactive-hover` | `#171B1D` / `#FFFFFF0D` | Tactile neutral state step |
-| Pressed / Active Row | `--interactive-active`, `--interactive-selection` | `#1E2326` | Crisp neutral selection without red/blue wash |
-| Hairline Borders | `--border`, `--interactive-border` | `#282D30` | Default structural edge (`borderHover: #394045`) |
-| Primary Text | `--foreground`, `--surface-foreground` | `#F1F2EF` | `> 17:1` contrast against `#08090A` / `#111416` |
-| Secondary Text | `--muted-foreground`, `--surface-muted-foreground` | `#959D9C` | `> 7.0:1` WCAG AA contrast against dark surfaces |
-| Tertiary / Timestamp | `--timestamp` | `#6F7877` | Metadata only (`> 4.5:1` on `#08090A`) |
-| Monochrome Primary Action | `--primary`, `--primary-base` | `#E5E8E3` | Hover `#F4F6F3`, Active `#CFD4CE` |
-| Monochrome Primary Ink | `--primary-foreground` | `#08090A` | Explicit dark ink (`> 15:1` contrast on `#E5E8E3`) |
-| Micro-Accent (Surgical) | `--spleen-accent`, `--interactive-focus` | `#C8FA62` | Tiny live dots (6px), hairline focus glow `#C8FA6244`, 3D rim glint |
-| Muted Accent | `--spleen-accent-muted`, `--status-success` | `#829E4B` | Completed/connected badges (never large surfaces) |
-| Restrained Info / Links | `--status-info`, `--markdown-link` | `#B8C0BE` / `#DDE3DF` | Neutral platinum links (zero blue!) |
-| Restrained Warning / Error | `--status-warning` / `--status-error` | `#C9A45C` / `#C46B6B` | Used strictly for real errors & irreversible confirmation |
+| Obsidian Sidebar / Rail | `--sidebar`, `--surface-muted` | `#060607` | Deep framing chrome around the workspace |
+| Calm Graphite Canvas | `--background`, `--surface-background` | `#101012` | Distinct step lighter than the obsidian sidebar |
+| Floating Menus / Popovers | `--popover`, `--surface-overlay`, `.oc-glass-popover` | `#151518` | Elevated sheet with subtle `1px` edge |
+| Cards / Sculpted Composer | `--card`, `--surface-elevated` | `#1A1A1E` | Tactile raised container with hairline border |
+| Hover / Active Pill | `--surface-subtle`, `--interactive-selection` | `#222227` / `#26262B` | Clean neutral hover and selected row step |
+| Hairline Borders | `--border`, `--interactive-border` | `#27272B` | Structural `1px` edge (`borderHover: #3A3A40`) |
+| Primary Text & Action | `--foreground`, `--primary`, `--primary-base` | `#FAFAFA` | High-contrast alabaster (`#09090B` primary button ink) |
+| Secondary Text | `--muted-foreground`, `--surface-muted-foreground` | `#A1A1AA` | Readable neutral zinc secondary copy |
+| Tertiary / Timestamp | `--timestamp` | `#71717A` | Metadata only (`tabular-nums`) |
+| Surgical Live Status | `--status-success` | `#34D399` | Live session dots and connected badges only |
+| Restrained Warning / Error | `--status-warning` / `--status-error` | `#D4A553` / `#E06C75` | Used strictly for real errors and confirmations |
+
+### Core Spleen Studio Light Palette (`spleen-light.json`)
+
+| Role | Token(s) | Hex |
+| --- | --- | --- |
+| Gallery Canvas | `--background`, `--surface-background` | `#FFFFFF` |
+| Studio Sidebar / Rail | `--sidebar`, `--surface-muted` | `#F6F6F7` |
+| Raised Cards / Composer | `--card`, `--surface-elevated` | `#FFFFFF` / `#F8F8FA` |
+| Active Pill / Hover | `--interactive-selection` | `#ECECEF` |
+| Primary Ink & Action | `--foreground`, `--primary` | `#09090B` (`#FFFFFF` button ink) |
 
 ---
 

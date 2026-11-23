@@ -1,16 +1,16 @@
 # Spleen brand identity
 
-The approved identity kit (v1.0) is the source of every Spleen mark. Its vectors
+The approved identity kit (v2.0, Keystone Fold S + Spleen Studio) is the source of every Spleen mark. Its vectors
 live in `docs/brand/source`; its UI icon set is in `docs/brand/ui-icons`; its
 authored palette is in `docs/brand/tokens.json`. The app never redraws the mark
 by hand.
 
 ## Mark
 
-Three interlocking sculpted S-shaped blades on a 1000-unit canvas: upper and
-lower alabaster-bone (`#F1F2EF`) blades framing a central diagonal brushed-titanium
-(`#959D9C`) core ribbon.
-The app icon sets the mark on an obsidian squircle tile (`#08090A`, border `#282D30`)
+An exact 180-degree symmetric sculpted S-ribbon ("Keystone Fold S") on a 1000-unit canvas:
+upper and lower alabaster (`#FAFAFA`) sculpted curved arches separated by crisp parallel diagonal
+cuts framing a floating brushed-titanium (`#90969E`) diamond keystone core.
+The app icon sets the mark on an obsidian squircle tile (`#09090B`, border `#27272B`)
 with corner radius 217/1000.
 
 | Variant | Source | Use |
@@ -27,22 +27,21 @@ with corner radius 217/1000.
 
 | Token | Value | Theme role |
 |---|---|---|
-| Canvas | `#08090A` | dark `surface.background`, chat canvas |
-| Sidebar / Recess | `#0B0D0F` | dark `surface.muted`, sidebar, splash |
-| Raised | `#111416` | dark `surface.elevated`, menus, panels |
-| Subtle | `#171B1D` | dark `surface.subtle`, hover, bubbles |
-| Border | `#282D30` | dark `interactive.border` |
-| Bone | `#F1F2EF` | dark `surface.foreground` |
-| Secondary / Titanium | `#959D9C` | `surface.mutedForeground`, center blade |
-| Primary Action | `#E5E8E3` | monochrome `primary.base` (`#08090A` ink) |
-| Micro-Accent | `#C8FA62` | surgical focus glint & live dots only |
-| Success | `#829E4B` | `status.success` |
-| Warning | `#C9A45C` | `status.warning` |
-| Danger | `#C46B6B` | `status.error` |
-| Focus | `#C8FA6244` | `interactive.focusRing` |
+| Sidebar / Recess | `#060607` | dark `surface.muted`, obsidian left sidebar & right rail |
+| Studio Canvas | `#101012` | dark `surface.background`, calm graphite workspace canvas |
+| Popover / Overlay | `#151518` | dark `surface.overlay`, floating menus & command sheet |
+| Raised Card / Composer | `#1A1A1E` | dark `surface.elevated`, sculpted composer & cards |
+| Subtle / Hover | `#26262B` | dark `surface.subtle`, active pills & tactile hovers |
+| Border | `#27272B` | dark `interactive.border` (`borderHover: #3A3A40`) |
+| Alabaster Ink | `#FAFAFA` | dark `surface.foreground` & monochrome `primary.base` (`#09090B` ink) |
+| Secondary / Titanium | `#A1A1AA` | `surface.mutedForeground` (`#90969E` keystone core) |
+| Status Live / Success | `#34D399` | `status.success` (surgical live dots & connected indicators) |
+| Warning | `#D4A553` | `status.warning` |
+| Danger | `#E06C75` | `status.error` |
+| Focus | `#FAFAFA33` | `interactive.focusRing` |
 
-The default `spleen-dark` theme uses these Obsidian Monochrome roles. `spleen-light`
-is the neutral daylight counterpart (`#F7F8F6` background, `#111416` ink) with zero red/blue saturation.
+The default `spleen-dark` theme uses these Spleen Studio Neutral roles. `spleen-light`
+is the clean daylight gallery counterpart (`#FFFFFF` canvas, `#F6F6F7` sidebar, `#09090B` ink) with zero saturated chrome casts.
 
 ## Geometry and type
 

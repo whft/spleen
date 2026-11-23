@@ -1258,10 +1258,10 @@ export const CommandPalette: React.FC = () => {
           </CommandList>
           </div>
           {isMobile ? null : (
-          <div className="flex items-center gap-4 border-t border-border px-3 py-1.5 typography-micro text-muted-foreground" aria-hidden="true">
-            <span><kbd className="font-sans">↑↓</kbd> {t('commandPalette.footer.navigate')}</span>
-            <span><kbd className="font-sans">↵</kbd> {t('commandPalette.footer.open')}</span>
-            <span><kbd className="font-sans">esc</kbd> {t('commandPalette.footer.close')}</span>
+          <div className="flex items-center gap-4 border-t border-edge-muted bg-sidebar/50 px-3.5 py-2 typography-micro text-muted-foreground" aria-hidden="true">
+            <span className="inline-flex items-center gap-1.5"><kbd className="rounded bg-surface-subtle px-1.5 py-0.5 font-sans text-[10px] text-foreground/85">↑↓</kbd> {t('commandPalette.footer.navigate')}</span>
+            <span className="inline-flex items-center gap-1.5"><kbd className="rounded bg-surface-subtle px-1.5 py-0.5 font-sans text-[10px] text-foreground/85">↵</kbd> {t('commandPalette.footer.open')}</span>
+            <span className="inline-flex items-center gap-1.5"><kbd className="rounded bg-surface-subtle px-1.5 py-0.5 font-sans text-[10px] text-foreground/85">esc</kbd> {t('commandPalette.footer.close')}</span>
           </div>
           )}
         </Command>

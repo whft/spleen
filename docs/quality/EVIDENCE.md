@@ -104,10 +104,54 @@ Spleen and remain visible until addressed.
 
 - A real provider usage limit and its reset: no account was deliberately
   exhausted. The paths use OpenCode 2.3.0's exact `SessionError` shape
-  (`provider.*`, `retryAfterMs`, `response.body`) in unit tests.
-- NSIS install, upgrade from a previous signed build, uninstall, UAC, WebView2 absence.
-- Code signing and updater signature verification (no certificate or keypair).
-- Windows 11, 125/150/200% DPI, high-contrast and screen-reader passes.
-- The tray glyph on a light Windows theme, and the tray icon's pixels in the notification area: it sits in the overflow flyout and this session could not inject the clicks to open it.
-- Remote pairing, relay, browser panel, SSH, terminal parity in the Tauri host.
-- Performance comparison against the original Electron build.
+  (`provider.*`, `retryAfterMs`, `response.body`, `model.providerID`) in unit
+  tests.
+- Clean-machine Windows 11 install, uninstall, and SmartScreen verification
+  without dev tools installed.
+- Authenticode Windows code signing (no certificate configured yet; Tauri
+  updater signature `.sig` is verified).
+- Windows 11 125/150/200% DPI, high-contrast and screen-reader passes.
+- The tray glyph on a light Windows theme.
+- Full `spleen_web` agent DOM/screenshot automation on Tauri desktop (awaits
+  Playwright/CDP browser provider extension).
+- Live third-party Discord / UnknownCheats authenticated account scraping
+  (unit-tested with mock HTTP/Gateway fixtures; live verification depends on
+  user account credentials).
+
+## 2026-11-22 Audit, Zen Recovery, Teams Hardening & Tauri Parity Run
+
+| Command | Result |
+|---|---|
+| `bun run type-check:ui` | pass, 0 errors across 4,323 files |
+| `bun run type-check:web` | pass, 0 errors across 2,912 files |
+| `cargo check --manifest-path packages/desktop/src-tauri/Cargo.toml` | pass, 0 errors, 1 pre-existing warning (`sidecar::shared` unused) |
+| `bun run --cwd packages/desktop test` | pass, 5/5 tests |
+| `bun run brand:audit` | pass, 8,939 tracked files clean |
+| `bun run --cwd packages/web test server/lib/session-recovery/ server/lib/limit-failover/` | pass, 63/63 tests (36 recovery + 27 limit-failover, including OpenCode Zen chat/subagent auto-continue, running-parent non-deadlock, stopped-session discovery, and non-Zen exclusion) |
+| `bun run --cwd packages/web test server/lib/teams/` | pass, 7/7 tests (DAG validation, blocked-dependency propagation, `@lead` escalation, cancel abort, retry unblock) |
+| `bun run --cwd packages/web test server/lib/discord/ server/lib/unknowncheats/` | pass, 7/7 tests |
+| `bun run --cwd packages/web test server/lib/session-goal/` | pass (all tests in `audit.test.js`, `create.test.js`, `runtime.test.js`) |
+| `bun run --cwd packages/web test server/lib/spleen-control/` | 17 pre-existing Windows-only failures in untouched upstream tests (`chats.test.js`, `file-open.test.js`, `project-knowledge.test.js`, `service.test.js`) due to POSIX `/repo` vs `C:\repo` path expectations and unprivileged `fs.symlink` `EPERM`; all other tests passed |
+| `bun run build:web` | pass in 3m 5s (`vendor-three` removed from bundle after deleting unused 3D clutter) |
+| `bun run --cwd packages/desktop build && bun run --cwd packages/desktop tauri:build` | pass, `Spleen_1.1.0_x64-setup.exe` (155.54 MiB) + `.sig` built |
+| `Spleen_1.1.0_x64-setup.exe /S` + detached launch + `GET http://127.0.0.1:3721/health` | exit 0, `LIVE_LISTENING=0.0.0.0:3721`, `spleenVersion: "1.1.0"`, `openCodeRunning: true`, `status: "ok"` |
+
+## 2026-11-23 Spleen Studio Redesign, Keystone Fold S Identity & Zen Auto-Continue Run
+
+| Command / Probe | Result |
+|---|---|
+| `bun run brand:generate` | pass, rebuilt 15 text outputs and 56 platform icon/installer images from v2.0 Keystone Fold S vector masters |
+| `bun run brand:generate --check` & `bun run brand:audit` | pass, 15 text files match and `8939 tracked files clean` |
+| `bun run icons:generate` | pass, generated 350 icons in `packages/ui/src/components/icon/sprite.ts` |
+| `bun test scripts/brand/generate.test.mjs packages/ui/src/components/ui/SpleenLogo.test.tsx` | pass, 11/11 tests |
+| `bun test packages/ui/src/components/chat/lib/visualKit.test.ts packages/ui/src/lib/theme/vscode/adapt.test.ts` | pass, 13/13 tests |
+| `bun run type-check:ui` & `bun run type-check:web` | pass, 0 errors across 4,323 UI files and 2,912 web files |
+| `bun run --filter '*' lint` | pass, 0 errors across all 6 workspace packages |
+| `bun run --cwd packages/web test server/lib/session-recovery/ server/lib/limit-failover/ server/lib/teams/ server/lib/discord/ server/lib/unknowncheats/` | pass, 10/10 files, 78/78 tests |
+| `bun run --cwd packages/desktop test` | pass, 5/5 tests |
+| `cargo check --manifest-path packages/desktop/src-tauri/Cargo.toml` | pass, 0 errors |
+| Browser visual QA on `http://localhost:5185/` | verified Dark (`1440x900` and `1024x768`) and Light (`1440x900`) screenshots across Welcome, Composer, Work Status, AI Teams, Discord, UnknownCheats, Command Palette, and Settings Appearance |
+| `bun run build:web && bun run --cwd packages/desktop build && bun run --cwd packages/desktop tauri:build` | pass, `Spleen_1.1.0_x64-setup.exe` (155.57 MiB) + `.sig` built |
+| `Spleen_1.1.0_x64-setup.exe /S` + launch `C:\Users\Admin\AppData\Local\Spleen\spleen.exe` + `GET http://127.0.0.1:3721/health` | exit 0, `status: "ok"`, `runtime: "desktop"`, `openCodeRunning: true`, `isOpenCodeReady: true`, `opencodeBinarySource: "bundled"` |
+| Version bump to `1.2.0` (`package.json`, `desktop`, `ui`, `web`, `tauri.conf.json`, `Cargo.toml`, `Cargo.lock`, `bun.lock`) + `package-manager.js` compiled `getCurrentVersion()` fallback | pass: `bun install --frozen-lockfile --ignore-scripts`, `cargo check --locked`, `43/43` `package-manager.test.js`, `24/24` brand/theme tests, `5/5` desktop contract tests |
+| Signed `1.2.0` desktop build (`tauri:build`) | pass, `Spleen_1.2.0_x64-setup.exe` (155.57 MiB) + `Spleen_1.2.0_x64-setup.exe.sig` (`version:1.2.0`, matching `tauri.conf.json` pubkey) |

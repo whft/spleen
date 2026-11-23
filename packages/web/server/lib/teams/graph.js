@@ -61,9 +61,48 @@ export const getReadyTasks = (tasks, maxParallel = 3) => {
   return ready;
 };
 
+const BLOCKING_DEP_STATUSES = new Set(['failed', 'cancelled', 'blocked']);
+
+/**
+ * Find pending tasks that can never start because an upstream dependency
+ * failed, was cancelled, or is already blocked.
+ */
+export const detectBlockedTasks = (tasks) => {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const byId = new Map(list.map((task) => [task.id, task]));
+  const blockedIds = new Map();
+
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const task of list) {
+      if (task.status !== 'pending' || blockedIds.has(task.id)) continue;
+      const deps = Array.isArray(task.dependsOn) ? task.dependsOn : [];
+      for (const depId of deps) {
+        const dep = byId.get(depId);
+        if (!dep) {
+          blockedIds.set(task.id, { taskId: task.id, depId, depStatus: 'missing' });
+          progressed = true;
+          break;
+        }
+        if (BLOCKING_DEP_STATUSES.has(dep.status) || blockedIds.has(depId)) {
+          blockedIds.set(task.id, {
+            taskId: task.id,
+            depId,
+            depStatus: blockedIds.has(depId) ? 'blocked' : dep.status,
+          });
+          progressed = true;
+          break;
+        }
+      }
+    }
+  }
+  return Array.from(blockedIds.values());
+};
+
 export const summarizeDag = (tasks) => {
   const list = Array.isArray(tasks) ? tasks : [];
-  const counts = { total: list.length, pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0 };
+  const counts = { total: list.length, pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0, blocked: 0 };
   for (const task of list) {
     if (task.status in counts) counts[task.status] += 1;
   }

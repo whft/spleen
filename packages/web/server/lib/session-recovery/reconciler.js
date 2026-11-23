@@ -1,4 +1,12 @@
-import { isLimitError, isLimitErrorType, parseLimitResetAt } from '../limit-failover/policy.js';
+import {
+  DEFAULT_AUTO_CONTINUE_PROVIDERS,
+  extractProviderIdFromError,
+  isLimitError,
+  isLimitErrorType,
+  isOpenCodeZenProvider,
+  isUsageAutoContinueAllowed,
+  parseLimitResetAt,
+} from '../limit-failover/policy.js';
 
 const PENDING_WAIT_MS = 15_000;
 const RESUME_SETTLE_MS = 30_000;
@@ -6,8 +14,19 @@ const STALE_MS = 10 * 60_000;
 const LIMIT_WAIT_BASE_MS = 60 * 60_000;
 const LIMIT_WAIT_MAX_MS = 24 * 60 * 60_000;
 const LIMIT_PROBE_MS = 5 * 60_000;
+const ZEN_CONTINUE_BACKOFF_MS = Object.freeze([
+  3_000,
+  15_000,
+  60_000,
+  5 * 60_000,
+  15 * 60_000,
+  30 * 60_000,
+]);
+
+export const MANUAL_LIMIT_REASON = 'provider limit (manual resume)';
 
 const EXTERNAL_TOOL = /bash|shell|write|edit|patch|git|task|fetch|publish|deploy|push|delete|move/i;
+const TEXT_USAGE_STOP_RE = /^(?:error:\s*)?(?:you(?:'ve| have)\s+reached|free\s+usage\s+limit|opencode\s+(?:zen|go)\b.*limit|usage\s+limit|daily\s+(?:usage\s+)?limit|weekly\s+(?:usage\s+)?limit|monthly\s+(?:usage\s+)?limit|rate\s+limit\s+(?:exceeded|reached)|quota\s*(?:exceeded|reached|exhausted)|too\s+many\s+requests|insufficient\s+credits|out\s+of\s+credits)/i;
 
 export const isExternalTool = (name) => EXTERNAL_TOOL.test(String(name || ''));
 
@@ -22,7 +41,22 @@ const limitWaitMs = (waits) => Math.min(
   LIMIT_WAIT_BASE_MS * 2 ** Math.max(0, (Number(waits) || 0) - 1),
 );
 
-export const providerLimitResetAt = (error, now, waits = 0, failedAt = now) => {
+const zenContinueWaitMs = (waits) => {
+  const index = Math.max(0, Math.min(ZEN_CONTINUE_BACKOFF_MS.length - 1, Math.trunc(Number(waits) || 0)));
+  return ZEN_CONTINUE_BACKOFF_MS[index];
+};
+
+const isZenQuickContinueLimit = (error, providerID) => {
+  const type = asText(error?.type).toLowerCase();
+  if (type === 'provider.free-limit') return true;
+  if (type === 'provider.go-limit') return false;
+  const resolved = asText(providerID) || extractProviderIdFromError(error);
+  if (resolved && isOpenCodeZenProvider(resolved, ['opencode', 'opencode-zen'])) return true;
+  const text = `${asText(error?.message)} ${asText(error?.response?.body)} ${asText(error?.body)}`;
+  return /free\s+usage\s+limit|opencode\s+zen/i.test(text);
+};
+
+export const providerLimitResetAt = (error, now, waits = 0, failedAt = now, providerID = '') => {
   if (!isRecord(error)) return null;
   const type = asText(error.type);
   const body = asText(error.response?.body) || asText(error.body) || null;
@@ -33,7 +67,18 @@ export const providerLimitResetAt = (error, now, waits = 0, failedAt = now) => {
     body,
     message: asText(error.message),
     data: isRecord(error.data) ? error.data : undefined,
+    cause: isRecord(error.cause) ? error.cause : undefined,
   }, baseAt);
+
+  if (isZenQuickContinueLimit(error, providerID) && (isLimitErrorType(type) || isLimitError(error))) {
+    const stepMs = zenContinueWaitMs(waits);
+    const candidateAt = baseAt + stepMs;
+    if (resetAt !== null && resetAt > baseAt && resetAt < candidateAt) {
+      return Math.max(baseAt + 1_000, resetAt);
+    }
+    return candidateAt;
+  }
+
   const backoffAt = baseAt + limitWaitMs(waits);
   const floor = (at) => (waits > 0 ? Math.max(at, backoffAt) : at);
   const firstCheck = (at) => (waits === 0 && at - baseAt > LIMIT_PROBE_MS ? baseAt + LIMIT_PROBE_MS : floor(at));
@@ -57,9 +102,23 @@ const toolPartsOf = (message) => contentOf(message)
   }))
   .filter((part) => part.id.length > 0);
 
+const textPartsOf = (message) => contentOf(message)
+  .filter((part) => isRecord(part) && part.type === 'text' && typeof part.text === 'string')
+  .map((part) => part.text.trim())
+  .filter(Boolean)
+  .join('\n');
+
 const assistantCompleted = (message) => (
   isRecord(message?.time) && Number.isFinite(message.time.completed)
 ) || (typeof message?.finish === 'string' && message.finish.length > 0);
+
+const providerIdOfMessage = (message) => (
+  asText(message?.model?.providerID)
+  || asText(message?.model?.providerId)
+  || asText(message?.providerID)
+  || asText(message?.providerId)
+  || ''
+);
 
 /**
  * The turn Spleen may have to resume: the last user message and everything
@@ -76,7 +135,7 @@ export const summarizeTail = (messages) => {
     }
   }
   if (lastUserIndex === -1) {
-    return { pending: false, lastUser: null, completedTools: [], unknownTools: [], assistantCount: 0 };
+    return { pending: false, lastUser: null, completedTools: [], unknownTools: [], assistantCount: 0, providerID: '' };
   }
   const lastUser = messages[lastUserIndex];
   const after = messages.slice(lastUserIndex + 1);
@@ -90,14 +149,28 @@ export const summarizeTail = (messages) => {
   const idle = [...after].reverse().find((message) => message?.type === 'idle');
   const contentErrorPart = contentOf(lastAssistant).find((part) => isRecord(part) && part.type === 'error');
   const contentError = contentErrorPart ? (isRecord(contentErrorPart.error) ? contentErrorPart.error : contentErrorPart) : null;
-  const error = isRecord(lastAssistant?.error)
+
+  let error = isRecord(lastAssistant?.error)
     ? lastAssistant.error
     : (isRecord(idle?.error) ? idle.error : contentError);
-  const errorAt = isRecord(lastAssistant?.error) || contentError
+
+  if (!error && lastAssistant && completedTools.length === 0 && unknownTools.length === 0) {
+    const assistantText = textPartsOf(lastAssistant);
+    if (assistantText.length > 0 && assistantText.length <= 420 && TEXT_USAGE_STOP_RE.test(assistantText)) {
+      error = { type: 'provider.quota', message: assistantText, fromText: true };
+    }
+  }
+
+  const errorAt = isRecord(lastAssistant?.error) || contentError || error?.fromText
     ? (Number(lastAssistant?.time?.completed) || Number(lastAssistant?.time?.created) || null)
     : (Number(idle?.time?.created) || null);
   const lastAssistantCompletedAt = Number(lastAssistant?.time?.completed) || 0;
-  const lastAssistantFailed = Boolean(isRecord(lastAssistant?.error) || contentError || lastAssistant?.finish === 'error');
+  const lastAssistantFailed = Boolean(isRecord(lastAssistant?.error) || contentError || error?.fromText || lastAssistant?.finish === 'error');
+  const providerID = extractProviderIdFromError(error)
+    || providerIdOfMessage(lastAssistant)
+    || providerIdOfMessage(lastUser)
+    || '';
+
   return {
     pending,
     lastUser: {
@@ -110,11 +183,22 @@ export const summarizeTail = (messages) => {
     lastAssistantFailed,
     error,
     errorAt,
+    providerID,
     completedTools,
     unknownTools,
     assistantCount: assistants.length,
   };
 };
+
+const sessionProviderId = (session, tail) => (
+  asText(tail?.providerID)
+  || extractProviderIdFromError(tail?.error)
+  || asText(session?.model?.providerID)
+  || asText(session?.model?.providerId)
+  || asText(session?.providerID)
+  || asText(session?.providerId)
+  || ''
+);
 
 /**
  * Pure decision for one durable execution after a restart. `attach` means the
@@ -131,6 +215,8 @@ export const decideRecovery = ({
   resumeSettleMs = RESUME_SETTLE_MS,
   pendingWaitMs = PENDING_WAIT_MS,
   staleMs = STALE_MS,
+  autoContinueProviders = DEFAULT_AUTO_CONTINUE_PROVIDERS,
+  manualResume = false,
 }) => {
   if (!session) return { action: 'needs_review', state: 'needs_review', reason: 'session missing' };
   if (active) return { action: 'attach', state: 'running', reason: 'backend owns the execution' };
@@ -145,16 +231,32 @@ export const decideRecovery = ({
   const errorAt = Number(tail?.errorAt) || 0;
   const beforeResume = resumedAt > 0 && errorAt > 0 && errorAt <= resumedAt;
   const anchoredFailedAt = tail?.errorAt ?? (Number(row?.updated_at) || Number(row?.started_at) || now);
+  const providerID = sessionProviderId(session, tail);
   const limitResetAt = tail?.lastUser && !beforeResume
-    ? providerLimitResetAt(tail.error, now, waits, anchoredFailedAt)
+    ? providerLimitResetAt(tail.error, now, waits, anchoredFailedAt, providerID)
     : null;
+  const autoContinueAllowed = manualResume || isUsageAutoContinueAllowed({
+    providerID,
+    error: tail?.error,
+    allowedProviders: autoContinueProviders,
+  });
 
   if (row?.state === 'waiting_provider') {
+    if (!manualResume && (!autoContinueAllowed || row.last_error === MANUAL_LIMIT_REASON)) {
+      return {
+        action: 'wait',
+        state: 'waiting_provider',
+        reason: MANUAL_LIMIT_REASON,
+        nextWakeAt: null,
+        manualOnly: true,
+        providerID,
+      };
+    }
     if (Number(row.next_wake_at) > now) {
       return { action: 'wait', state: 'waiting_provider', reason: 'provider limit', nextWakeAt: Number(row.next_wake_at) };
     }
     if (limitResetAt !== null) {
-      if (limitResetAt > now) {
+      if (!manualResume && limitResetAt > now) {
         return { action: 'wait', state: 'waiting_provider', reason: 'provider limit', nextWakeAt: limitResetAt };
       }
       return {
@@ -163,6 +265,7 @@ export const decideRecovery = ({
         reason: 'provider limit reset',
         attempt: attempts,
         afterLimit: true,
+        providerID,
         tail,
       };
     }
@@ -186,12 +289,23 @@ export const decideRecovery = ({
       reason: 'provider limit reset',
       attempt: attempts,
       afterLimit: true,
+      providerID,
       tail,
     };
   }
 
   if (limitResetAt !== null) {
-    return { action: 'park', state: 'waiting_provider', reason: 'provider limit', nextWakeAt: limitResetAt };
+    if (!autoContinueAllowed) {
+      return {
+        action: 'park',
+        state: 'waiting_provider',
+        reason: MANUAL_LIMIT_REASON,
+        nextWakeAt: null,
+        manualOnly: true,
+        providerID,
+      };
+    }
+    return { action: 'park', state: 'waiting_provider', reason: 'provider limit', nextWakeAt: limitResetAt, providerID };
   }
 
   if (beforeResume) {

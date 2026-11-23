@@ -14,7 +14,6 @@ import { useI18n } from '@/lib/i18n';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { SEMANTIC_TYPOGRAPHY, VSCODE_TYPOGRAPHY, getScaledTypographyStyle } from '@/lib/typography';
 import { ChatSearchBar } from './search/ChatSearchBar';
-import { RecoveryStatusBanner } from './RecoveryStatusBanner';
 import { WorkStatusPanel } from './work-status/WorkStatusPanel';
 import { TimelineDialog } from './TimelineDialog';
 import { FormDockModeContext, resolveFormDockMode, resolveFormsInChat } from './formsInChat';
@@ -428,7 +427,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         </div>
                     ) : null}
 
-                    <RecoveryStatusBanner sessionId={currentSessionId} />
                     <FormDockModeContext.Provider value={resolveFormDockMode(formsInChat, showScrollButton)}>
                     <ComposerSlot
                         attachComposerSlot={attachComposerSlot}

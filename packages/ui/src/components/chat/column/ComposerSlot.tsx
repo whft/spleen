@@ -13,10 +13,10 @@ import { registerFloatingPanelClearanceReader } from '@/components/chat/composer
 import ScrollToBottomButton from '../components/ScrollToBottomButton';
 import { StatusRowContainer } from '../StatusRowContainer';
 import { ChatInput } from '../ChatInput';
-import { SpleenSpatialStage3D } from '@/components/ui/SpleenSpatialStage3D';
 import { PermissionDock } from '../PermissionDock';
 import { FormDock } from '../FormDock';
 import { MessageSelectionBar } from '../messageSelection/MessageSelectionBar';
+import { RecoveryStatusBanner } from '../RecoveryStatusBanner';
 import { ReadOnlyPromptBanner } from './ReadOnlyPromptBanner';
 
 const ComposerRiders: React.FC<{
@@ -87,6 +87,7 @@ const ReadOnlyComposer: React.FC<{
                 directory={directory}
                 hidden={permissionCount > 0}
             />
+            <RecoveryStatusBanner sessionId={sessionId} variant="floating" />
             <ReadOnlyPromptBanner
                 text={spaceArchiveName !== null
                     ? t('spaces.archive.readOnlyBanner', { name: spaceArchiveName })
@@ -160,13 +161,10 @@ export const ComposerSlot: React.FC<{
             isDesktopExpandedInput
                 ? 'flex-1 min-h-0 bg-background'
                 : draftLayoutVisible && !useCompactDraftLayout
-                    ? 'flex-1 items-center justify-center overflow-hidden bg-background pb-[6vh]'
+                    ? 'flex-1 items-center justify-center bg-background pb-[6vh]'
                 : !floatingComposer && 'bg-background'
         )}
     >
-        {draftLayoutVisible && !useCompactDraftLayout && !isMobile ? (
-            <SpleenSpatialStage3D className="pointer-events-none absolute inset-0 z-0" />
-        ) : null}
         {showRiders && (
             <ComposerRiders
                 showScrollToBottom={showScrollToBottom}

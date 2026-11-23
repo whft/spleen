@@ -99,7 +99,7 @@ export const DiscordThreads: React.FC<{
                 key={th.id}
                 type="button"
                 onClick={() => onSelectThread(th)}
-                className="flex w-full items-center justify-between rounded border border-border/60 bg-card/40 px-2.5 py-2 text-left hover:bg-muted"
+                className="flex w-full items-center justify-between rounded border border-border/60 bg-card/40 px-2.5 py-2 text-start hover:bg-muted"
               >
                 <span className="truncate font-medium">#{th.name}</span>
               </button>

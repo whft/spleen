@@ -35,7 +35,7 @@ Every fix and feature goes through these steps, in order. What counts as proof, 
 
 - `packages/ui`: shared React UI, state, sync, and runtime contracts.
 - `packages/web`: web surfaces, Spleen server, managed/external OpenCode lifecycle, and CLI.
-- `packages/electron`: native desktop shell and privileged Electron boundary.
+- `packages/desktop`: native Windows Tauri 2 desktop host, sidecar supervisor, updater, and privileged Rust IPC boundary.
 - `packages/vscode`: extension host, webview, and runtime bridge.
 - `packages/mobile`: Capacitor iOS/Android shell; bundles the mobile web surface and connects to an existing Spleen server.
 - `packages/docs`: product documentation; not a Bun workspace.

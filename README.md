@@ -65,9 +65,9 @@ Run a prompt once, daily, weekly, or on a cron schedule. Scheduled tasks can use
 
 ### Windows desktop
 
-The desktop app targets Windows 10/11 with WebView2. Release artifacts are not published yet; build the unsigned installer from source with [Windows development](docs/operations/WINDOWS-DEV.md). The installer bundles the matching OpenCode CLI, so no separate OpenCode installation is required.
+The desktop app targets Windows 10/11 with WebView2. Download the latest signed updater-enabled NSIS installer from [GitHub Releases](https://github.com/whft/spleen/releases/latest), or build from source with [Windows development](docs/operations/WINDOWS-DEV.md). The installer bundles the matching OpenCode CLI, so no separate OpenCode installation is required.
 
-The local build writes `Spleen_<version>_x64-setup.exe` under `packages/desktop/src-tauri/target/release/bundle/nsis/`.
+Local builds write `Spleen_<version>_x64-setup.exe` under `packages/desktop/src-tauri/target/release/bundle/nsis/`.
 
 ### VS Code
 

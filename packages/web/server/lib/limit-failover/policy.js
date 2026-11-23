@@ -18,13 +18,90 @@ const LIMIT_ERROR_TYPES = new Set([
 
 const MAX_NL_RESET_MS = 7 * 24 * 60 * 60_000;
 const LIMIT_TYPE_RE = /rate.?limit|quota|budget|usage.?limit|overloaded|resource_exhausted|too_many_requests/i;
-const LIMIT_TEXT_RE = /rate.?limit|usage.?limit|quota\s*(?:exceeded|reached|exhausted)|too many requests|\b429\b|capacity|overloaded|try again (?:in|at|after)|limit resets/i;
+const LIMIT_TEXT_RE = /rate.?limit|usage.?limit|usage\s+exceeded|quota\s*(?:exceeded|reached|exhausted)|(?:daily|weekly|monthly|hourly|free|credit|spending|workspace|session)\s+(?:usage\s+)?limit|limit\s+(?:reached|exceeded|exhausted|resets)|out of credits|insufficient\s+credits|too many requests|\b429\b|capacity|overloaded|try again (?:in|at|after)/i;
 const AUTH_ERROR_RE = /invalid.?api.?key|authentication|unauthorized/i;
+
+export const DEFAULT_AUTO_CONTINUE_PROVIDERS = Object.freeze(['opencode', 'opencode-zen', 'opencode-go']);
+
+const NON_ZEN_PROVIDER_TEXT_RE = /\b(anthropic|claude\s+(?:pro|max|api)|openai|chatgpt|google\s+ai|gemini|openrouter|github\s+copilot|xai|grok|deepseek|mistral|cohere)\b/i;
+const ZEN_PROVIDER_TEXT_RE = /\b(opencode(?:\s+(?:zen|go))?|zen\s+(?:usage|free|limit|quota))\b/i;
+
+export const normalizeProviderId = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+export const isOpenCodeZenProvider = (providerID, allowedProviders = DEFAULT_AUTO_CONTINUE_PROVIDERS) => {
+  const normalized = normalizeProviderId(providerID);
+  if (!normalized) return false;
+  const allowSet = new Set(
+    (Array.isArray(allowedProviders) && allowedProviders.length > 0 ? allowedProviders : DEFAULT_AUTO_CONTINUE_PROVIDERS)
+      .map(normalizeProviderId)
+      .filter(Boolean),
+  );
+  if (allowSet.has(normalized)) return true;
+  if (allowSet.has('opencode') || allowSet.has('opencode-zen')) {
+    return normalized === 'opencode' || normalized === 'opencode-zen' || normalized.startsWith('opencode-zen');
+  }
+  return false;
+};
+
+export const extractProviderIdFromError = (error) => {
+  if (!error || typeof error !== 'object') return '';
+  for (const candidate of [
+    error.providerID,
+    error.providerId,
+    error.provider,
+    error.data?.providerID,
+    error.data?.providerId,
+    error.data?.provider,
+    error.data?.error?.providerID,
+    error.response?.providerID,
+  ]) {
+    const id = normalizeProviderId(candidate);
+    if (id) return id;
+  }
+  return '';
+};
+
+export const isUsageAutoContinueAllowed = ({
+  providerID = null,
+  error = null,
+  allowedProviders = DEFAULT_AUTO_CONTINUE_PROVIDERS,
+} = {}) => {
+  const errType = typeof error?.type === 'string' ? error.type.trim().toLowerCase() : '';
+  if (errType === 'provider.chatgpt-limit') return false;
+  const resolvedProvider = normalizeProviderId(providerID) || extractProviderIdFromError(error);
+  if (resolvedProvider) {
+    return isOpenCodeZenProvider(resolvedProvider, allowedProviders);
+  }
+  if (errType === 'provider.free-limit' || errType === 'provider.go-limit') {
+    return true;
+  }
+  const text = [
+    error?.message,
+    typeof error?.body === 'string' ? error.body : '',
+    error?.data?.message,
+    error?.data?.error?.message,
+    typeof error?.response?.body === 'string' ? error.response.body : '',
+  ]
+    .filter((v) => typeof v === 'string' && v.trim())
+    .join(' ');
+  if (text && NON_ZEN_PROVIDER_TEXT_RE.test(text) && !ZEN_PROVIDER_TEXT_RE.test(text)) {
+    return false;
+  }
+  return true;
+};
 
 export const isLimitErrorType = (type) => LIMIT_ERROR_TYPES.has(type);
 
 const extractHttpStatus = (error) => {
-  for (const candidate of [error?.status, error?.statusCode, error?.response?.status, error?.data?.statusCode, error?.data?.status]) {
+  for (const candidate of [
+    error?.status,
+    error?.statusCode,
+    error?.response?.status,
+    error?.data?.statusCode,
+    error?.data?.status,
+    error?.data?.error?.status,
+    error?.data?.error?.statusCode,
+  ]) {
     const code = Number(candidate);
     if (Number.isInteger(code) && code >= 100 && code <= 599) return code;
   }
@@ -38,7 +115,7 @@ export const isLimitError = (error) => {
   if (status === 401 || status === 403) return false;
   if (LIMIT_ERROR_TYPES.has(error.type)) return true;
   if (status === 429 || status === 529) return true;
-  const typeText = [error.name, error.code, error.type, error.data?.code, error.data?.type]
+  const typeText = [error.name, error.code, error.type, error.data?.code, error.data?.type, error.data?.error?.code, error.data?.error?.type]
     .filter((v) => typeof v === 'string' && v.trim())
     .join(' ');
   if (typeText && LIMIT_TYPE_RE.test(typeText)) return true;
@@ -49,12 +126,15 @@ export const isLimitError = (error) => {
     error.message,
     typeof error.body === 'string' ? error.body : '',
     error.data?.message,
+    error.data?.error?.message,
+    typeof error.data?.responseBody === 'string' ? error.data.responseBody : '',
+    typeof error.cause?.message === 'string' ? error.cause.message : '',
     typeof error.response?.body === 'string' ? error.response.body : '',
   ]
     .filter((v) => typeof v === 'string' && v.trim())
     .join(' ');
   if (!bodyText) return false;
-  if (AUTH_ERROR_RE.test(bodyText) && !/rate.?limit|usage.?limit|quota/i.test(bodyText)) return false;
+  if (AUTH_ERROR_RE.test(bodyText) && !/rate.?limit|usage.?limit|quota|limit\s+(?:reached|exceeded)/i.test(bodyText)) return false;
   return LIMIT_TEXT_RE.test(bodyText);
 };
 
@@ -160,6 +240,9 @@ export const parseLimitResetAt = (error, now) => {
     error?.message,
     typeof error?.body === 'string' ? error.body : null,
     typeof error?.data?.message === 'string' ? error.data.message : null,
+    typeof error?.data?.error?.message === 'string' ? error.data.error.message : null,
+    typeof error?.data?.responseBody === 'string' ? error.data.responseBody : null,
+    typeof error?.cause?.message === 'string' ? error.cause.message : null,
     typeof error?.response?.body === 'string' ? error.response.body : null,
   ]) {
     const parsed = parseNaturalLanguageResetAt(text, now);

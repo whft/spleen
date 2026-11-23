@@ -7,12 +7,13 @@ import {
   RiDeleteBinLine,
   RiEditLine,
   RiPlayLine,
-  RiRefreshLine,
   RiSendPlaneLine,
   RiStopCircleLine,
   RiUserAddLine,
 } from '@remixicon/react';
 import { Icon } from '@/components/icon/Icon';
+import { ContextPanelHeaderToolbar } from '@/components/layout/contextPanelHeaderSlot';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { subscribeSpleenEvents } from '@/lib/spleenEvents';
@@ -26,7 +27,7 @@ import {
 } from '@/stores/useAgentsStore';
 import { teamsApi, type TeamRecord } from './api';
 import { TeamLauncher } from './TeamLauncher';
-import { TeamConstellation3D } from './TeamConstellation3D';
+import { TeamExecutionGraph } from './TeamExecutionGraph';
 
 type SubTab = 'topology' | 'board' | 'tasks' | 'agents';
 
@@ -38,6 +39,7 @@ const STATUS_BADGE: Record<string, string> = {
   pending: 'border border-border/60 bg-muted text-muted-foreground',
   idle: 'border border-border/60 bg-muted text-muted-foreground',
   failed: 'border border-border bg-muted text-foreground',
+  blocked: 'border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/10 text-[var(--status-warning)]',
   stopped: 'border border-border/60 bg-muted text-muted-foreground',
   cancelled: 'border border-border/60 bg-muted text-muted-foreground',
 };
@@ -494,51 +496,55 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <Icon name="ai-teams" className="h-4 w-4 shrink-0 text-foreground" />
-          {teams.length > 0 ? (
-            <select
-              value={selectedId ?? ''}
-              onChange={(e) => void selectTeam(e.target.value)}
-              className="max-w-[200px] truncate rounded border border-border bg-card px-2 py-1 text-xs font-medium text-foreground"
+      <ContextPanelHeaderToolbar>
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <Icon name="ai-teams" className="h-4 w-4 shrink-0 text-foreground" />
+            {teams.length > 0 ? (
+              <select
+                value={selectedId ?? ''}
+                onChange={(e) => void selectTeam(e.target.value)}
+                className="max-w-[190px] truncate rounded-lg border border-edge bg-surface-elevated px-2 py-1 text-xs font-medium text-foreground outline-none"
+              >
+                {teams.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} ({item.status})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="truncate typography-ui-label font-medium text-foreground">{t('contextPanel.mode.teams')}</span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => setShowLauncher((v) => !v)}
+              className="h-7 gap-1 rounded-full px-2.5 text-[11px]"
             >
-              {teams.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name} ({item.status})
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-xs font-semibold">{t('contextPanel.mode.teams')}</span>
-          )}
+              <Icon name="add" className="h-3.5 w-3.5" />
+              {t('teams.launcher.newTeam')}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                void loadTeams();
+                if (effectiveDirectory) void loadAgents(effectiveDirectory);
+              }}
+              aria-label="Refresh"
+              title="Refresh"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
+            >
+              <Icon name="refresh" className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setShowLauncher((v) => !v)}
-            className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground hover:opacity-90"
-          >
-            <RiAddLine className="h-3.5 w-3.5" />
-            {t('teams.launcher.newTeam')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void loadTeams();
-              if (effectiveDirectory) void loadAgents(effectiveDirectory);
-            }}
-            aria-label="Refresh"
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <RiRefreshLine className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
+      </ContextPanelHeaderToolbar>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto p-3.5">
         {showLauncher ? (
           <TeamLauncher
             directory={effectiveDirectory}
@@ -581,7 +587,7 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-semibold">{activeTeam.name}</span>
                   <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[activeTeam.status] ?? 'bg-muted'}`}>
-                    {isLiveStatus(activeTeam.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--spleen-accent,#C8FA62)]" /> : null}
+                    {isLiveStatus(activeTeam.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-success)]" /> : null}
                     {activeTeam.status}
                   </span>
                   {activeTeam.dagSummary ? (
@@ -646,7 +652,7 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
 
             {subTab === 'topology' ? (
               <div className="flex flex-col gap-2.5">
-                <TeamConstellation3D
+                <TeamExecutionGraph
                   teamName={activeTeam.name}
                   teamStatus={activeTeam.status}
                   members={activeTeam.members}
@@ -747,7 +753,7 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                           </span>
                         ) : null}
                         <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${STATUS_BADGE[member.status] ?? 'bg-muted'}`}>
-                          {isLiveStatus(member.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--spleen-accent,#C8FA62)]" /> : null}
+                          {isLiveStatus(member.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-success)]" /> : null}
                           {member.status}
                         </span>
                       </div>
@@ -918,7 +924,7 @@ export const TeamsPanel: React.FC<{ directory: string; visible?: boolean }> = ({
                               <span className="font-medium">{task.title}</span>
                               <span className="font-mono text-[10px] text-muted-foreground">{task.id}</span>
                               <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[task.status] ?? 'bg-muted'}`}>
-                                {isLiveStatus(task.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--spleen-accent,#C8FA62)]" /> : null}
+                                {isLiveStatus(task.status) ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-success)]" /> : null}
                                 {task.status}
                               </span>
                               {member ? (

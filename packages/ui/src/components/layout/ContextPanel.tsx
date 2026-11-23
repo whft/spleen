@@ -1131,7 +1131,7 @@ export const ContextPanel: React.FC<{ zone?: ContextZone }> = ({ zone = 'right' 
           zone === 'bottom' && (leftZoneShown ? 'ms-0' : 'ms-2'),
           zone === 'bottom' && (rightSlotFilled ? 'me-0' : 'me-1.5'),
           isVertical ? null : 'h-[calc(100%-0.5rem)]',
-          'oc-panel-edge overflow-hidden rounded-[10px] bg-background',
+          'oc-panel-edge overflow-hidden rounded-2xl bg-background',
           isVertical ? 'transition-[height,opacity]' : 'transition-[width,opacity,margin-inline-start]',
           !isOpen && 'opacity-0',
           contentHidden && 'pointer-events-none select-none'

@@ -130,4 +130,32 @@ describe('teams service & routes', () => {
     const after = await request(app).get(`/api/teams/${teamId}`).expect(200);
     expect(after.body.status).toBe('stopped');
   });
+
+  it('aborts running sessions on cancel, propagates blocked dependencies to @lead, and unblocks on retry', async () => {
+    const ctx = await setupTeams();
+    const team = await ctx.service.createTeam({
+      name: 'Supervisor Team',
+      goal: 'Ship safely',
+      directory: 'C:/repo',
+      preset: 'bug-hunt',
+      initialTasks: [
+        { id: 't1', title: 'Step 1', assignee: 'investigator', prompt: 'Investigate' },
+        { id: 't2', title: 'Step 2', assignee: 'fixer', dependsOn: ['t1'], prompt: 'Fix' },
+      ],
+    });
+
+    await ctx.service.cancelTask(team.id, 't1');
+    const afterCancel = await ctx.service.getTeam(team.id);
+    expect(afterCancel.tasks.find((t) => t.id === 't1').status).toBe('cancelled');
+    expect(afterCancel.tasks.find((t) => t.id === 't2').status).toBe('blocked');
+    expect(afterCancel.messages.some((m) => m.body.includes('@lead') && m.body.includes('t2'))).toBe(true);
+    expect(afterCancel.status).toBe('failed');
+
+    // Retrying t1 unblocks t2 back to pending and reactivates the team
+    await ctx.service.retryTask(team.id, 't1');
+    const afterRetry = await ctx.service.getTeam(team.id);
+    expect(afterRetry.status).toBe('active');
+    expect(afterRetry.tasks.find((t) => t.id === 't1').status).toBe('running');
+    expect(afterRetry.tasks.find((t) => t.id === 't2').status).toBe('pending');
+  });
 });

@@ -20,7 +20,7 @@ function Command({
         ...style,
       }}
       className={cn(
-        "bg-popover text-popover-foreground border border-border/80 flex h-full w-full flex-col overflow-hidden rounded-xl",
+        "bg-popover text-popover-foreground border border-border/80 flex h-full w-full flex-col overflow-hidden rounded-2xl",
         className
       )}
       {...props}
@@ -35,14 +35,14 @@ const CommandInput = React.forwardRef<
   return (
     <div
       data-slot="command-input-wrapper"
-      className="flex h-8 items-center gap-2 border-b px-3"
+      className="flex h-11 items-center gap-2.5 border-b border-edge-muted px-3.5"
     >
-      <Icon name="search" className="size-4 shrink-0 opacity-50" />
+      <Icon name="search" className="size-4 shrink-0 text-muted-foreground" />
       <CommandPrimitive.Input
         ref={ref}
         data-slot="command-input"
         className={cn(
-          "placeholder:text-muted-foreground flex h-8 w-full rounded-lg bg-transparent py-2 typography-meta outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+          "placeholder:text-muted-foreground flex h-10 w-full rounded-lg bg-transparent py-2 typography-ui-label outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         {...props}
@@ -123,7 +123,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "data-[selected=true]:bg-interactive-selection data-[selected=true]:text-interactive-selection-foreground data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 typography-meta outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "data-[selected=true]:bg-interactive-selection data-[selected=true]:text-interactive-selection-foreground data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 typography-meta transition-colors duration-100 outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

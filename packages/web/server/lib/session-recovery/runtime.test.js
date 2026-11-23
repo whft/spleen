@@ -231,23 +231,35 @@ describe('decideRecovery', () => {
     expect(decideRecovery({ row: sent, session: interrupted, messages, now: 50_000 + 10 * 60_000 + 1 }).action).toBe('needs_review');
   });
 
-  it('probes a long free-limit reset after five minutes', () => {
+  it('quickly continues a free-limit stop in 3s even when retryAfterMs is hours away, and escalates if immediate retry hits limit again', () => {
     const messages = [
       userMessage('u1', 'do work'),
-      assistantMessage('a1', [], {
-        completed: true,
-        completedAt: 1_000,
-        error: { type: 'provider.free-limit', message: 'Free usage limit reached.', status: 429, retryAfterMs: 39_375_000 },
-      }),
+      {
+        ...assistantMessage('a1', [], {
+          completed: true,
+          completedAt: 1_000,
+          error: {
+            type: 'provider.free-limit',
+            message: 'Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.',
+            status: 429,
+            retryAfterMs: 75_982_000,
+          },
+        }),
+        model: { id: 'deepseek-v4.1-flash-free', providerID: 'opencode', variant: 'max' },
+      },
     ];
     const session = { id: 'ses_x', outcome: 'failed' };
     expect(decideRecovery({ row, session, messages, now: 1_000 })).toMatchObject({
       action: 'park',
-      nextWakeAt: 1_000 + 5 * 60_000,
+      nextWakeAt: 1_000 + 3_000,
     });
-    expect(decideRecovery({ row: { ...row, provider_waits: 1 }, session, messages, now: 301_000 })).toMatchObject({
+    expect(decideRecovery({ row: { ...row, provider_waits: 1 }, session, messages, now: 4_000 })).toMatchObject({
       action: 'park',
-      nextWakeAt: 1_000 + 39_375_000,
+      nextWakeAt: 1_000 + 15_000,
+    });
+    expect(decideRecovery({ row: { ...row, provider_waits: 2 }, session, messages, now: 19_000 })).toMatchObject({
+      action: 'park',
+      nextWakeAt: 1_000 + 60_000,
     });
   });
 
@@ -429,7 +441,7 @@ describe('recovery runtime', () => {
     runtime.stop();
   });
 
-  it('probes a free limit that names a reset many hours away', () => {
+  it('schedules a fast 3s auto-continue on OpenCode Zen free limit and resets backoff after real tool progress', () => {
     const store = openStore(tempDb());
     store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 1, at: 1_000 });
     const runtime = createSessionRecoveryRuntime({
@@ -442,12 +454,20 @@ describe('recovery runtime', () => {
       type: 'session.execution.failed',
       data: {
         sessionID: 'ses_limit',
-        error: { type: 'provider.free-limit', message: 'Free usage limit reached.', status: 429, retryAfterMs: 39_375_000 },
+        model: { id: 'deepseek-v4.1-flash-free', providerID: 'opencode', variant: 'max' },
+        error: { type: 'provider.free-limit', message: 'Free usage limit reached.', status: 429, retryAfterMs: 75_982_000 },
       },
     });
     const row = store.get('ses_limit');
     expect(row.state).toBe('waiting_provider');
-    expect(row.next_wake_at).toBe(10_000 + 5 * 60_000);
+    expect(row.next_wake_at).toBe(10_000 + 3_000);
+
+    // Simulate a continuation that succeeds and completes a real tool call: provider_waits resets to 0
+    store.schedule('ses_limit', { state: 'recovering', attempts: 0, providerWaits: 2, resumedAt: 13_000, at: 13_000 });
+    store.beginExecution({ sessionID: 'ses_limit', directory: 'C:/work', seq: 2, at: 14_000 });
+    expect(store.get('ses_limit').provider_waits).toBe(2);
+    store.noteTool({ sessionID: 'ses_limit', toolID: 'tool_1', name: 'read', status: 'completed', executed: true, at: 15_000 });
+    expect(store.get('ses_limit').provider_waits).toBe(0);
     runtime.stop();
   });
 
@@ -687,6 +707,182 @@ describe('recovery runtime', () => {
     expect(dismissed).toEqual({ ok: true, sessionID: 'ses_err_evt' });
     expect(store.get('ses_err_evt').state).toBe('completed');
     expect(events.some((e) => e.type === 'spleen:recovery')).toBe(true);
+    runtime.stop();
+  });
+
+  it('auto-continues OpenCode Zen chats and subagents (even while parent is running) and skips non-Zen providers', async () => {
+    const store = openStore(tempDb());
+    const zenError = {
+      type: 'provider.free-limit',
+      providerID: 'opencode',
+      message: 'OpenCode Zen free usage limit reached.',
+      status: 429,
+      retryAfterMs: 60_000,
+    };
+    const anthropicError = {
+      type: 'provider.rate-limit',
+      providerID: 'anthropic',
+      message: 'Anthropic usage limit reached',
+      status: 429,
+      retryAfterMs: 60_000,
+    };
+
+    const sessions = new Map([
+      ['ses_parent_running', {
+        info: { id: 'ses_parent_running', outcome: 'interrupted', model: { providerID: 'opencode', id: 'big-pickle' }, time: { created: 1, updated: 100 } },
+        messages: [userMessage('pu', 'delegate work'), assistantMessage('pa', [{ id: 't1', name: 'task', status: 'running' }])],
+      }],
+      ['ses_subagent_zen', {
+        info: { id: 'ses_subagent_zen', parentID: 'ses_parent_running', outcome: 'failed', model: { providerID: 'opencode', id: 'big-pickle' }, time: { created: 1, updated: 1_000 } },
+        messages: [
+          userMessage('su', 'subagent task'),
+          { ...assistantMessage('sa', [], { completed: true, completedAt: 1_000, error: zenError }), model: { providerID: 'opencode', id: 'big-pickle' } },
+        ],
+      }],
+      ['ses_anthropic', {
+        info: { id: 'ses_anthropic', outcome: 'failed', model: { providerID: 'anthropic', id: 'claude-sonnet' }, time: { created: 1, updated: 1_000 } },
+        messages: [
+          userMessage('au', 'other provider task'),
+          { ...assistantMessage('aa', [], { completed: true, completedAt: 1_000, error: anthropicError }), model: { providerID: 'anthropic', id: 'claude-sonnet' } },
+        ],
+      }],
+    ]);
+
+    store.beginExecution({ sessionID: 'ses_parent_running', directory: 'C:/work', seq: 1, at: 100 });
+    store.beginExecution({ sessionID: 'ses_subagent_zen', parentSessionID: 'ses_parent_running', directory: 'C:/work', seq: 1, at: 500 });
+    store.schedule('ses_subagent_zen', { state: 'waiting_provider', attempts: 0, nextWakeAt: 61_000, error: 'provider limit', at: 1_000 });
+    store.beginExecution({ sessionID: 'ses_anthropic', directory: 'C:/work', seq: 1, at: 500 });
+
+    const backend = fakeBackend({ sessions, active: { ses_parent_running: {} } });
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => 62_000,
+      owner: 'zen-subagents',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+
+    // Stopped OpenCode Zen subagent must receive "Continue." even though its parent is running
+    expect(backend.prompts).toHaveLength(1);
+    expect(backend.prompts[0].sessionID).toBe('ses_subagent_zen');
+    expect(backend.prompts[0].body.text).toBe('Continue.');
+
+    // Non-Zen Anthropic session must be parked for manual resume only (never auto-continued)
+    const anthRow = store.get('ses_anthropic');
+    expect(anthRow.state).toBe('waiting_provider');
+    expect(anthRow.last_error).toBe('provider limit (manual resume)');
+    expect(anthRow.next_wake_at).toBeNull();
+    runtime.stop();
+  });
+
+  it('discovers untracked stopped OpenCode Zen chats and subagents and sends Continue.', async () => {
+    const store = openStore(tempDb());
+    const sessions = new Map([
+      ['ses_discovered_sub', {
+        info: {
+          id: 'ses_discovered_sub',
+          parentID: 'ses_root_done',
+          directory: 'C:/work',
+          outcome: 'failed',
+          model: { providerID: 'opencode', id: 'big-pickle' },
+          time: { created: 1_000, updated: 1_000 },
+        },
+        messages: [
+          userMessage('du', 'audit files'),
+          {
+            id: 'da',
+            type: 'assistant',
+            model: { providerID: 'opencode', id: 'big-pickle' },
+            content: [{ type: 'text', text: 'Free usage limit reached. Try again in 2 minutes.' }],
+            time: { created: 1_000, completed: 1_000 },
+            finish: 'stop',
+          },
+        ],
+      }],
+    ]);
+
+    const prompts = [];
+    const fetchImpl = async (fetchPath, options = {}) => {
+      const method = options.method || 'GET';
+      if (fetchPath === '/api/session/active') return {};
+      if (fetchPath === '/api/session') return Array.from(sessions.values()).map((s) => s.info);
+      const promptMatch = fetchPath.match(/^\/api\/session\/([^/]+)\/prompt$/);
+      if (method === 'POST' && promptMatch) {
+        prompts.push({ sessionID: decodeURIComponent(promptMatch[1]), body: options.body });
+        return { id: `inbox-${prompts.length}` };
+      }
+      const messageMatch = fetchPath.match(/^\/api\/session\/([^/]+)\/message$/);
+      if (messageMatch) {
+        return { data: sessions.get(decodeURIComponent(messageMatch[1])).messages, cursor: null };
+      }
+      const sessionMatch = fetchPath.match(/^\/api\/session\/([^/]+)$/);
+      if (sessionMatch) {
+        return sessions.get(decodeURIComponent(sessionMatch[1])).info;
+      }
+      throw new Error(`unexpected ${method} ${fetchPath}`);
+    };
+
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: fetchImpl,
+      now: () => 1_000 + 3 * 60_000,
+      owner: 'zen-discovery',
+      startGraceMs: 0,
+    });
+    runtime.start();
+    await runtime.reconcile();
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].sessionID).toBe('ses_discovered_sub');
+    expect(prompts[0].body.text).toBe('Continue.');
+    runtime.stop();
+  });
+
+  it('automatically wakes on the exact Zen 3s schedule via wake timer without waiting for pollMs', async () => {
+    const store = openStore(tempDb());
+    const startAt = Date.now();
+    const error = {
+      type: 'provider.free-limit',
+      message: 'Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.',
+      status: 429,
+      retryAfterMs: 75_982_000,
+    };
+    const sessions = new Map([
+      ['ses_zen_live', {
+        info: { id: 'ses_zen_live', directory: 'C:/work', outcome: 'failed', model: { providerID: 'opencode', id: 'deepseek-v4.1-flash-free' }, time: { created: startAt - 1000, updated: startAt } },
+        messages: [
+          userMessage('u1', 'keep building'),
+          { ...assistantMessage('a1', [], { completed: true, completedAt: startAt, error }), model: { providerID: 'opencode', id: 'deepseek-v4.1-flash-free' } },
+        ],
+      }],
+    ]);
+    const backend = fakeBackend({ sessions });
+    const clock = { at: startAt };
+    const runtime = createSessionRecoveryRuntime({
+      store,
+      openCodeFetch: backend.fetchImpl,
+      now: () => clock.at,
+      owner: 'zen-wake-timer',
+      pollMs: 60_000,
+      startGraceMs: 60_000,
+    });
+    runtime.start();
+    runtime.handleEvent({
+      type: 'session.idle',
+      directory: 'C:/work',
+      data: { sessionID: 'ses_zen_live', outcome: 'failed', error },
+    });
+    expect(store.get('ses_zen_live').state).toBe('waiting_provider');
+    expect(store.get('ses_zen_live').next_wake_at).toBe(startAt + 3_000);
+
+    // Advance clock to 3s and trigger reconcile (startGraceMs=60s must NOT delay live Zen continuation)
+    clock.at = startAt + 3_000;
+    await runtime.reconcile();
+    expect(backend.prompts).toHaveLength(1);
+    expect(backend.prompts[0].sessionID).toBe('ses_zen_live');
+    expect(backend.prompts[0].body.text).toBe('Continue.');
     runtime.stop();
   });
 });

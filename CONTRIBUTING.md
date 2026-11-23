@@ -42,8 +42,7 @@ bun install
 ```
 
 To start over from a fresh state, `bun run clean` removes every `node_modules`
-and build output (`dist`, `dist-*`, built-in extensions), packaged desktop
-builds in `packages/electron/dist` included. Then run `bun install` again. Add
+and build output (`dist`, `dist-*`, built-in extensions). Then run `bun install` again. Add
 `-- --dry-run` to see the list without deleting anything.
 
 ## Dev Scripts
@@ -59,23 +58,17 @@ Run commands from the project root unless a section says otherwise.
 
 Both are configurable via env vars: `SPLEEN_PORT`, `SPLEEN_HMR_UI_PORT`, `SPLEEN_HMR_API_PORT`.
 
-### Desktop (Electron)
+### Desktop (Tauri 2 — Windows)
 
 ```bash
-bun run electron:dev          # HMR web UI + Electron shell
-bun run electron:dev:bundled  # Electron shell using built web assets
-bun run electron:build        # Package desktop app for the current platform
+bun run desktop:build:unsigned  # Build web assets, Bun sidecar, and unsigned Windows NSIS installer
+bun run desktop:build           # Build signed Windows NSIS installer + updater signature (requires TAURI_SIGNING_PRIVATE_KEY)
+bun run --cwd packages/desktop tauri:dev  # Run the Tauri 2 desktop shell in development mode
 ```
 
-Desktop supports macOS, Windows, and Linux. The build output is written to `packages/electron/dist`.
+Windows builds write `Spleen_<version>_x64-setup.exe` (and `.sig` when signed) under `packages/desktop/src-tauri/target/release/bundle/nsis/`.
 
-macOS builds create `dmg` and `zip` files. You need Xcode/build tools for notarized packaging and icon asset work.
-
-Windows builds create an NSIS installer. If signing env vars are not set, the build script makes an unsigned installer.
-
-Linux builds produce an AppImage, a `.deb` and an `.rpm` for the native x64 or arm64 host. The `.rpm` needs `rpmbuild` (the `rpm` package on Debian/Ubuntu).
-
-For desktop-specific details, see [`packages/electron/README.md`](./packages/electron/README.md).
+For Windows setup and signing details, see [`docs/operations/WINDOWS-DEV.md`](./docs/operations/WINDOWS-DEV.md).
 
 ### VS Code Extension
 
@@ -108,41 +101,21 @@ bun run lint:ui
 | `bun run build` | Build all workspaces |
 | `bun run build:web` | Build only `packages/web` |
 | `bun run build:ui` | Build only `packages/ui` |
-| `bun run build:electron` | Run Electron package build script without full packaging |
-| `bun run electron:build` | Build packaged desktop app for the current OS |
+| `bun run desktop:build:unsigned` | Build unsigned Windows Tauri 2 NSIS installer |
+| `bun run desktop:build` | Build signed Windows Tauri 2 NSIS installer and updater signature |
 | `bun run vscode:build` | Build the VS Code extension |
 | `bun run vscode:package` | Package the VS Code extension as `.vsix` |
 | `bun run pack:web` | Create a package archive for `@spleen/web` |
 
 ## Platform Build Notes
 
-You usually build desktop installers on the target platform.
-
-macOS:
+Desktop builds currently target Windows 10/11 (x64) via Tauri 2 and WebView2:
 
 ```bash
-bun run electron:build
-bun run release:test:intel
-bun run release:test:arm
+bun run desktop:build:unsigned
 ```
 
-Windows:
-
-```bash
-bun run electron:build
-```
-
-Linux x64 and arm64 packages are built natively on the matching host architecture. Use Bun for dependency installation and packaging orchestration:
-
-```bash
-SPLEEN_TARGET_ARCH=x64 bun run electron:build
-# On an arm64 host:
-SPLEEN_TARGET_ARCH=arm64 bun run electron:build
-
-bun run --cwd packages/electron verify:linux-appimage
-```
-
-The final AppImage verifier checks desktop identity and the architecture of Electron, the bundled OpenCode CLI, and packaged native modules.
+See [`docs/operations/WINDOWS-DEV.md`](./docs/operations/WINDOWS-DEV.md) for Rust, Bun, and Tauri updater signing prerequisites.
 
 ## Before Submitting
 

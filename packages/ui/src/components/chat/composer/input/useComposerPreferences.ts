@@ -31,8 +31,8 @@ export function useComposerPreferences() {
     ), [cycleAgentShortcutOverride]);
 
     const { currentTheme } = useThemeSystem();
-    // Rounder composer on mobile (touch UI reads better with a softer corner).
-    const chatInputRadius = isMobile ? '1.25rem' : 'var(--radius-xl)';
+    // Sculpted Krea Studio floating prompt radius across desktop and mobile.
+    const chatInputRadius = isMobile ? '1.375rem' : 'var(--radius-composer, 1.375rem)';
 
     return {
     isMobile, hasHardwareKeyboard, enterToSend, enterToSendConfigured, mobileReturnKeySends,

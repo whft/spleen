@@ -1,7 +1,6 @@
 import React from 'react';
-import { RiTeamLine } from '@remixicon/react';
+import { Icon } from '@/components/icon/Icon';
 import { SpleenLogo } from '@/components/ui/SpleenLogo';
-import { SpleenMonolith3D } from '@/components/ui/SpleenMonolith3D';
 import { DraftProjectName } from '@/components/chat/DraftProjectName';
 import { DraftPresetChips } from '../DraftPresetChips';
 import { useI18n } from '@/lib/i18n';
@@ -56,7 +55,7 @@ export const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false 
             'oc-draft-center flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
             exiting && 'pointer-events-none opacity-0',
         )}>
-            <SpleenMonolith3D size={80} className="mb-3" />
+            <SpleenLogo width={40} height={40} className="mb-3.5 text-foreground/90" />
             <h1 className="text-balance text-3xl font-normal tracking-tight text-foreground">
                 {renderDraftTitle(draftHeading, projectLabel)}
             </h1>
@@ -67,9 +66,9 @@ export const DraftWelcome: React.FC<{ exiting?: boolean }> = ({ exiting = false 
             <button
                 type="button"
                 onClick={openTeamsLauncher}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-card/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
             >
-                <RiTeamLine className="h-3.5 w-3.5 text-primary" />
+                <Icon name="ai-teams" className="h-3.5 w-3.5 text-foreground" />
                 {t('teams.launcher.startAction')}
             </button>
         </div>

@@ -403,12 +403,95 @@ pub async fn spleen_desktop_invoke(
             Ok(hosts)
         }
         "desktop_hosts_set" => {
-            let mut next = args.clone();
+            let mut next = args.get("input").cloned().unwrap_or_else(|| args.clone());
+            if let Some(tok) = next
+                .get("localClientToken")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                *state.client_token.lock().unwrap() = tok.to_string();
+            }
             next["localOrigin"] = json!(state.origin.lock().unwrap().clone());
             write_json_atomic(&state.paths.hosts_file(), &next).map_err(|e| e.to_string())?;
             *state.hosts.lock().unwrap() = next;
             Ok(json!(true))
         }
+        "desktop_switch_to_local" => {
+            let origin = state.origin.lock().unwrap().clone();
+            if origin.is_empty() {
+                return Ok(json!(false));
+            }
+            let parsed = url::Url::parse(&origin).map_err(|e| e.to_string())?;
+            let window = window_of(&app)?;
+            window.navigate(parsed).map_err(|e| e.to_string())?;
+            Ok(json!(true))
+        }
+        "desktop_host_probe" => {
+            let raw_url = arg_str(&args, "url");
+            let client_token = arg_str(&args, "clientToken");
+            let request_headers = args.get("requestHeaders").cloned();
+            Ok(probe_remote_host(&raw_url, &client_token, request_headers.as_ref()).await)
+        }
+        "desktop_remote_password_login" => {
+            let raw_url = arg_str(&args, "url");
+            let password = arg_str(&args, "password");
+            let trust_device = arg_bool(&args, "trustDevice");
+            let request_headers = args.get("requestHeaders").cloned();
+            remote_password_login(&raw_url, &password, trust_device, request_headers.as_ref()).await
+        }
+        "desktop_open_host_session" => {
+            let runtime_key = arg_str(&args, "runtimeKey");
+            if let Some(host_id) = runtime_key.strip_prefix("host:") {
+                let bootstrap = bootstrap_from_state(&app, &state);
+                let target_url = {
+                    let hosts = state.hosts.lock().unwrap();
+                    hosts
+                        .get("hosts")
+                        .and_then(Value::as_array)
+                        .and_then(|list| {
+                            list.iter()
+                                .find(|h| h.get("id").and_then(Value::as_str) == Some(host_id))
+                                .and_then(|h| h.get("url").and_then(Value::as_str))
+                                .map(str::to_string)
+                        })
+                };
+                if let Some(url_str) = target_url {
+                    if let Ok(parsed) = url::Url::parse(&url_str) {
+                        let label = next_window_label("spleen");
+                        let _ = crate::window::open_local_window(
+                            &app, &label, parsed, "Spleen", 1280.0, 800.0, &bootstrap,
+                        );
+                        return Ok(json!({ "opened": true }));
+                    }
+                }
+            }
+            crate::window::focus_main(&app);
+            Ok(json!({ "opened": true }))
+        }
+        "desktop_browser_fetch_favicon" => {
+            let raw_url = arg_str(&args, "url");
+            Ok(fetch_favicon_data_url(&raw_url).await)
+        }
+        "desktop_get_quake_mode" => Ok(json!({
+            "supported": false,
+            "enabled": false,
+            "height": 50,
+            "shortcut": ""
+        })),
+        "desktop_set_quake_mode_enabled"
+        | "desktop_set_quake_mode_height"
+        | "desktop_set_quake_mode_shortcut" => Ok(json!({
+            "supported": false,
+            "enabled": false
+        })),
+        "desktop_get_mini_chat_global_shortcut" | "desktop_set_mini_chat_global_shortcut" => {
+            Ok(json!({
+                "supported": false,
+                "shortcut": ""
+            }))
+        }
+        "desktop_show_app_menu" | "desktop_relay_dev_tunnel_close_all" => Ok(json!(true)),
         "desktop_ssh_instances_get" => Ok(state.ssh.instances_get()),
         "desktop_ssh_instances_set" => {
             let cfg = args.get("config").cloned().unwrap_or_else(|| args.clone());
@@ -777,6 +860,186 @@ fn is_safe_external_url(url: &str) -> bool {
     }
 }
 
+fn apply_extra_headers(
+    mut builder: reqwest::RequestBuilder,
+    headers: Option<&Value>,
+) -> reqwest::RequestBuilder {
+    if let Some(map) = headers.and_then(Value::as_object) {
+        for (name, val) in map {
+            if name.eq_ignore_ascii_case("authorization") {
+                continue;
+            }
+            if let Some(text) = val.as_str() {
+                builder = builder.header(name.as_str(), text);
+            }
+        }
+    }
+    builder
+}
+
+async fn probe_remote_host(
+    raw_url: &str,
+    client_token: &str,
+    request_headers: Option<&Value>,
+) -> Value {
+    let Ok(parsed) = url::Url::parse(raw_url.trim()) else {
+        return json!({ "status": "unreachable", "latencyMs": 0 });
+    };
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return json!({ "status": "unreachable", "latencyMs": 0 });
+    }
+    let base = raw_url.trim().trim_end_matches('/');
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+    else {
+        return json!({ "status": "unreachable", "latencyMs": 0 });
+    };
+
+    let started = std::time::Instant::now();
+    let health_req = apply_extra_headers(client.get(format!("{base}/health")), request_headers)
+        .header("Accept", "application/json");
+    let health_res = match health_req.send().await {
+        Ok(res) => res,
+        Err(_) => return json!({ "status": "unreachable", "latencyMs": 0 }),
+    };
+    let latency_ms = started.elapsed().as_millis() as u64;
+    if !health_res.status().is_success() {
+        return json!({ "status": "unreachable", "latencyMs": latency_ms });
+    }
+    let health_body: Value = health_res.json().await.unwrap_or(Value::Null);
+    let looks_like_spleen = health_body.get("spleenVersion").is_some()
+        || health_body.get("openCodeRunning").is_some()
+        || health_body.get("status").and_then(Value::as_str) == Some("ok");
+    if !looks_like_spleen {
+        return json!({ "status": "wrong-service", "latencyMs": latency_ms });
+    }
+
+    let mut auth_req =
+        apply_extra_headers(client.get(format!("{base}/auth/session")), request_headers)
+            .header("Accept", "application/json");
+    if !client_token.trim().is_empty() {
+        auth_req = auth_req.bearer_auth(client_token.trim());
+    }
+    match auth_req.send().await {
+        Ok(res) if res.status().as_u16() == 401 || res.status().as_u16() == 403 => {
+            json!({ "status": "auth", "latencyMs": latency_ms })
+        }
+        Ok(res) if res.status().is_success() => {
+            let body: Value = res.json().await.unwrap_or(Value::Null);
+            let authenticated = body
+                .get("authenticated")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            if authenticated {
+                json!({ "status": "ok", "latencyMs": latency_ms })
+            } else {
+                json!({ "status": "auth", "latencyMs": latency_ms })
+            }
+        }
+        Ok(_) => json!({ "status": "ok", "latencyMs": latency_ms }),
+        Err(_) => json!({ "status": "unreachable", "latencyMs": latency_ms }),
+    }
+}
+
+async fn remote_password_login(
+    raw_url: &str,
+    password: &str,
+    trust_device: bool,
+    request_headers: Option<&Value>,
+) -> Result<Value, String> {
+    let parsed = url::Url::parse(raw_url.trim()).map_err(|e| e.to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("invalid remote url".into());
+    }
+    let base = raw_url.trim().trim_end_matches('/');
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let body = json!({
+        "password": password,
+        "trustDevice": trust_device,
+        "issueClientToken": true,
+        "clientLabel": "Spleen Desktop",
+        "clientKind": "desktop",
+    });
+    let req = apply_extra_headers(client.post(format!("{base}/auth/session")), request_headers)
+        .header("Accept", "application/json")
+        .json(&body);
+    let res = req.send().await.map_err(|e| e.to_string())?;
+    let status = res.status().as_u16();
+    let payload: Value = res.json().await.unwrap_or(Value::Null);
+    let token = payload
+        .get("clientToken")
+        .or_else(|| payload.get("token"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    Ok(json!({ "token": token, "status": status }))
+}
+
+fn encode_base64(input: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(TABLE[((n >> 18) & 63) as usize] as char);
+        out.push(TABLE[((n >> 12) & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            TABLE[((n >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            TABLE[(n & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+async fn fetch_favicon_data_url(raw_url: &str) -> Value {
+    let Ok(parsed) = url::Url::parse(raw_url.trim()) else {
+        return json!({ "dataUrl": "" });
+    };
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return json!({ "dataUrl": "" });
+    }
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+    else {
+        return json!({ "dataUrl": "" });
+    };
+    let Ok(res) = client.get(parsed).send().await else {
+        return json!({ "dataUrl": "" });
+    };
+    if !res.status().is_success() {
+        return json!({ "dataUrl": "" });
+    }
+    let mime = res
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(';').next().unwrap_or("image/x-icon").trim().to_string())
+        .filter(|s| s.starts_with("image/"))
+        .unwrap_or_else(|| "image/x-icon".to_string());
+    let Ok(bytes) = res.bytes().await else {
+        return json!({ "dataUrl": "" });
+    };
+    if bytes.is_empty() || bytes.len() > 131_072 {
+        return json!({ "dataUrl": "" });
+    }
+    let data_url = format!("data:{mime};base64,{}", encode_base64(&bytes));
+    json!({ "dataUrl": data_url })
+}
+
 fn lan_address() -> String {
     for target in ["8.8.8.8:80", "1.1.1.1:80", "192.168.1.1:80", "10.0.0.1:80", "172.16.0.1:80"] {
         if let Ok(addr) = std::net::UdpSocket::bind("0.0.0.0:0").and_then(|socket| {
@@ -797,16 +1060,19 @@ pub fn load_state(paths: SpleenPaths) -> AppState {
     if !paths.settings_file().exists() {
         let _ = write_json_atomic(&paths.settings_file(), &settings);
     }
-    let hosts: Value = read_json_or_default(&paths.hosts_file());
-    let hosts = if hosts.is_null() {
+    let raw_hosts: Value = read_json_or_default(&paths.hosts_file());
+    let hosts = if raw_hosts.is_null() {
         json!({
             "hosts": [],
             "defaultHostId": "local",
             "initialHostChoiceCompleted": false,
             "localOrigin": null
         })
+    } else if raw_hosts.get("hosts").is_none() && raw_hosts.get("input").is_some() {
+        // Recover from older builds that saved the outer `{ input: ... }` IPC wrapper.
+        raw_hosts.get("input").cloned().unwrap_or_else(|| json!({ "hosts": [] }))
     } else {
-        hosts
+        raw_hosts
     };
     let ssh = crate::ssh::SshManager::new(paths.clone());
     AppState {

@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import webPackage from '../../package.json' with { type: 'json' };
 import { fetchUpdateNotes } from './changelog/update-notes.js';
 import { compareVersions } from './version-order.js';
 import { isEnterpriseMode } from './enterprise-mode.js';
@@ -680,10 +681,13 @@ export function getCurrentVersion() {
   try {
     const pkgPath = path.resolve(__dirname, '..', '..', 'package.json');
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    return pkg.version || 'unknown';
+    if (typeof pkg.version === 'string' && pkg.version.trim()) return pkg.version.trim();
   } catch {
-    return 'unknown';
   }
+  if (typeof webPackage?.version === 'string' && webPackage.version.trim()) {
+    return webPackage.version.trim();
+  }
+  return 'unknown';
 }
 
 const UPDATE_CHANNELS = new Set(['stable', 'canary']);

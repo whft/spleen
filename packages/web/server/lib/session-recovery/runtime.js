@@ -1,8 +1,21 @@
 import crypto from 'node:crypto';
 
-import { isLimitError, isLimitErrorType } from '../limit-failover/policy.js';
+import {
+  DEFAULT_AUTO_CONTINUE_PROVIDERS,
+  extractProviderIdFromError,
+  isLimitError,
+  isLimitErrorType,
+  isUsageAutoContinueAllowed,
+} from '../limit-failover/policy.js';
 import { sessionParentId } from '../session-lineage.js';
-import { buildResumePrompt, decideRecovery, isExternalTool, providerLimitResetAt } from './reconciler.js';
+import {
+  MANUAL_LIMIT_REASON,
+  buildResumePrompt,
+  decideRecovery,
+  isExternalTool,
+  providerLimitResetAt,
+  summarizeTail,
+} from './reconciler.js';
 
 const LEASE_TTL_MS = 60_000;
 const LEASE_RENEW_MS = 20_000;
@@ -13,9 +26,27 @@ const CHILD_MAX_DEFER_MS = 5 * 60_000;
 const REVIVE_LIMIT_MS = 35 * 24 * 60 * 60_000;
 const REVIVE_STAGGER_MS = 30_000;
 const MESSAGE_FETCH_LIMIT = 60;
+const DISCOVERY_SESSION_LIMIT = 40;
+const DISCOVERY_WINDOW_MS = 24 * 60 * 60_000;
 
 const isRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const asText = (value) => (typeof value === 'string' ? value : '');
+
+const parentIdFromEventData = (data) => (
+  asText(data?.parentID)
+  || asText(data?.parentSessionID)
+  || asText(data?.info?.parentID)
+  || null
+);
+
+const providerIdFromEventData = (data, error) => (
+  asText(data?.providerID)
+  || asText(data?.providerId)
+  || asText(data?.model?.providerID)
+  || asText(data?.model?.providerId)
+  || extractProviderIdFromError(error)
+  || ''
+);
 
 export const createSessionRecoveryRuntime = ({
   store,
@@ -31,11 +62,14 @@ export const createSessionRecoveryRuntime = ({
   connectDebounceMs = CONNECT_DEBOUNCE_MS,
   pollMs = 30_000,
   startGraceMs = 10_000,
+  autoContinueProviders = DEFAULT_AUTO_CONTINUE_PROVIDERS,
+  enableDiscovery = true,
 }) => {
   const runtimeStartedAt = now();
   let stopped = false;
   let hasLease = false;
   let reconcileTimer = null;
+  let wakeTimer = null;
   let heartbeatTimer = null;
   let pollTimer = null;
   let reconcilePromise = null;
@@ -43,6 +77,40 @@ export const createSessionRecoveryRuntime = ({
   const unsubscribers = [];
 
   const backoffFor = (attempts) => RETRY_BASE_MS * (2 ** Math.max(0, attempts - 1));
+
+  const clearWakeTimer = () => {
+    if (wakeTimer) {
+      clearTimeout(wakeTimer);
+      wakeTimer = null;
+    }
+  };
+
+  /**
+   * Arm a one-shot timer for the earliest upcoming auto-continue wake so Zen
+   * continuations fire right on schedule (e.g. 3s) rather than waiting up to
+   * pollMs (30s) for the next periodic scan.
+   */
+  const armNextWakeTimer = () => {
+    clearWakeTimer();
+    if (stopped || !hasLease) return;
+    const at = now();
+    let earliest = null;
+    for (const row of store.pending()) {
+      if (row.state === 'waiting_provider' && row.last_error === MANUAL_LIMIT_REASON && row.next_wake_at === null) {
+        continue;
+      }
+      const wakeAt = Number(row.next_wake_at);
+      if (!Number.isFinite(wakeAt) || wakeAt <= 0) continue;
+      if (earliest === null || wakeAt < earliest) earliest = wakeAt;
+    }
+    if (earliest === null) return;
+    const delayMs = Math.max(50, Math.min(pollMs, earliest - at + 25));
+    wakeTimer = setTimeout(() => {
+      wakeTimer = null;
+      scheduleReconcile(0);
+    }, delayMs);
+    wakeTimer.unref?.();
+  };
 
   const broadcastSummary = (detail) => {
     broadcastEvent({ type: 'spleen:recovery', properties: { ...status(), ...detail } });
@@ -54,6 +122,7 @@ export const createSessionRecoveryRuntime = ({
     for (const row of rows) counts[row.state] = (counts[row.state] ?? 0) + 1;
     return {
       coordinator: hasLease,
+      autoContinueProviders: [...autoContinueProviders],
       counts,
       sessions: rows.slice(0, 50).map((row) => ({
         sessionID: row.session_id,
@@ -66,8 +135,45 @@ export const createSessionRecoveryRuntime = ({
         resumedAt: row.resumed_at ?? null,
         updatedAt: row.updated_at ?? null,
         reason: row.last_error || null,
+        autoContinue: row.last_error !== MANUAL_LIMIT_REASON,
       })),
     };
+  };
+
+  const parkLimitEvent = ({ sessionID, parentSessionID, directory, seq, error, providerID, at }) => {
+    const row = store.get(sessionID);
+    const attempts = Number(row?.attempts) || 0;
+    const priorWaits = row && row.state !== 'completed' ? (Number(row.provider_waits) || 0) : 0;
+    const limitResetAt = providerLimitResetAt(error, at, priorWaits, at, providerID);
+    if (limitResetAt === null) return false;
+    const allowed = isUsageAutoContinueAllowed({
+      providerID,
+      error,
+      allowedProviders: autoContinueProviders,
+    });
+    if (!row) {
+      store.beginExecution({ sessionID, parentSessionID, directory: directory || null, seq, at });
+    } else if (parentSessionID && parentSessionID !== row.parent_session_id) {
+      store.noteParent(sessionID, parentSessionID, at);
+    }
+    store.schedule(sessionID, {
+      state: 'waiting_provider',
+      attempts,
+      providerWaits: priorWaits,
+      nextWakeAt: allowed ? limitResetAt : null,
+      error: allowed ? 'provider limit' : MANUAL_LIMIT_REASON,
+      at,
+    });
+    store.noteRecovery('limit.parked', sessionID, {
+      providerID: providerID || null,
+      errorType: asText(error?.type) || null,
+      allowed,
+      waits: priorWaits,
+      nextWakeAt: allowed ? limitResetAt : null,
+    }, at);
+    broadcastSummary({ parked: sessionID });
+    if (allowed) armNextWakeTimer();
+    return true;
   };
 
   const reviveLimitFailures = () => {
@@ -75,6 +181,9 @@ export const createSessionRecoveryRuntime = ({
     let revived = 0;
     for (const row of store.failedSince(at - REVIVE_LIMIT_MS)) {
       if (!isLimitErrorType(row.last_error) && !isLimitError({ type: row.last_error, message: row.last_error })) continue;
+      if (!isUsageAutoContinueAllowed({ error: { type: row.last_error, message: row.last_error }, allowedProviders: autoContinueProviders })) {
+        continue;
+      }
       store.schedule(row.session_id, {
         state: 'waiting_provider',
         attempts: 0,
@@ -109,31 +218,41 @@ export const createSessionRecoveryRuntime = ({
     const sessionID = asText(data.sessionID);
     if (!sessionID) return;
     const directory = asText(event?.directory) || asText(data.directory);
+    const parentSessionID = parentIdFromEventData(data);
     const seq = Number.isFinite(payload?.durable?.seq) ? payload.durable.seq : null;
     const at = now();
 
     switch (type) {
       case 'session.execution.started':
-        store.beginExecution({ sessionID, directory: directory || null, seq, at });
+        store.beginExecution({ sessionID, parentSessionID, directory: directory || null, seq, at });
         break;
-      case 'session.execution.succeeded':
+      case 'session.execution.succeeded': {
+        const error = isRecord(data.error) ? data.error : null;
+        if (error && parkLimitEvent({
+          sessionID,
+          parentSessionID,
+          directory,
+          seq,
+          error,
+          providerID: providerIdFromEventData(data, error),
+          at,
+        })) {
+          break;
+        }
         store.finish(sessionID, 'completed', { at });
         break;
+      }
       case 'session.execution.failed': {
         const error = isRecord(data.error) ? data.error : {};
-        const row = store.get(sessionID);
-        const attempts = Number(row?.attempts) || 0;
-        const limitResetAt = providerLimitResetAt(error, at, Number(row?.provider_waits) || 0);
-        if (limitResetAt !== null) {
-          if (!row) store.beginExecution({ sessionID, directory: directory || null, seq, at });
-          store.schedule(sessionID, {
-            state: 'waiting_provider',
-            attempts,
-            nextWakeAt: limitResetAt,
-            error: 'provider limit',
-            at,
-          });
-          broadcastSummary({ parked: sessionID });
+        if (parkLimitEvent({
+          sessionID,
+          parentSessionID,
+          directory,
+          seq,
+          error,
+          providerID: providerIdFromEventData(data, error),
+          at,
+        })) {
           break;
         }
         store.finish(sessionID, 'failed', {
@@ -142,41 +261,38 @@ export const createSessionRecoveryRuntime = ({
         });
         break;
       }
-      case 'session.error': {
-        const error = isRecord(data.error) ? data.error : {};
-        const row = store.get(sessionID);
-        const limitResetAt = providerLimitResetAt(error, at, Number(row?.provider_waits) || 0);
-        if (limitResetAt !== null) {
-          if (!row) store.beginExecution({ sessionID, directory: directory || null, seq, at });
-          store.schedule(sessionID, {
-            state: 'waiting_provider',
-            attempts: Number(row?.attempts) || 0,
-            nextWakeAt: limitResetAt,
-            error: 'provider limit',
-            at,
-          });
-          broadcastSummary({ parked: sessionID });
-        }
+      case 'session.error':
+      case 'session.idle': {
+        const error = isRecord(data.error) ? data.error : null;
+        if (!error) return;
+        parkLimitEvent({
+          sessionID,
+          parentSessionID,
+          directory,
+          seq,
+          error,
+          providerID: providerIdFromEventData(data, error),
+          at,
+        });
         break;
       }
       case 'session.status': {
         const statusInfo = isRecord(data.status) ? data.status : data;
         if (asText(statusInfo?.type) !== 'retry') return;
         const message = asText(statusInfo.message);
-        const row = store.get(sessionID);
-        const error = { message, retryAfterMs: Number.isFinite(statusInfo.next) && statusInfo.next > at ? statusInfo.next - at : undefined };
-        const limitResetAt = providerLimitResetAt(error, at, Number(row?.provider_waits) || 0);
-        if (limitResetAt !== null) {
-          if (!row) store.beginExecution({ sessionID, directory: directory || null, seq, at });
-          store.schedule(sessionID, {
-            state: 'waiting_provider',
-            attempts: Number(row?.attempts) || 0,
-            nextWakeAt: limitResetAt,
-            error: 'provider limit',
-            at,
-          });
-          broadcastSummary({ parked: sessionID });
-        }
+        const error = {
+          message,
+          retryAfterMs: Number.isFinite(statusInfo.next) && statusInfo.next > at ? statusInfo.next - at : undefined,
+        };
+        parkLimitEvent({
+          sessionID,
+          parentSessionID,
+          directory,
+          seq,
+          error,
+          providerID: providerIdFromEventData(data, error),
+          at,
+        });
         break;
       }
       case 'session.execution.interrupted': {
@@ -259,6 +375,82 @@ export const createSessionRecoveryRuntime = ({
     }
   };
 
+  /**
+   * Discover stopped chats and subagents (e.g. spawned while SSE flickered or
+   * stopped before restart) whose transcript ended on an OpenCode Zen usage
+   * limit, and enroll them into recovery so every stopped Zen session continues.
+   */
+  const discoverStoppedZenSessions = async (activeMap, pendingByID) => {
+    if (!enableDiscovery) return [];
+    let list;
+    try {
+      const raw = await openCodeFetch('/api/session', {
+        query: { limit: String(DISCOVERY_SESSION_LIMIT) },
+      });
+      list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : null);
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(list) || list.length === 0) return [];
+
+    const at = now();
+    const discovered = [];
+    for (const info of list) {
+      if (!isRecord(info)) continue;
+      const sessionID = asText(info.id);
+      if (!sessionID || activeMap[sessionID] || pendingByID.has(sessionID)) continue;
+      const updatedAt = Number(info?.time?.updated) || Number(info?.time?.created) || 0;
+      if (updatedAt > 0 && at - updatedAt > DISCOVERY_WINDOW_MS) continue;
+
+      const existing = store.get(sessionID);
+      if (existing) {
+        if (existing.last_error === 'dismissed' && updatedAt <= Number(existing.updated_at || 0)) continue;
+        if (existing.state === 'completed' && updatedAt <= Number(existing.updated_at || 0)) continue;
+      }
+
+      const outcome = asText(info.outcome);
+      const parentID = sessionParentId(info) || null;
+      // Only inspect sessions that failed/interrupted or are child subagents of tracked/recent runs
+      if (outcome !== 'failed' && outcome !== 'interrupted' && !parentID) continue;
+
+      const directory = asText(info.directory) || null;
+      const messages = await fetchMessages(sessionID, directory);
+      if (!Array.isArray(messages)) continue;
+      const tail = summarizeTail(messages);
+      if (!tail?.lastUser || !tail.error) continue;
+
+      const providerID = tail.providerID
+        || extractProviderIdFromError(tail.error)
+        || asText(info?.model?.providerID)
+        || asText(info?.providerID)
+        || '';
+      if (!isUsageAutoContinueAllowed({ providerID, error: tail.error, allowedProviders: autoContinueProviders })) {
+        continue;
+      }
+      const failedAt = tail.errorAt ?? (updatedAt || at);
+      const resetAt = providerLimitResetAt(tail.error, at, 0, failedAt, providerID);
+      if (resetAt === null) continue;
+
+      store.beginExecution({ sessionID, parentSessionID: parentID, directory, seq: null, at: failedAt });
+      store.schedule(sessionID, {
+        state: 'waiting_provider',
+        attempts: 0,
+        providerWaits: 0,
+        nextWakeAt: resetAt,
+        error: 'provider limit',
+        at,
+      });
+      const enrolled = store.get(sessionID);
+      if (enrolled) {
+        pendingByID.set(sessionID, enrolled);
+        if (!(Number(enrolled.next_wake_at) > at)) {
+          discovered.push(enrolled);
+        }
+      }
+    }
+    return discovered;
+  };
+
   const sendResume = async (row, decision) => {
     const sessionID = row.session_id;
     const directory = row.directory || null;
@@ -284,20 +476,26 @@ export const createSessionRecoveryRuntime = ({
         resumedAt: sentAt,
         at: sentAt,
       });
-      store.noteRecovery('resume.sent', sessionID, { attempt: decision.attempt, resumeMessageID }, sentAt);
+      store.noteRecovery('resume.sent', sessionID, { attempt: decision.attempt, resumeMessageID, afterLimit: Boolean(decision.afterLimit) }, sentAt);
       broadcastSummary({ resumed: sessionID });
       return true;
     } catch (error) {
       const at = now();
       const waits = (Number(row.provider_waits) || 0) + 1;
-      const limitResetAt = providerLimitResetAt(error, at, waits);
+      const resolvedProviderID = decision.providerID || extractProviderIdFromError(error);
+      const limitResetAt = providerLimitResetAt(error, at, waits, at, resolvedProviderID);
       if (limitResetAt !== null) {
+        const allowed = isUsageAutoContinueAllowed({
+          providerID: resolvedProviderID,
+          error,
+          allowedProviders: autoContinueProviders,
+        });
         store.schedule(sessionID, {
           state: 'waiting_provider',
           attempts: decision.attempt,
           providerWaits: waits,
-          nextWakeAt: limitResetAt,
-          error: 'provider limit',
+          nextWakeAt: allowed ? limitResetAt : null,
+          error: allowed ? 'provider limit' : MANUAL_LIMIT_REASON,
           at,
         });
       } else {
@@ -314,9 +512,26 @@ export const createSessionRecoveryRuntime = ({
     }
   };
 
+  /**
+   * Decide whether a child session must wait for its parent before resuming.
+   * Crash recovery always resumes the parent first so parent and child do not
+   * duplicate work. For usage-limit stops (`afterLimit` / `waiting_provider`),
+   * a stopped subagent must still receive `Continue.` when its parent is
+   * actively running (waiting on the subagent's task tool) or already due to
+   * wake; it only waits while the parent itself is still parked in the future.
+   */
+  const shouldDeferToParent = (row, parent, afterLimit) => {
+    if (!parent) return false;
+    const isUsageLimitChild = afterLimit || row.state === 'waiting_provider';
+    if (!isUsageLimitChild) return true;
+    const at = now();
+    return parent.state === 'waiting_provider' && Number(parent.next_wake_at) > at;
+  };
+
   const reconcileRow = async (row, activeMap, pendingByID) => {
     const sessionID = row.session_id;
     const directory = row.directory || null;
+    const isManualWake = manualWakeIds.has(sessionID);
     const storedParent = row.parent_session_id && row.parent_session_id !== sessionID
       ? pendingByID.get(row.parent_session_id)
       : null;
@@ -330,7 +545,7 @@ export const createSessionRecoveryRuntime = ({
         at,
       });
     };
-    if (storedParent && !activeMap[sessionID]) {
+    if (!isManualWake && storedParent && !activeMap[sessionID] && shouldDeferToParent(row, storedParent, false)) {
       deferToParent(storedParent);
       return;
     }
@@ -348,6 +563,8 @@ export const createSessionRecoveryRuntime = ({
       messages,
       now: now(),
       maxAttempts,
+      autoContinueProviders,
+      manualResume: isManualWake,
     });
 
     switch (decision.action) {
@@ -373,13 +590,14 @@ export const createSessionRecoveryRuntime = ({
         store.schedule(sessionID, {
           state: decision.state,
           attempts: Number(row.attempts) || 0,
-          nextWakeAt: decision.nextWakeAt ?? now() + 15_000,
+          nextWakeAt: decision.manualOnly ? null : (decision.nextWakeAt ?? now() + 15_000),
           at: now(),
           error: decision.reason,
         });
         break;
-      case 'resume':
-        if (!manualWakeIds.delete(sessionID) && now() - runtimeStartedAt < startGraceMs) {
+      case 'resume': {
+        const manualConsumed = manualWakeIds.delete(sessionID);
+        if (!manualConsumed && !decision.afterLimit && now() - runtimeStartedAt < startGraceMs) {
           store.schedule(sessionID, {
             state: 'recovering',
             attempts: Number(row.attempts) || 0,
@@ -389,12 +607,14 @@ export const createSessionRecoveryRuntime = ({
           });
           break;
         }
-        if (parentSessionID && pendingByID.has(parentSessionID)) {
-          deferToParent(pendingByID.get(parentSessionID));
+        const liveParent = parentSessionID ? pendingByID.get(parentSessionID) : null;
+        if (!manualConsumed && liveParent && shouldDeferToParent(row, liveParent, Boolean(decision.afterLimit))) {
+          deferToParent(liveParent);
           break;
         }
         await sendResume(row, decision);
         break;
+      }
       default:
         break;
     }
@@ -404,11 +624,13 @@ export const createSessionRecoveryRuntime = ({
     if (stopped || !hasLease) return;
     const at = now();
     const pendingRows = store.pending();
-    const rows = pendingRows.filter((row) => !(Number(row.next_wake_at) > at));
-    if (rows.length === 0) {
-      broadcastSummary({ reconciled: true });
-      return;
-    }
+    const rows = pendingRows.filter((row) => {
+      if (manualWakeIds.has(row.session_id)) return true;
+      if (row.state === 'waiting_provider' && row.last_error === MANUAL_LIMIT_REASON && row.next_wake_at === null) {
+        return false;
+      }
+      return !(Number(row.next_wake_at) > at);
+    });
 
     let activeMap;
     try {
@@ -428,7 +650,14 @@ export const createSessionRecoveryRuntime = ({
     }
 
     const pendingByID = new Map(pendingRows.map((row) => [row.session_id, row]));
-    const queue = [...rows];
+    const discovered = await discoverStoppedZenSessions(activeMap, pendingByID);
+    const queue = [...rows, ...discovered];
+    if (queue.length === 0) {
+      armNextWakeTimer();
+      broadcastSummary({ reconciled: true });
+      return;
+    }
+
     const workers = Array.from({ length: Math.max(1, Math.min(resumeConcurrency, queue.length)) }, async () => {
       while (queue.length > 0 && !stopped) {
         const row = queue.shift();
@@ -440,6 +669,7 @@ export const createSessionRecoveryRuntime = ({
       }
     });
     await Promise.all(workers);
+    armNextWakeTimer();
     broadcastSummary({ reconciled: true });
   };
 
@@ -486,6 +716,7 @@ export const createSessionRecoveryRuntime = ({
   const stop = () => {
     stopped = true;
     if (reconcileTimer) clearTimeout(reconcileTimer);
+    clearWakeTimer();
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     if (pollTimer) clearInterval(pollTimer);
     reconcileTimer = null;
@@ -535,10 +766,21 @@ export const createSessionRecoveryRuntime = ({
 
   const wakeWaitingProvider = () => {
     const at = now();
+    let updated = 0;
     for (const row of store.pending()) {
-      if (row.state === 'waiting_provider') manualWakeIds.add(row.session_id);
+      if (row.state !== 'waiting_provider') continue;
+      if (row.last_error === MANUAL_LIMIT_REASON) continue;
+      manualWakeIds.add(row.session_id);
+      store.schedule(row.session_id, {
+        state: 'waiting_provider',
+        attempts: Number(row.attempts) || 0,
+        providerWaits: Number(row.provider_waits) || 0,
+        nextWakeAt: at,
+        error: row.last_error || 'provider limit',
+        at,
+      });
+      updated += 1;
     }
-    const updated = store.wakeWaitingProvider(at);
     if (updated > 0) {
       broadcastSummary({ woken: updated });
       if (hasLease) scheduleReconcile(0);

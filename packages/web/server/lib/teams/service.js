@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { extractMentions, getReadyTasks, summarizeDag, validateDag } from './graph.js';
+import { detectBlockedTasks, extractMentions, getReadyTasks, summarizeDag, validateDag } from './graph.js';
 
 export const TEAM_PRESETS = Object.freeze({
   'full-stack': [
@@ -383,16 +383,41 @@ export const createTeamsService = ({
   };
 
   const removeMember = async (teamId, memberId) => {
+    const pre = await store.read();
+    const preTeam = pre.teams.find((t) => t.id === teamId);
+    if (!preTeam) throw new TeamServiceError('Team not found', 404, 'TEAM_NOT_FOUND');
+    const removedMember = preTeam.members.find((m) => m.id === memberId);
+    if (!removedMember) throw new TeamServiceError('Member not found', 404, 'MEMBER_NOT_FOUND');
+
+    if (removedMember.sessionId && sessionService?.abort) {
+      await Promise.resolve(sessionService.abort(removedMember.sessionId, { directory: removedMember.directory || preTeam.directory })).catch(() => {});
+    }
+
+    const at = now();
     const detail = await store.update((draft) => {
       const target = draft.teams.find((t) => t.id === teamId);
       if (!target) throw new TeamServiceError('Team not found', 404, 'TEAM_NOT_FOUND');
       const idx = target.members.findIndex((m) => m.id === memberId);
       if (idx === -1) throw new TeamServiceError('Member not found', 404, 'MEMBER_NOT_FOUND');
       target.members.splice(idx, 1);
-      target.updatedAt = now();
+      const fallbackAssignee = target.members.find((m) => m.role === 'lead')?.id ?? target.members[0]?.id ?? null;
+      for (const task of draft.tasks) {
+        if (task.teamId !== teamId || task.assignee !== memberId) continue;
+        if (task.status === 'pending') {
+          task.assignee = fallbackAssignee;
+          task.updatedAt = at;
+        } else if (task.status === 'running') {
+          task.status = 'failed';
+          task.error = `Assigned member ${removedMember.name} was removed`;
+          task.leaseUntil = null;
+          task.updatedAt = at;
+        }
+      }
+      target.updatedAt = at;
       return buildTeamDetail(draft, teamId);
     });
     emitUpdate({ action: 'member_removed', teamId, memberId });
+    await tickScheduler(teamId);
     return detail;
   };
 
@@ -493,8 +518,14 @@ export const createTeamsService = ({
     const updated = await store.update((draft) => {
       const task = draft.tasks.find((t) => t.teamId === teamId && t.id === taskId);
       if (!task) throw new TeamServiceError('Task not found', 404, 'TASK_NOT_FOUND');
-      if (patch.status && ['pending', 'running', 'completed', 'failed', 'cancelled'].includes(patch.status)) {
+      if (patch.status && ['pending', 'running', 'completed', 'failed', 'cancelled', 'blocked'].includes(patch.status)) {
         task.status = patch.status;
+        if (patch.status === 'completed' || patch.status === 'failed' || patch.status === 'cancelled' || patch.status === 'blocked') {
+          task.leaseUntil = null;
+          const team = draft.teams.find((t) => t.id === teamId);
+          const m = team?.members.find((x) => x.id === task.assignee);
+          if (m && m.status === 'working') m.status = 'idle';
+        }
       }
       if (patch.result !== undefined) task.result = typeof patch.result === 'string' ? patch.result : JSON.stringify(patch.result);
       if (patch.error !== undefined) task.error = patch.error ? String(patch.error) : null;
@@ -520,6 +551,24 @@ export const createTeamsService = ({
       task.dispatchedAt = null;
       task.leaseUntil = null;
       task.updatedAt = at;
+
+      // Unblock downstream tasks that were blocked by this task (transitively)
+      const unblocked = new Set([taskId]);
+      let progressed = true;
+      while (progressed) {
+        progressed = false;
+        for (const candidate of draft.tasks) {
+          if (candidate.teamId !== teamId || candidate.status !== 'blocked') continue;
+          if (Array.isArray(candidate.dependsOn) && candidate.dependsOn.some((dep) => unblocked.has(dep))) {
+            candidate.status = 'pending';
+            candidate.error = null;
+            candidate.updatedAt = at;
+            unblocked.add(candidate.id);
+            progressed = true;
+          }
+        }
+      }
+
       const team = draft.teams.find((t) => t.id === teamId);
       if (team && team.status !== 'active') {
         team.status = 'active';
@@ -533,6 +582,18 @@ export const createTeamsService = ({
   };
 
   const cancelTask = async (teamId, taskId) => {
+    const pre = await store.read();
+    const preTeam = pre.teams.find((t) => t.id === teamId);
+    const preTask = pre.tasks.find((t) => t.teamId === teamId && t.id === taskId);
+    if (!preTask) throw new TeamServiceError('Task not found', 404, 'TASK_NOT_FOUND');
+
+    if (preTask.status === 'running' && preTeam && sessionService?.abort) {
+      const member = preTeam.members.find((m) => m.id === preTask.assignee);
+      if (member?.sessionId) {
+        await Promise.resolve(sessionService.abort(member.sessionId, { directory: member.directory || preTeam.directory })).catch(() => {});
+      }
+    }
+
     const at = now();
     const updated = await store.update((draft) => {
       const task = draft.tasks.find((t) => t.teamId === teamId && t.id === taskId);
@@ -540,9 +601,13 @@ export const createTeamsService = ({
       task.status = 'cancelled';
       task.leaseUntil = null;
       task.updatedAt = at;
+      const team = draft.teams.find((t) => t.id === teamId);
+      const member = team?.members.find((m) => m.id === task.assignee);
+      if (member && member.status === 'working') member.status = 'idle';
       return task;
     });
     emitUpdate({ action: 'task_cancelled', teamId, taskId });
+    await tickScheduler(teamId);
     return updated;
   };
 
@@ -604,7 +669,32 @@ export const createTeamsService = ({
         }
       }
 
-      // 2. Refresh snapshot & dispatch ready tasks.
+      // 2. Propagate blocked status when upstream dependencies failed/cancelled and escalate to Lead.
+      const preDispatch = await store.read();
+      const preDispatchTeam = preDispatch.teams.find((t) => t.id === team.id);
+      if (!preDispatchTeam || preDispatchTeam.status !== 'active') continue;
+      const blockedEntries = detectBlockedTasks(preDispatch.tasks.filter((t) => t.teamId === team.id));
+      if (blockedEntries.length > 0) {
+        const blockTime = now();
+        await store.update((draft) => {
+          for (const entry of blockedEntries) {
+            const target = draft.tasks.find((t) => t.teamId === team.id && t.id === entry.taskId);
+            if (!target || target.status !== 'pending') continue;
+            target.status = 'blocked';
+            target.error = `Blocked by ${entry.depStatus} dependency ${entry.depId}`;
+            target.updatedAt = blockTime;
+          }
+        });
+        changed = true;
+        const summaryLines = blockedEntries.map((e) => `- \`${e.taskId}\` blocked by \`${e.depId}\` (${e.depStatus})`);
+        await postBoardMessage({
+          teamId: team.id,
+          author: 'system',
+          body: `@lead Dependency blocker detected:\n${summaryLines.join('\n')}\nRetry the failed task or add a replacement task to unblock.`,
+        }).catch(() => {});
+      }
+
+      // 3. Refresh snapshot & dispatch ready tasks.
       const refreshed = await store.read();
       const freshTeam = refreshed.teams.find((t) => t.id === team.id);
       if (!freshTeam || freshTeam.status !== 'active') continue;
@@ -651,19 +741,23 @@ export const createTeamsService = ({
               target.error = sent.error || 'dispatch failed';
               target.leaseUntil = null;
               target.updatedAt = now();
+              const m = draft.teams.find((x) => x.id === freshTeam.id)?.members.find((x) => x.id === assignee.id);
+              if (m && m.status === 'working') m.status = 'idle';
             });
           }
         }
       }
 
-      // 3. Mark team completed once every DAG task has finished.
+      // 4. Mark team settled once every DAG task has reached a non-active state.
       const finalSnapshot = await store.read();
       const finalTasks = finalSnapshot.tasks.filter((t) => t.teamId === team.id);
-      if (finalTasks.length > 0 && finalTasks.every((t) => t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled')) {
+      const settledStatuses = new Set(['completed', 'failed', 'cancelled', 'blocked']);
+      if (finalTasks.length > 0 && finalTasks.every((t) => settledStatuses.has(t.status))) {
+        const hasFailures = finalTasks.some((t) => t.status === 'failed' || t.status === 'blocked');
         await store.update((draft) => {
           const target = draft.teams.find((t) => t.id === team.id);
           if (!target || target.status !== 'active') return;
-          target.status = 'completed';
+          target.status = hasFailures ? 'failed' : 'completed';
           target.updatedAt = now();
         });
         changed = true;

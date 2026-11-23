@@ -1,5 +1,4 @@
 import React from 'react';
-import { RiAddLine, RiCloseLine } from '@remixicon/react';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -159,7 +158,7 @@ export const TeamLauncher: React.FC<{
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-3 rounded-lg border border-border/80 bg-card/60 p-3.5 text-xs">
+    <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-3.5 rounded-2xl border border-edge bg-surface-elevated p-4 text-xs">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-medium text-foreground">
           <Icon name="ai-teams" className="h-4 w-4 text-foreground" />
@@ -173,13 +172,13 @@ export const TeamLauncher: React.FC<{
       </div>
 
       {/* Workspace / Project Picker */}
-      <label className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">Project Workspace</span>
         {projects.length > 0 ? (
           <select
             value={selectedDirectory}
             onChange={(e) => setSelectedDirectory(e.target.value)}
-            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
+            className="oc-raised oc-field rounded-[10px] bg-background px-3 py-2 text-xs text-foreground outline-none"
           >
             {directory && !projects.some((p) => p.path === directory) ? (
               <option value={directory}>{directory}</option>
@@ -195,28 +194,28 @@ export const TeamLauncher: React.FC<{
             value={selectedDirectory}
             onChange={(e) => setSelectedDirectory(e.target.value)}
             placeholder="C:\path\to\project"
-            className="rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none focus:border-foreground/50"
+            className="oc-raised oc-field rounded-[10px] bg-background px-3 py-2 font-mono text-xs text-foreground outline-none"
           />
         )}
       </label>
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1.5">
           <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.nameLabel')}</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t('teams.launcher.namePlaceholder')}
-            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
+            className="oc-raised oc-field rounded-[10px] bg-background px-3 py-2 text-xs text-foreground outline-none"
           />
         </label>
 
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1.5">
           <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.presetLabel')}</span>
           <select
             value={preset}
             onChange={(e) => handlePresetChange(e.target.value)}
-            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
+            className="oc-raised oc-field rounded-[10px] bg-background px-3 py-2 text-xs text-foreground outline-none"
           >
             {PRESET_OPTIONS.map((opt) => (
               <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -225,33 +224,33 @@ export const TeamLauncher: React.FC<{
         </label>
       </div>
 
-      <label className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1.5">
         <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.goalLabel')}</span>
         <textarea
           rows={3}
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
           placeholder={t('teams.launcher.goalPlaceholder')}
-          className="resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
+          className="oc-raised oc-field resize-y rounded-[10px] bg-background px-3 py-2 text-xs text-foreground outline-none"
         />
       </label>
 
       {/* Roster customization */}
-      <div className="rounded-md border border-border/70 bg-background/60 p-2.5">
+      <div className="rounded-xl border border-edge-muted bg-background/70 p-3">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setShowRosterEditor((v) => !v)}
-            className="text-left text-[11px] font-medium text-foreground hover:opacity-80"
+            className="text-start text-[11px] font-medium text-foreground hover:opacity-80"
           >
             {showRosterEditor ? '▾' : '▸'} Agents & Roster ({roster.length})
           </button>
           <button
             type="button"
             onClick={addRosterRow}
-            className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-full border border-edge bg-surface-subtle px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
-            <RiAddLine className="h-3 w-3" />
+            <Icon name="add" className="h-3 w-3" />
             Add Role
           </button>
         </div>
@@ -259,29 +258,29 @@ export const TeamLauncher: React.FC<{
         {showRosterEditor ? (
           <div className="mt-2.5 space-y-2">
             {roster.map((member, idx) => (
-              <div key={idx} className="rounded-md border border-border/60 bg-card/40 p-2">
+              <div key={idx} className="rounded-xl border border-edge-muted bg-surface-elevated/60 p-2.5">
                 <div className="grid grid-cols-2 gap-1.5">
                   <input
                     value={member.name}
                     onChange={(e) => updateRosterRow(idx, { name: e.target.value })}
                     placeholder="Display Name"
-                    className="rounded border border-border bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
+                    className="rounded-lg border border-edge bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
                   />
                   <div className="flex gap-1">
                     <input
                       value={member.role}
                       onChange={(e) => updateRosterRow(idx, { role: e.target.value })}
                       placeholder="role (e.g. lead, reviewer)"
-                      className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 font-mono text-[11px] outline-none focus:border-foreground/50"
+                      className="min-w-0 flex-1 rounded-lg border border-edge bg-background px-2 py-1 font-mono text-[11px] outline-none focus:border-foreground/50"
                     />
                     {roster.length > 1 ? (
                       <button
                         type="button"
                         onClick={() => removeRosterRow(idx)}
                         title="Remove member"
-                        className="rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        className="rounded-lg px-1 text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
                       >
-                        <RiCloseLine className="h-3.5 w-3.5" />
+                        <Icon name="close" className="h-3.5 w-3.5" />
                       </button>
                     ) : null}
                   </div>
@@ -290,7 +289,7 @@ export const TeamLauncher: React.FC<{
                   <select
                     value={member.agent}
                     onChange={(e) => updateRosterRow(idx, { agent: e.target.value })}
-                    className="rounded border border-border bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
+                    className="rounded-lg border border-edge bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
                   >
                     <option value="">Agent: Default (build)</option>
                     {availableAgents.map((ag) => (
@@ -303,22 +302,22 @@ export const TeamLauncher: React.FC<{
                     value={member.model}
                     onChange={(e) => updateRosterRow(idx, { model: e.target.value })}
                     placeholder="Model override (optional)"
-                    className="rounded border border-border bg-background px-2 py-1 font-mono text-[11px] outline-none focus:border-foreground/50"
+                    className="rounded-lg border border-edge bg-background px-2 py-1 font-mono text-[11px] outline-none focus:border-foreground/50"
                   />
                 </div>
                 <input
                   value={member.description}
                   onChange={(e) => updateRosterRow(idx, { description: e.target.value })}
                   placeholder="Role instructions / responsibility"
-                  className="mt-1.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
+                  className="mt-1.5 w-full rounded-lg border border-edge bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
                 />
               </div>
             ))}
           </div>
         ) : (
-          <div className="mt-1.5 flex flex-wrap gap-1">
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {roster.map((m, idx) => (
-              <span key={idx} className="rounded border border-border/60 bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              <span key={idx} className="rounded-full border border-edge-muted bg-surface-subtle px-2.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                 {m.name}{m.agent ? ` · ${m.agent}` : ''}
               </span>
             ))}
@@ -345,18 +344,18 @@ export const TeamLauncher: React.FC<{
             max={8}
             value={maxParallel}
             onChange={(e) => setMaxParallel(Math.max(1, Math.min(8, Number(e.target.value) || 3)))}
-            className="w-12 rounded border border-border bg-background px-1.5 py-0.5 text-center text-[11px] text-foreground"
+            className="w-12 rounded-lg border border-edge bg-background px-1.5 py-0.5 text-center text-[11px] tabular-nums text-foreground"
           />
         </label>
       </div>
 
-      {error ? <div className="rounded border border-border bg-muted/60 px-2 py-1 text-foreground">{error}</div> : null}
+      {error ? <div className="rounded-[10px] bg-[var(--status-error-background)] px-3 py-1.5 text-[var(--status-error)]">{error}</div> : null}
 
       <div className="flex justify-end gap-2">
         <button
           type="submit"
           disabled={submitting || !selectedDirectory.trim()}
-          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+          className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90 active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:text-muted-foreground disabled:opacity-80"
         >
           {submitting ? 'Launching Team…' : t('teams.launcher.create')}
         </button>
