@@ -12,6 +12,10 @@ export const DiscordAvatar: React.FC<{
   const initials = label.slice(0, 2).toUpperCase();
   const [broken, setBroken] = React.useState(false);
 
+  React.useEffect(() => {
+    setBroken(false);
+  }, [url]);
+
   if (url && !broken) {
     return (
       <img
@@ -20,15 +24,15 @@ export const DiscordAvatar: React.FC<{
         width={size}
         height={size}
         onError={() => setBroken(true)}
-        style={{ width: size, height: size }}
-        className="shrink-0 rounded-full object-cover bg-muted"
+        style={{ width: size, height: size, minWidth: size, minHeight: size }}
+        className="aspect-square shrink-0 rounded-full object-cover bg-[#171B1D]"
       />
     );
   }
   return (
     <div
-      style={{ width: size, height: size }}
-      className="flex shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-semibold text-primary select-none"
+      style={{ width: size, height: size, minWidth: size, minHeight: size }}
+      className="flex aspect-square shrink-0 items-center justify-center rounded-full border border-border/70 bg-[#171B1D] text-[11px] font-semibold text-foreground select-none"
     >
       {initials}
     </div>

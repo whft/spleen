@@ -118,7 +118,7 @@ const ALL_PARAMETER_PROPERTIES = {
   projectId: { type: 'string', description: 'Not with directory' },
   directory: { type: 'string', description: "Absolute path; default: this session's directory" },
   sessionId: { type: 'string' },
-  messageId: { type: 'string', description: 'Fork boundary' },
+  messageId: { type: 'string', description: 'Fork boundary, or Discord message id for discord.react / discord.createThread' },
   link: {
     type: 'object',
     properties: {
@@ -202,26 +202,40 @@ const ALL_PARAMETER_PROPERTIES = {
   teamGoal: { type: 'string', description: 'team.create: overall objective for the AI Team' },
   preset: { type: 'string', enum: ['full-stack', 'research-build', 'bug-hunt', 'multi-review', 'custom'], description: 'team.create: built-in role preset' },
   members: { type: 'array', items: { type: 'object' }, description: 'team.create: optional custom member definitions [{ name, role, model, agent, description }]' },
+  memberId: { type: 'string', description: 'team.removeMember: member id to remove' },
+  memberRole: { type: 'string', description: 'team.addMember: specialist role name (e.g. frontend, backend, reviewer, qa)' },
   maxParallel: { type: 'integer', minimum: 1, maximum: 8, description: 'team.create: maximum concurrent running tasks in the DAG (1-8)' },
   useWorktrees: { type: 'boolean', description: 'team.create / team.addMember: isolate non-lead members into separate git worktrees' },
   initialTasks: { type: 'array', items: { type: 'object' }, description: 'team.create: optional initial DAG tasks' },
+  description: { type: 'string', description: 'team.addTask / team.addMember / agent.create / agent.update: detailed description' },
+  dependsOn: { type: 'array', items: { type: 'string' }, description: 'team.addTask: array of prerequisite taskIds in the DAG' },
+  status: { type: 'string', enum: ['pending', 'running', 'completed', 'failed', 'cancelled'], description: 'team.updateTask: new task status' },
+  result: { type: 'string', description: 'team.updateTask: summary or output of the task' },
   assignee: { type: 'string', description: 'team.addTask: member id, role, or name' },
   acceptance: { type: 'string', description: 'team.addTask: acceptance criteria checked before completion' },
   idempotencyKey: { type: 'string', description: 'team.addTask: deduplication key' },
   author: { type: 'string', description: 'team.post: sender name or member id' },
+  message: { type: 'string', description: 'team.post / ui.control notify / discord.send: text content' },
   mentions: { type: 'array', items: { type: 'string' }, description: 'team.post: explicit member ids to notify' },
+  agentName: { type: 'string', description: 'agent.create / agent.update / agent.delete: agent identifier (letters, numbers, ., _, -)' },
+  agentScope: { type: 'string', enum: ['project', 'user'], description: 'agent.create: save into <project>/.opencode/agents (project) or user global config (user)' },
+  agentMode: { type: 'string', enum: ['primary', 'subagent', 'all'], description: 'agent.create / agent.update: OpenCode agent mode' },
+  systemPrompt: { type: 'string', description: 'agent.create / agent.update: system instructions markdown body for the agent' },
   sourceSessionId: { type: 'string', description: 'chat.link: source session id (default this session)' },
   targetSessionId: { type: 'string', description: 'chat.link: connected session id' },
   relation: { type: 'string', enum: ['reference', 'supervise', 'delegate'], description: 'chat.link: connection kind' },
   note: { type: 'string', description: 'chat.link: short note describing how the sessions relate' },
   linkId: { type: 'string', description: 'chat.unlink: link id to remove' },
-  guildId: { type: 'string', description: 'discord.channels: Discord guild id' },
-  channelId: { type: 'string', description: 'discord.messages / discord.send: Discord channel id' },
-  content: { type: 'string', description: 'discord.send: message body text' },
+  guildId: { type: 'string', description: 'discord.channels / discord.members / discord.search: Discord guild id' },
+  channelId: { type: 'string', description: 'discord.messages / discord.pins / discord.send / discord.react / discord.createThread: Discord channel id' },
+  content: { type: 'string', description: 'discord.send / discord.search: message text or search query' },
   replyToMessageId: { type: 'string', description: 'discord.send: optional message id to reply to' },
   before: { type: 'string', description: 'discord.messages: fetch messages before this message id' },
+  emoji: { type: 'string', description: 'discord.react: unicode emoji or custom name:id' },
+  threadName: { type: 'string', description: 'discord.createThread: title for the new Discord thread' },
   fid: { type: 'integer', description: 'uc.forum: UnknownCheats forum id' },
   tid: { type: 'integer', description: 'uc.thread: UnknownCheats thread id' },
+  forum: { type: 'string', description: 'uc.addBookmark: optional forum name label' },
   page: { type: 'integer', minimum: 1, description: 'uc.*: 1-based page number' },
   memoryId: { type: 'string', description: 'From memory.list or memory.read; on save it rewrites that entry' },
   type: { type: 'string', enum: ['fact', 'preference', 'reference'], description: 'fact: something true. preference: how the user wants work done. reference: a resource hard to find again' },
@@ -239,7 +253,11 @@ const CONTROL_PARAMETER_PROPERTIES = {
       && !SCHEDULE_ONLY_PARAMETER_NAMES.includes(name)
     )),
   ),
-  url: { type: 'string', description: 'session.unlink: the address of the link to remove' },
+  name: { type: 'string', description: 'team.create / team.addMember / agent.* / discord.createThread: display name or identifier' },
+  taskId: { type: 'string', description: 'team.updateTask / team.retryTask / team.cancelTask: task id' },
+  targetSessionId: { type: 'string', description: 'chat.link: connected target session id' },
+  body: { type: 'string', description: 'team.post / discord.send: message body text' },
+  url: { type: 'string', description: 'session.unlink / uc.forum / uc.thread / uc.addBookmark: URL' },
   identifier: { type: 'string', description: 'session.unlink: the identifier of the link to remove, when no url' },
   source: { type: 'string', description: 'wait.start: "timer", "pr", or <extension>/<wait> as wait.list names it' },
   args: { type: 'object', description: 'wait.start: the arguments the source\'s params list, such as { "minutes": 10 } or { "url": "https://github.com/o/r/pull/1" }' },
@@ -409,8 +427,8 @@ export const managedPermissionRules = ({ includeWorkflow = false } = {}) => (
   includeWorkflow ? [{ action: WORKFLOW_ANSWER_TOOL, resource: '*', effect: 'deny' }] : []
 );
 
-const CONTROL_TOOL_DESCRIPTION = "Spleen projects, sessions, settings, UI control, AI Teams, recovery, Discord and UnknownCheats. One action per call; projectId or directory scope it, default this session's directory. "
-  + "You can inspect/update non-secret Spleen settings (settings.list, settings.read, settings.update), drive the desktop/web UI live (ui.control), stop sessions (session.stop), inspect/resume auto-continue recovery (recovery.*), connect sessions (chat.link/links/unlink), orchestrate multi-agent AI Teams with a shared board and DAG task scheduler (team.*), and read connected Discord channels or UnknownCheats threads (discord.*, uc.*). "
+const CONTROL_TOOL_DESCRIPTION = "Spleen projects, sessions, settings, UI control, AI Teams, project agents, recovery, Discord and UnknownCheats. One action per call; projectId or directory scope it, default this session's directory. "
+  + "You can inspect/update non-secret Spleen settings (settings.list, settings.read, settings.update), drive the desktop/web UI live (ui.control), stop sessions (session.stop), inspect/resume auto-continue recovery (recovery.*), connect sessions (chat.link/links/unlink), create/edit/delete project-scoped or global custom agents (agent.list/create/update/delete), orchestrate multi-agent AI Teams with a shared board and DAG task scheduler (team.list/create/get/stop/addMember/removeMember/post/addTask/updateTask/retryTask/cancelTask), interact with connected Discord servers/DMs (discord.status/guilds/dms/channels/members/messages/pins/search/send/react/createThread), and browse/search/bookmark UnknownCheats forums and threads (uc.status/home/recent/forum/thread/search/bookmarks/addBookmark/history). "
   + "A session you create, send to or fork belongs to the user, who follows and talks to it. Dispatch one when the user asks, even for work related to yours, with any agent, optionally in a new worktree. A session you start to get work done and collect its answer takes ownWork, also when the user told you to delegate; smaller pieces go to the subagent tool. A dispatch returns at once; returnResult brings its final answer back here as a message. session.send always starts a new prompt. "
   + "session.moveToWorktree moves this session into a new worktree on a new branch from the default branch, taking the changed files you name in carry. It can help when the checkout looks busy: someone's pull request branch, uncommitted changes, another session here, a branch changed between your messages. Whether that fits depends on how the user works: ask, unless the request already calls for separate work, such as a pull request of its own. Unlike git worktree add, the session moves along and the branch starts from the default branch. "
   + "This tool cannot delete sessions or worktrees, and cannot read or modify secret settings.";

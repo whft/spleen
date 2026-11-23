@@ -18,14 +18,20 @@ type SessionFolderDropTarget = {
 };
 
 const SessionFolderOwnersContext = React.createContext<ReadonlySet<string> | null>(null);
+const SessionProjectDropContext = React.createContext<boolean>(false);
 
 export const SessionFolderOwnersProvider: React.FC<{
   ownerKeys: readonly string[];
+  canDropOnProject?: boolean;
   children: React.ReactNode;
-}> = ({ ownerKeys, children }) => {
+}> = ({ ownerKeys, canDropOnProject = false, children }) => {
   const ownersKey = [...new Set(ownerKeys)].sort().join('\n');
   const owners = React.useMemo(() => new Set(ownersKey ? ownersKey.split('\n') : []), [ownersKey]);
-  return <SessionFolderOwnersContext.Provider value={owners}>{children}</SessionFolderOwnersContext.Provider>;
+  return (
+    <SessionProjectDropContext.Provider value={canDropOnProject}>
+      <SessionFolderOwnersContext.Provider value={owners}>{children}</SessionFolderOwnersContext.Provider>
+    </SessionProjectDropContext.Provider>
+  );
 };
 
 export const DraggableSessionRow: React.FC<{
@@ -38,10 +44,11 @@ export const DraggableSessionRow: React.FC<{
   children: React.ReactNode;
 }> = ({ sessionId, dragKey, ownerKey = null, sessionDirectory, sessionTitle, archivedBucket = false, children }) => {
   const folderOwners = React.useContext(SessionFolderOwnersContext);
+  const canDropOnProject = React.useContext(SessionProjectDropContext);
   const hasFolderToDropInto = folderOwners === null || (ownerKey !== null && folderOwners.has(ownerKey));
   const { attributes, listeners, setNodeRef, node, isDragging } = useDraggable({
     id: getSessionDragId(dragKey ?? sessionId),
-    disabled: archivedBucket || !hasFolderToDropInto,
+    disabled: archivedBucket || (!hasFolderToDropInto && !canDropOnProject),
     data: { type: 'session', sessionId, ownerKey, sessionDirectory, sessionTitle, archivedBucket, element: () => node.current },
   });
 

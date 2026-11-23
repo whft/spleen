@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Spleen",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "dev.spleen.desktop",
   "build": {
     "frontendDist": "../splash"

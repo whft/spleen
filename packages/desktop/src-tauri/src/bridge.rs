@@ -409,6 +409,44 @@ pub async fn spleen_desktop_invoke(
             *state.hosts.lock().unwrap() = next;
             Ok(json!(true))
         }
+        "desktop_ssh_instances_get" => Ok(state.ssh.instances_get()),
+        "desktop_ssh_instances_set" => {
+            let cfg = args.get("config").cloned().unwrap_or_else(|| args.clone());
+            state.ssh.instances_set(cfg)
+        }
+        "desktop_ssh_import_hosts" => Ok(json!(state.ssh.import_hosts())),
+        "desktop_ssh_connect" => {
+            let id = arg_str(&args, "id");
+            if id.is_empty() {
+                return Err("missing ssh instance id".into());
+            }
+            state.ssh.connect(app.clone(), id)?;
+            Ok(json!(true))
+        }
+        "desktop_ssh_disconnect" => {
+            let id = arg_str(&args, "id");
+            if !id.is_empty() {
+                state.ssh.disconnect(&app, &id);
+            }
+            Ok(json!(true))
+        }
+        "desktop_ssh_status" => {
+            let id = arg_str(&args, "id");
+            let filter = if id.is_empty() { None } else { Some(id.as_str()) };
+            Ok(json!(state.ssh.status(filter)))
+        }
+        "desktop_ssh_logs" => {
+            let id = arg_str(&args, "id");
+            let limit = args.get("limit").and_then(Value::as_u64).map(|n| n as usize);
+            Ok(json!(state.ssh.logs(&id, limit)))
+        }
+        "desktop_ssh_logs_clear" => {
+            let id = arg_str(&args, "id");
+            if !id.is_empty() {
+                state.ssh.logs_clear(&id);
+            }
+            Ok(json!(true))
+        }
         "desktop_local_client_token_get" => {
             Ok(json!(state.client_token.lock().unwrap().clone()))
         }
@@ -740,13 +778,18 @@ fn is_safe_external_url(url: &str) -> bool {
 }
 
 fn lan_address() -> String {
-    std::net::UdpSocket::bind("0.0.0.0:0")
-        .and_then(|socket| {
-            socket.connect("8.8.8.8:80")?;
+    for target in ["8.8.8.8:80", "1.1.1.1:80", "192.168.1.1:80", "10.0.0.1:80", "172.16.0.1:80"] {
+        if let Ok(addr) = std::net::UdpSocket::bind("0.0.0.0:0").and_then(|socket| {
+            socket.connect(target)?;
             socket.local_addr()
-        })
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_default()
+        }) {
+            let ip = addr.ip();
+            if !ip.is_loopback() && !ip.is_unspecified() {
+                return ip.to_string();
+            }
+        }
+    }
+    String::new()
 }
 
 pub fn load_state(paths: SpleenPaths) -> AppState {
@@ -765,11 +808,13 @@ pub fn load_state(paths: SpleenPaths) -> AppState {
     } else {
         hosts
     };
+    let ssh = crate::ssh::SshManager::new(paths.clone());
     AppState {
         paths,
         server: Arc::new(Mutex::new(None::<ServerProcess>)),
         settings: Mutex::new(settings),
         hosts: Mutex::new(hosts),
+        ssh,
         client_token: Mutex::new(String::new()),
         origin: Mutex::new(String::new()),
     }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiDiscordLine } from '@remixicon/react';
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { discordApi, type DiscordStatus } from '@/lib/discord/api';
 
@@ -29,7 +29,7 @@ export const DiscordConnectForm: React.FC<{ onConnected: (status: DiscordStatus)
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="mx-auto flex w-full max-w-sm flex-col gap-3 rounded-xl border border-border/80 bg-card p-4 text-xs">
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <RiDiscordLine className="h-5 w-5 text-foreground" />
+        <Icon name="discord" className="h-5 w-5 shrink-0 text-foreground" />
         <span>{t('discord.connect.title')}</span>
       </div>
       <p className="text-[11px] leading-relaxed text-muted-foreground">{t('discord.connect.subtitle')}</p>

@@ -3,11 +3,10 @@ import {
   RiAttachment2,
   RiCloseLine,
   RiDeleteBinLine,
-  RiDiscordLine,
   RiEditLine,
   RiGroupLine,
+  RiLayoutLeftLine,
   RiLogoutBoxRLine,
-  RiMessage2Line,
   RiPushpinLine,
   RiRefreshLine,
   RiReplyLine,
@@ -15,6 +14,7 @@ import {
   RiSettings3Line,
   RiSparklingLine,
 } from '@remixicon/react';
+import { Icon } from '@/components/icon/Icon';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -63,6 +63,8 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
   const [members, setMembers] = React.useState<DiscordMember[]>([]);
   const [roles, setRoles] = React.useState<DiscordRole[]>([]);
   const [rightDrawer, setRightDrawer] = React.useState<RightDrawer>('none');
+  const [showChannels, setShowChannels] = React.useState(true);
+  const [brokenGuildIcons, setBrokenGuildIcons] = React.useState<Record<string, boolean>>({});
   const [composerText, setComposerText] = React.useState('');
   const [replyTo, setReplyTo] = React.useState<DiscordMessage | null>(null);
   const [editingMsg, setEditingMsg] = React.useState<DiscordMessage | null>(null);
@@ -299,89 +301,155 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
         if (e.dataTransfer.files?.length) void readFileList(e.dataTransfer.files);
       }}
     >
-      {/* Column 1: Server Rail */}
-      <div className="flex w-12 shrink-0 flex-col items-center gap-1.5 overflow-y-auto border-r border-border/60 bg-card/40 py-2">
-        <button
-          type="button"
-          title={t('discord.directMessages')}
-          onClick={() => setSelectedGuildId('__dms__')}
-          className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
-            selectedGuildId === '__dms__'
-              ? 'border-foreground/40 bg-primary text-primary-foreground'
-              : 'border-border/60 bg-card text-muted-foreground hover:border-border hover:text-foreground'
-          }`}
-        >
-          <RiMessage2Line className="h-4 w-4" />
-        </button>
-        <div className="h-px w-6 bg-border/70" />
-        {guilds.map((g) => (
+      {/* Column 1: Server Rail (strictly non-squishable fixed-square icons) */}
+      <div className="flex w-[62px] shrink-0 flex-col items-center gap-2 overflow-y-auto overflow-x-hidden border-r border-border/60 bg-[#0B0D0F] py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative flex w-full shrink-0 items-center justify-center">
+          <span
+            className={`absolute left-0 w-1 rounded-r-full bg-[#F1F2EF] transition-all ${
+              selectedGuildId === '__dms__' ? 'h-6 opacity-100' : 'h-0 opacity-0'
+            }`}
+          />
           <button
-            key={g.id}
             type="button"
-            title={g.name}
-            onClick={() => setSelectedGuildId(g.id)}
-            className={`relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border transition ${
-              selectedGuildId === g.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:rounded-lg'
+            title={t('discord.directMessages')}
+            onClick={() => setSelectedGuildId('__dms__')}
+            style={{ width: 40, height: 40, minWidth: 40, minHeight: 40 }}
+            className={`flex aspect-square shrink-0 items-center justify-center border transition-all ${
+              selectedGuildId === '__dms__'
+                ? 'rounded-[12px] border-foreground/40 bg-[#E5E8E3] text-[#08090A]'
+                : 'rounded-[20px] border-border/70 bg-[#171B1D] text-foreground/85 hover:rounded-[12px] hover:border-foreground/30 hover:text-foreground'
             }`}
           >
-            {g.iconUrl ? (
-              <img src={g.iconUrl} alt={g.name} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-[11px] font-semibold">{g.name.slice(0, 2).toUpperCase()}</span>
-            )}
+            <Icon name="discord" className="h-5 w-5 shrink-0" />
           </button>
-        ))}
-        <div className="mt-auto pt-2">
+        </div>
+
+        <div className="h-px w-7 shrink-0 bg-border/70" />
+
+        {guilds.map((g) => {
+          const active = selectedGuildId === g.id;
+          const showImg = Boolean(g.iconUrl) && !brokenGuildIcons[g.id];
+          const acronym = g.name
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((w) => w[0])
+            .join('')
+            .slice(0, 3)
+            .toUpperCase() || g.name.slice(0, 2).toUpperCase();
+          return (
+            <div key={g.id} className="group/guild relative flex w-full shrink-0 items-center justify-center">
+              <span
+                className={`absolute left-0 w-1 rounded-r-full bg-[#F1F2EF] transition-all ${
+                  active ? 'h-6 opacity-100' : 'h-0 opacity-0 group-hover/guild:h-3 group-hover/guild:opacity-60'
+                }`}
+              />
+              <button
+                type="button"
+                title={g.name}
+                onClick={() => setSelectedGuildId(g.id)}
+                style={{ width: 40, height: 40, minWidth: 40, minHeight: 40 }}
+                className={`relative flex aspect-square shrink-0 items-center justify-center overflow-hidden border bg-[#171B1D] transition-all ${
+                  active
+                    ? 'rounded-[12px] border-[#E5E8E3]/70 ring-1 ring-[#E5E8E3]/30'
+                    : 'rounded-[20px] border-border/60 hover:rounded-[12px] hover:border-foreground/35'
+                }`}
+              >
+                {showImg ? (
+                  <img
+                    src={g.iconUrl!}
+                    alt={g.name}
+                    width={40}
+                    height={40}
+                    loading="lazy"
+                    onError={() => setBrokenGuildIcons((prev) => ({ ...prev, [g.id]: true }))}
+                    className="h-full w-full aspect-square object-cover"
+                  />
+                ) : (
+                  <span className="px-1 text-[11px] font-semibold tracking-tight text-foreground select-none">
+                    {acronym}
+                  </span>
+                )}
+              </button>
+            </div>
+          );
+        })}
+
+        <div className="mt-auto shrink-0 pt-2">
           <button
             type="button"
             title={t('discord.connect.disconnect')}
             onClick={() => void discordApi.disconnect().then(setStatus)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            style={{ width: 36, height: 36, minWidth: 36, minHeight: 36 }}
+            className="flex aspect-square shrink-0 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-destructive/15 hover:text-destructive"
           >
-            <RiLogoutBoxRLine className="h-4 w-4" />
+            <RiLogoutBoxRLine className="h-4 w-4 shrink-0" />
           </button>
         </div>
       </div>
 
       {/* Column 2: Channels / DMs */}
-      <div className="hidden w-44 shrink-0 flex-col border-r border-border/60 bg-card/20 sm:flex">
-        <div className="flex items-center justify-between border-b border-border/60 px-2.5 py-2 text-xs font-semibold">
-          <span className="truncate">{selectedGuildId === '__dms__' ? t('discord.directMessages') : (activeGuild?.name ?? 'Server')}</span>
-          <span className="flex items-center gap-1.5 shrink-0">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${status.gatewayConnected ? 'bg-[var(--spleen-accent,#C8FA62)]' : 'bg-muted-foreground/40'}`}
-              title={status.gatewayConnected ? 'Gateway connected' : 'Gateway disconnected'}
-            />
-            <RiDiscordLine className="h-3.5 w-3.5 text-muted-foreground" />
-          </span>
+      {showChannels ? (
+        <div className="flex w-48 shrink-0 flex-col border-r border-border/60 bg-[#0B0D0F]/80">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2.5 py-2 text-xs font-semibold">
+            <span className="truncate">{selectedGuildId === '__dms__' ? t('discord.directMessages') : (activeGuild?.name ?? 'Server')}</span>
+            <span className="flex items-center gap-1.5 shrink-0">
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.gatewayConnected ? 'bg-[var(--spleen-accent,#C8FA62)]' : 'bg-muted-foreground/40'}`}
+                title={status.gatewayConnected ? 'Gateway connected' : 'Gateway disconnected'}
+              />
+              <Icon name="discord" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </span>
+          </div>
+          <div className="min-h-0 flex-1">
+            {selectedGuildId === '__dms__' ? (
+              <DiscordDirect
+                dms={dms}
+                activeChannelId={activeChannel?.id ?? null}
+                onSelect={setActiveChannel}
+                onCreatedDm={(ch) => {
+                  setDms((prev) => (prev.some((d) => d.id === ch.id) ? prev : [ch, ...prev]));
+                  setActiveChannel(ch);
+                }}
+              />
+            ) : (
+              <DiscordChannels
+                channels={channels}
+                threads={threads}
+                activeChannelId={activeChannel?.id ?? null}
+                onSelect={setActiveChannel}
+              />
+            )}
+          </div>
+          {status.user ? (
+            <div className="flex shrink-0 items-center gap-2 border-t border-border/60 bg-[#08090A] px-2.5 py-2">
+              <DiscordAvatar user={status.user} size={26} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-semibold text-foreground">
+                  {status.user.globalName || status.user.username}
+                </div>
+                <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground">
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${status.gatewayConnected ? 'bg-[#C8FA62]' : 'bg-muted-foreground/40'}`} />
+                  <span className="truncate">{status.gatewayConnected ? 'LIVE' : 'REST'}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
-        <div className="min-h-0 flex-1">
-          {selectedGuildId === '__dms__' ? (
-            <DiscordDirect
-              dms={dms}
-              activeChannelId={activeChannel?.id ?? null}
-              onSelect={setActiveChannel}
-              onCreatedDm={(ch) => {
-                setDms((prev) => (prev.some((d) => d.id === ch.id) ? prev : [ch, ...prev]));
-                setActiveChannel(ch);
-              }}
-            />
-          ) : (
-            <DiscordChannels
-              channels={channels}
-              threads={threads}
-              activeChannelId={activeChannel?.id ?? null}
-              onSelect={setActiveChannel}
-            />
-          )}
-        </div>
-      </div>
+      ) : null}
 
       {/* Column 3: Messages + Composer + Right Drawer */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top Channel Bar */}
-        <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2 text-xs">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-[#0B0D0F]/60 px-3 py-2 text-xs">
           <div className="min-w-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowChannels((v) => !v)}
+              title={showChannels ? 'Hide channels' : 'Show channels'}
+              className="shrink-0 rounded p-1 text-muted-foreground transition hover:bg-[#171B1D] hover:text-foreground"
+            >
+              <RiLayoutLeftLine className="h-3.5 w-3.5" />
+            </button>
             <span className="font-semibold truncate">
               {activeChannel ? `# ${activeChannel.name}` : 'Select a channel'}
             </span>

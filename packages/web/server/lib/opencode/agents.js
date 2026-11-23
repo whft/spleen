@@ -497,7 +497,7 @@ function collectAgentIds(dir, prefix, ids) {
   }
 }
 
-function listDisabledAgents(workingDirectory) {
+function listConfiguredAgents(workingDirectory) {
   const lookupCache = createAgentLookupCache();
   const names = new Set();
 
@@ -519,21 +519,36 @@ function listDisabledAgents(workingDirectory) {
     if (isRecord(section)) for (const name of Object.keys(section)) names.add(name);
   }
 
-  const disabled = [];
+  const results = [];
   for (const name of [...names].sort((a, b) => a.localeCompare(b))) {
     const entry = getAgentConfig(name, workingDirectory, lookupCache);
-    if (entry.config.disabled !== true) continue;
-    disabled.push({
+    results.push({
       name,
       scope: entry.scope,
       path: entry.path,
-      ...(typeof entry.config.description === 'string' ? { description: entry.config.description } : {}),
+      disabled: entry.config.disabled === true,
+      description: typeof entry.config.description === 'string' ? entry.config.description : '',
+      model: typeof entry.config.model === 'string' ? entry.config.model : null,
+      mode: typeof entry.config.mode === 'string' ? entry.config.mode : 'subagent',
+      prompt: typeof entry.config.prompt === 'string' ? entry.config.prompt : '',
     });
   }
-  return disabled;
+  return results;
+}
+
+function listDisabledAgents(workingDirectory) {
+  return listConfiguredAgents(workingDirectory)
+    .filter((entry) => entry.disabled)
+    .map(({ name, scope, path: entryPath, description }) => ({
+      name,
+      scope,
+      path: entryPath,
+      ...(description ? { description } : {}),
+    }));
 }
 
 export {
+  listConfiguredAgents,
   listDisabledAgents,
   getAgentSources,
   getAgentConfig,

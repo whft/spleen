@@ -95,6 +95,7 @@ import { registerUnknownCheatsRoutes } from './lib/unknowncheats/routes.js';
 import { createServerUtilsRuntime } from './lib/opencode/server-utils-runtime.js';
 import { createMcpOAuthSignIn } from './lib/opencode/mcp-oauth.js';
 import { getMcpConfig, listMcpConfigs, updateMcpConfig } from './lib/opencode/mcp.js';
+import { listConfiguredAgents, getAgentConfig, createAgent, updateAgent, deleteAgent } from './lib/opencode/agents.js';
 import { createOpenCodeTrust } from './lib/opencode-trust/index.js';
 import { registerSessionProjectRoutes } from './lib/projects/session-directory.js';
 import { guardOpenCodeFetch } from './lib/opencode-trust/fetch-guard.js';
@@ -771,6 +772,7 @@ let recoveryStore = null;
 let teamsRuntime = null;
 let discordClientRuntime = null;
 let unknownCheatsRuntime = null;
+let unknownCheatsStoreRuntime = null;
 let spacesHost = null;
 let activeTunnelController = null;
 let globalWatcherStartPromise = null;
@@ -2200,6 +2202,14 @@ const spleenControlService = createSpleenControlService({
   getSessionRecoveryRuntime: () => sessionRecoveryRuntime,
   getDiscordClient: () => discordClientRuntime,
   getUnknownCheatsClient: () => unknownCheatsRuntime,
+  getUnknownCheatsStore: () => unknownCheatsStoreRuntime,
+  agentConfigApi: {
+    listConfiguredAgents,
+    getAgentConfig,
+    createAgent,
+    updateAgent,
+    deleteAgent,
+  },
   sanitizeProjects,
   buildOpenCodeUrl,
   getOpenCodeAuthHeaders,
@@ -2861,6 +2871,7 @@ async function main(options = {}) {
     requireAuthorized: (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }),
   });
   const unknownCheatsStore = createUnknownCheatsStore({ filePath: path.join(SPLEEN_DATA_DIR, 'unknowncheats.json') });
+  unknownCheatsStoreRuntime = unknownCheatsStore;
   unknownCheatsRuntime = createUnknownCheatsClient({ store: unknownCheatsStore });
   registerUnknownCheatsRoutes(app, {
     client: unknownCheatsRuntime,

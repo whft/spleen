@@ -27,9 +27,22 @@ export const registerUnknownCheatsRoutes = (app, { client, store, requireAuthori
     res.json(await store.getPublicStatus());
   }));
 
+  app.post('/api/unknowncheats/login', express.json({ limit: '16kb' }), wrap(async (req, res) => {
+    const result = await client.login({
+      username: typeof req.body?.username === 'string' ? req.body.username : '',
+      password: typeof req.body?.password === 'string' ? req.body.password : '',
+      userAgent: typeof req.body?.userAgent === 'string' ? req.body.userAgent : req.get('user-agent'),
+    });
+    res.json(result);
+  }));
+
   app.post('/api/unknowncheats/cookies', express.json({ limit: '64kb' }), wrap(async (req, res) => {
     const cookieHeader = typeof req.body?.cookieHeader === 'string' ? req.body.cookieHeader : '';
-    await store.setCookieHeader(cookieHeader);
+    const userAgent = typeof req.body?.userAgent === 'string' && req.body.userAgent.trim()
+      ? req.body.userAgent.trim()
+      : (req.get('user-agent') || '');
+    const username = typeof req.body?.username === 'string' ? req.body.username : undefined;
+    await store.setCookieHeader(cookieHeader, { userAgent, username });
     res.json(await store.getPublicStatus());
   }));
 
@@ -40,6 +53,12 @@ export const registerUnknownCheatsRoutes = (app, { client, store, requireAuthori
 
   app.get('/api/unknowncheats/home', wrap(async (_req, res) => {
     res.json(await client.getHome());
+  }));
+
+  app.get('/api/unknowncheats/recent', wrap(async (req, res) => {
+    res.json(await client.getRecent({
+      page: req.query?.page ? Number(req.query.page) : 1,
+    }));
   }));
 
   app.get('/api/unknowncheats/forum', wrap(async (req, res) => {
@@ -59,8 +78,11 @@ export const registerUnknownCheatsRoutes = (app, { client, store, requireAuthori
   }));
 
   app.get('/api/unknowncheats/search', wrap(async (req, res) => {
+    const query = typeof req.query?.query === 'string'
+      ? req.query.query
+      : (typeof req.query?.q === 'string' ? req.query.q : '');
     res.json(await client.search({
-      query: typeof req.query?.query === 'string' ? req.query.query : '',
+      query,
       page: req.query?.page ? Number(req.query.page) : 1,
     }));
   }));

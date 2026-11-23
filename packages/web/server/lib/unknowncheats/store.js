@@ -2,8 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const DEFAULT_STATE = () => ({
-  version: 1,
+  version: 2,
   cookieHeader: '',
+  userAgent: '',
+  username: null,
   cookiesUpdatedAt: null,
   bookmarks: [],
   history: [],
@@ -24,8 +26,10 @@ export const createUnknownCheatsStore = ({ filePath, fsImpl = fs } = {}) => {
     try {
       const parsed = JSON.parse(await fsImpl.readFile(filePath, 'utf8'));
       cache = {
-        version: 1,
+        version: 2,
         cookieHeader: typeof parsed?.cookieHeader === 'string' ? parsed.cookieHeader : '',
+        userAgent: typeof parsed?.userAgent === 'string' ? parsed.userAgent : '',
+        username: typeof parsed?.username === 'string' && parsed.username.trim() ? parsed.username.trim() : null,
         cookiesUpdatedAt: parsed?.cookiesUpdatedAt ?? null,
         bookmarks: Array.isArray(parsed?.bookmarks) ? parsed.bookmarks : [],
         history: Array.isArray(parsed?.history) ? parsed.history : [],
@@ -37,7 +41,7 @@ export const createUnknownCheatsStore = ({ filePath, fsImpl = fs } = {}) => {
   };
 
   const writeRaw = async (next) => {
-    cache = { ...DEFAULT_STATE(), ...next, version: 1 };
+    cache = { ...DEFAULT_STATE(), ...next, version: 2 };
     if (!filePath) return clone(cache);
     await fsImpl.mkdir(path.dirname(filePath), { recursive: true });
     const temp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -61,20 +65,45 @@ export const createUnknownCheatsStore = ({ filePath, fsImpl = fs } = {}) => {
   return {
     getPublicStatus: async () => {
       const s = await queue.then(() => readRaw());
+      const hasCookies = Boolean(s.cookieHeader.trim());
+      const loggedIn = Boolean(s.username) || /\bbb_userid=|\bbb_password=|\bbb_sessionhash=/i.test(s.cookieHeader);
       return {
-        hasCookies: Boolean(s.cookieHeader.trim()),
+        hasCookies,
+        loggedIn,
+        username: s.username,
+        hasUserAgent: Boolean(s.userAgent.trim()),
         cookiesUpdatedAt: s.cookiesUpdatedAt,
         bookmarkCount: s.bookmarks.length,
         historyCount: s.history.length,
       };
     },
+    readSessionMeta: async () => {
+      const s = await queue.then(() => readRaw());
+      return {
+        cookieHeader: s.cookieHeader,
+        userAgent: s.userAgent,
+        username: s.username,
+      };
+    },
     readCookieHeader: async () => (await queue.then(() => readRaw())).cookieHeader,
-    setCookieHeader: (cookieHeader) => update((draft) => {
+    setCookieHeader: (cookieHeader, options = {}) => update((draft) => {
       draft.cookieHeader = typeof cookieHeader === 'string' ? cookieHeader.trim() : '';
+      if (typeof options?.userAgent === 'string' && options.userAgent.trim()) {
+        draft.userAgent = options.userAgent.trim();
+      }
+      if (typeof options?.username === 'string') {
+        draft.username = options.username.trim() || null;
+      }
       draft.cookiesUpdatedAt = draft.cookieHeader ? Date.now() : null;
+    }),
+    setUsername: (username) => update((draft) => {
+      const next = typeof username === 'string' ? username.trim() || null : null;
+      draft.username = next;
     }),
     clearCookies: () => update((draft) => {
       draft.cookieHeader = '';
+      draft.userAgent = '';
+      draft.username = null;
       draft.cookiesUpdatedAt = null;
     }),
     listBookmarks: async () => (await queue.then(() => readRaw())).bookmarks,

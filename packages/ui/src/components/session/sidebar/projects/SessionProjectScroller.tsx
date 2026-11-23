@@ -56,7 +56,10 @@ import { getPinnedZoneHeaderHeight } from './pinnedZoneHeader';
 import { prepareSessionProjectAction } from './sessionProjectActionContext';
 import { applyShowControl, getProjectLabel, grantGroupAccess, retryGroupStatus, toggleActivityZone, toggleProjectsCaption } from './sessionProjectListActions';
 import { countArchiveAllOutcome, selectArchiveAllSessionIds, withArchiveAllSubtrees } from './archiveAllSessions';
-import { collectSessionSubtreeIds } from '../sessions/sessionSubtreeActions';
+import { collectSessionMoveDescendants, collectSessionSubtreeIds } from '../sessions/sessionSubtreeActions';
+import { normalizePath } from '@/lib/pathNormalization';
+import { buildSessionTreeMoveMessages, requestSessionTreeMove } from '@/lib/worktrees/sessionWorktreeMove';
+import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/components/ui';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
@@ -145,6 +148,7 @@ const ROW_DRAG_MEASURING = { droppable: { strategy: MeasuringStrategy.Always } }
 type SidebarDragData = {
   type?: 'session' | 'project' | 'section';
   sessionId?: string;
+  sessionDirectory?: string | null;
   rowKey?: string;
   sortGroup?: string;
   sectionId?: string;
@@ -629,8 +633,15 @@ function SessionProjectScrollerComponent({ model, view, actions }: SessionProjec
     endBlockDrag(active, moved ? active.rect.current.translated?.top : active.rect.current.initial?.top);
     if (!over) return;
     const activeData = readDragData(active);
-    // SAFETY: folder payloads are created by the sidebar's droppable folder rows.
-    const overData = over.data.current as { type?: string; folderId?: string; scopeKey?: string; sectionId?: string } | undefined;
+    // SAFETY: folder and project payloads are created by the sidebar's droppable rows.
+    const overData = over.data.current as {
+      type?: string;
+      folderId?: string;
+      scopeKey?: string;
+      sectionId?: string;
+      projectId?: string;
+      projectDirectory?: string | null;
+    } | undefined;
     if (activeData.type === 'session' && activeData.sessionId && overData?.type === 'folder' && overData.folderId && overData.scopeKey) {
       const source = resolveCurrentSessionFolderDropSource(model.rowModel.rows, String(active.id), activeData.sessionId);
       if (!source) return;
@@ -644,6 +655,30 @@ function SessionProjectScrollerComponent({ model, view, actions }: SessionProjec
         authority,
         removeSessionFromFolder: store.removeSessionFromFolder,
         addSessionToFolder,
+      });
+      return;
+    }
+    if (activeData.type === 'session' && activeData.sessionId && overData?.type === 'project' && overData.projectDirectory) {
+      const { entityById } = useGlobalSessionsStore.getState();
+      let root = entityById.get(activeData.sessionId);
+      if (!root) return;
+      for (let parent = entityById.get(root.parentID ?? ''); parent?.directory === root.directory; parent = entityById.get(root.parentID ?? '')) {
+        root = parent;
+      }
+      const sourceDirectory = root.directory || activeData.sessionDirectory || '';
+      if (sourceDirectory && normalizePath(sourceDirectory) === normalizePath(overData.projectDirectory)) {
+        return;
+      }
+      requestSessionTreeMove({
+        kind: 'project',
+        root,
+        descendants: collectSessionMoveDescendants(root, []),
+        sourceDirectory,
+        projectDirectory: overData.projectDirectory,
+        messages: buildSessionTreeMoveMessages(t, {
+          success: 'sessions.moveSession.success',
+          failure: 'sessions.moveSession.failed',
+        }),
       });
       return;
     }
@@ -687,7 +722,7 @@ function SessionProjectScrollerComponent({ model, view, actions }: SessionProjec
         scrollShadowSurface={view.mobileVariant ? 'var(--background)' : 'var(--sidebar)'}
         outerClassName="flex-1 min-h-0" className="oc-sidebar-scroller pb-1 ps-2.5 pe-2 [overflow-anchor:none]"
       >
-        <SessionFolderOwnersProvider ownerKeys={folderDropOwnerKeys}>
+        <SessionFolderOwnersProvider ownerKeys={folderDropOwnerKeys} canDropOnProject={!view.isVSCode && model.projectSections.length > 0}>
         <DndContext
           sensors={sensors}
           collisionDetection={sessionFolderCollision}

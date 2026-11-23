@@ -22,7 +22,7 @@ import {
   type UcThreadSummary,
 } from '@/lib/unknowncheats/api';
 
-type UcTab = 'home' | 'forum' | 'thread' | 'search' | 'bookmarks' | 'history' | 'session';
+type UcTab = 'home' | 'recent' | 'forum' | 'thread' | 'search' | 'bookmarks' | 'history' | 'session';
 
 const UcSpoilerBlock: React.FC<{ title: string; text: string }> = ({ title, text }) => {
   const [open, setOpen] = React.useState(false);
@@ -112,6 +112,12 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
   const [forums, setForums] = React.useState<UcForumItem[]>([]);
   const [forumFilter, setForumFilter] = React.useState('');
 
+  const [recentState, setRecentState] = React.useState<{
+    page: number;
+    totalPages: number;
+    threads: UcThreadSummary[];
+  } | null>(null);
+
   const [activeForum, setActiveForum] = React.useState<{
     id?: string;
     title: string;
@@ -142,8 +148,15 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
 
   const [bookmarks, setBookmarks] = React.useState<UcBookmark[]>([]);
   const [history, setHistory] = React.useState<UcHistoryEntry[]>([]);
+
+  // Login & cookie sync state
+  const [loginUsername, setLoginUsername] = React.useState('');
+  const [loginPassword, setLoginPassword] = React.useState('');
+  const [loggingIn, setLoggingIn] = React.useState(false);
   const [cookieInput, setCookieInput] = React.useState('');
   const [syncingCookies, setSyncingCookies] = React.useState(false);
+  const [autoWatchingWindow, setAutoWatchingWindow] = React.useState(false);
+  const lastSyncedCookieRef = React.useRef('');
 
   const sendToSpleenAi = React.useCallback((text: string) => {
     useInputStore.getState().setPendingInputText(text, 'append');
@@ -175,6 +188,26 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
         setGate({ info: res.gate, url: res.url || res.gate.targetUrl });
       } else {
         setForums(res.forums);
+        if (res.currentUser?.username) void refreshStatusAndLists();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshStatusAndLists]);
+
+  const loadRecent = React.useCallback(async (page = 1) => {
+    setTab('recent');
+    setLoading(true);
+    setError(null);
+    setGate(null);
+    try {
+      const res = await unknownCheatsApi.recent(page);
+      if (res.gated) {
+        setGate({ info: res.gate, url: res.url || res.gate.targetUrl });
+      } else {
+        setRecentState({ page: res.page, totalPages: res.totalPages, threads: res.threads });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -271,12 +304,16 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
       void openForum({ fid: activeForum.id, url: activeForum.url, title: activeForum.title, page: activeForum.page });
       return;
     }
+    if (tab === 'recent') {
+      void loadRecent(recentState?.page ?? 1);
+      return;
+    }
     if (tab === 'search' && searchQuery.trim()) {
       void runSearch(searchQuery.trim(), searchState?.page ?? 1);
       return;
     }
     void loadHome();
-  }, [activeForum, activeThread, loadHome, openForum, openThread, runSearch, searchQuery, searchState?.page, tab]);
+  }, [activeForum, activeThread, loadHome, loadRecent, openForum, openThread, recentState?.page, runSearch, searchQuery, searchState?.page, tab]);
 
   React.useEffect(() => {
     if (!visible) return;
@@ -286,12 +323,83 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
     }
   }, [forums.length, gate, loadHome, loading, refreshStatusAndLists, visible]);
 
+  // Automatic background sync while the visible Tauri verification/login window is open
+  React.useEffect(() => {
+    if (!autoWatchingWindow || !visible) return;
+    let cancelled = false;
+    let attempts = 0;
+    const poll = async () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (attempts > 48) {
+        setAutoWatchingWindow(false);
+        return;
+      }
+      const res = await readUcVerificationCookies();
+      if (cancelled) return;
+      if (!res.ok) {
+        if (res.error === 'verification_window_not_open') setAutoWatchingWindow(false);
+        return;
+      }
+      const header = res.cookieHeader.trim();
+      const hasAuthOrClearance = /\b(cf_clearance|bb_userid|bb_password|bb_sessionhash)=/i.test(header);
+      if (hasAuthOrClearance && header !== lastSyncedCookieRef.current) {
+        lastSyncedCookieRef.current = header;
+        try {
+          const nextStatus = await unknownCheatsApi.setCookies(header);
+          setStatus(nextStatus);
+          setGate(null);
+          if (/\bbb_userid=|\bbb_password=/i.test(header) || !gate) {
+            setAutoWatchingWindow(false);
+          }
+          toast.success(`Synced ${res.count} UnknownCheats cookies automatically`);
+          retryActiveView();
+        } catch {
+          // ignore transient save errors while polling
+        }
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [autoWatchingWindow, gate, retryActiveView, visible]);
+
   const handleOpenVerificationWindow = async (targetUrl?: string) => {
-    const opened = await openUcVerificationWindow(targetUrl || gate?.url || 'https://www.unknowncheats.me/forum/');
+    const dest = targetUrl || gate?.url || 'https://www.unknowncheats.me/forum/login.php';
+    const opened = await openUcVerificationWindow(dest);
     if (opened) {
-      toast.info('Complete verification or login in the UnknownCheats window, then click Sync Verified Session.');
+      setAutoWatchingWindow(true);
+      toast.info('Sign in or complete verification in the UnknownCheats window — Spleen will auto-sync your session.');
     } else {
-      void openDesktopBrowserWindow(targetUrl || gate?.url || 'https://www.unknowncheats.me/forum/', 'UnknownCheats');
+      void openDesktopBrowserWindow(dest, 'UnknownCheats Login');
+    }
+  };
+
+  const handleDirectLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginUsername.trim() || !loginPassword) return;
+    setLoggingIn(true);
+    setError(null);
+    try {
+      const res = await unknownCheatsApi.login(loginUsername.trim(), loginPassword);
+      if (res.gated) {
+        setGate({ info: res.gate, url: res.url || 'https://www.unknowncheats.me/forum/login.php' });
+        toast.info('Cloudflare verification is required — opening Spleen’s interactive Login Window.');
+        void handleOpenVerificationWindow(res.url || 'https://www.unknowncheats.me/forum/login.php');
+        return;
+      }
+      setStatus(res.status);
+      setLoginPassword('');
+      setGate(null);
+      toast.success(`Signed in to UnknownCheats as ${res.username}`);
+      if (tab === 'session') setTab('home');
+      retryActiveView();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoggingIn(false);
     }
   };
 
@@ -302,14 +410,16 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
       if (!res.ok || !res.cookieHeader.trim()) {
         toast.error(
           res.error === 'verification_window_not_open'
-            ? 'Open the UnknownCheats Verification Window first, complete verification, then sync.'
+            ? 'Open the Login / Verification Window first, sign in or verify, then click Sync.'
             : 'No verification cookies available yet — complete verification in the window or paste Cookie header below.',
         );
         return;
       }
+      lastSyncedCookieRef.current = res.cookieHeader.trim();
       const nextStatus = await unknownCheatsApi.setCookies(res.cookieHeader);
       setStatus(nextStatus);
       setGate(null);
+      setAutoWatchingWindow(false);
       toast.success(`Synced ${res.count} UnknownCheats session cookies`);
       retryActiveView();
     } catch (err) {
@@ -337,8 +447,9 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
   const handleClearCookies = async () => {
     try {
       const nextStatus = await unknownCheatsApi.clearCookies();
+      lastSyncedCookieRef.current = '';
       setStatus(nextStatus);
-      toast.success('Cleared UnknownCheats session cookies');
+      toast.success('Signed out & cleared UnknownCheats session');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to clear cookies');
     }
@@ -382,6 +493,55 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
     return q ? forums.filter((f) => f.title.toLowerCase().includes(q) || f.id.toLowerCase().includes(q)) : forums;
   }, [forumFilter, forums]);
 
+  const renderLoginBox = (compact = false) => (
+    <div className="space-y-3">
+      <form onSubmit={(e) => void handleDirectLogin(e)} className="space-y-2">
+        <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          UnknownCheats Account Login
+        </div>
+        <div className={cn('grid gap-2', compact ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2')}>
+          <input
+            value={loginUsername}
+            onChange={(e) => setLoginUsername(e.target.value)}
+            placeholder="UC Username"
+            autoComplete="username"
+            className="rounded-md border border-border bg-[#08090A] px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
+          />
+          <input
+            type="password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            placeholder="Password"
+            autoComplete="current-password"
+            className="rounded-md border border-border bg-[#08090A] px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" size="sm" disabled={loggingIn || !loginUsername.trim() || !loginPassword}>
+            {loggingIn ? 'Signing in…' : 'Sign In'}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleOpenVerificationWindow(gate?.url || 'https://www.unknowncheats.me/forum/login.php')}
+          >
+            Interactive Browser Login
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={syncingCookies}
+            onClick={() => void handleSyncVerificationCookies()}
+          >
+            {syncingCookies ? 'Syncing…' : autoWatchingWindow ? 'Auto-Syncing… (Sync Now)' : t('uc.action.syncVerification')}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+
   const renderThreadRow = (thread: UcThreadSummary) => {
     const saved = isBookmarked(thread.id) || isBookmarked(thread.url);
     return (
@@ -400,7 +560,12 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                 Sticky
               </span>
             ) : null}
-            <span className="line-clamp-2 text-xs font-medium text-foreground group-hover:text-foreground">
+            {thread.prefix ? (
+              <span className="rounded border border-border/80 bg-[#08090A] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-foreground/85">
+                {thread.prefix}
+              </span>
+            ) : null}
+            <span className="line-clamp-2 text-xs font-medium text-foreground">
               {thread.title}
             </span>
           </div>
@@ -475,14 +640,26 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
     );
   };
 
+  const sessionBadgeLabel = status?.username
+    ? `@${status.username}`
+    : status?.loggedIn
+      ? 'SIGNED IN'
+      : status?.hasCookies
+        ? 'VERIFIED'
+        : 'SIGN IN';
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#08090A] text-foreground">
       {/* Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-[#0B0D0F] px-3 py-2">
-        <div className="flex items-center gap-1">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-[#0B0D0F] px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="mr-1.5 inline-flex items-center gap-1.5 text-xs font-semibold tracking-tight text-foreground">
+            <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
+          </span>
           {(
             [
               { id: 'home', label: t('uc.nav.home') },
+              { id: 'recent', label: 'Recent' },
               ...(activeForum ? [{ id: 'forum' as const, label: activeForum.title.slice(0, 18) }] : []),
               ...(activeThread ? [{ id: 'thread' as const, label: activeThread.title.slice(0, 18) }] : []),
               { id: 'search', label: t('uc.nav.search') },
@@ -494,7 +671,13 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
             <button
               key={item.id}
               type="button"
-              onClick={() => setTab(item.id)}
+              onClick={() => {
+                if (item.id === 'recent' && !recentState) {
+                  void loadRecent(1);
+                } else {
+                  setTab(item.id);
+                }
+              }}
               className={cn(
                 'rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
                 tab === item.id
@@ -511,16 +694,16 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
           <button
             type="button"
             onClick={() => setTab('session')}
-            title="UnknownCheats Session & Verification"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-[#111416] px-2 py-1 font-mono text-[10px] text-muted-foreground hover:border-border hover:text-foreground"
+            title="UnknownCheats Account & Verification"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-[#111416] px-2 py-1 font-mono text-[10px] text-foreground/90 hover:border-border"
           >
             <span
               className={cn(
                 'inline-block size-1.5 rounded-full',
-                status?.hasCookies ? 'bg-[#C8FA62]' : 'bg-muted-foreground/50',
+                status?.loggedIn || status?.hasCookies ? 'bg-[#C8FA62]' : 'bg-muted-foreground/50',
               )}
             />
-            {status?.hasCookies ? 'VERIFIED' : 'GUEST'}
+            {sessionBadgeLabel}
           </button>
           <button
             type="button"
@@ -540,7 +723,7 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
           e.preventDefault();
           void runSearch(searchQuery, 1);
         }}
-        className="flex items-center gap-1.5 border-b border-border/60 bg-[#0B0D0F] px-3 py-1.5"
+        className="flex shrink-0 items-center gap-1.5 border-b border-border/60 bg-[#0B0D0F] px-3 py-1.5"
       >
         <Icon name="search" className="size-3.5 shrink-0 text-muted-foreground" />
         <input
@@ -558,36 +741,19 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
 
       {/* Main Content Area */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {gate ? (
-          <div className="mx-auto my-4 max-w-lg rounded-lg border border-border bg-[#111416] p-4">
+        {gate && tab !== 'session' ? (
+          <div className="mx-auto my-4 max-w-lg space-y-3 rounded-lg border border-border bg-[#111416] p-4">
             <div className="flex items-center gap-2">
-              <span className="inline-block size-2 rounded-full bg-[#C8FA62]" />
+              <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
               <h3 className="text-sm font-semibold text-foreground">{t('uc.gate.title')}</h3>
             </div>
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               {gate.info.message || t('uc.gate.subtitle')}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void handleOpenVerificationWindow(gate.url)}
-              >
-                {t('uc.action.openVerification')}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={syncingCookies}
-                onClick={() => void handleSyncVerificationCookies()}
-              >
-                {syncingCookies ? 'Syncing…' : t('uc.action.syncVerification')}
-              </Button>
-            </div>
-            <div className="mt-4 border-t border-border/60 pt-3">
+            {renderLoginBox(true)}
+            <div className="border-t border-border/60 pt-3">
               <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                Or paste Cookie header manually (cf_clearance / bb_sessionhash)
+                Or paste Cookie header manually (cf_clearance / bb_userid / bb_sessionhash)
               </div>
               <div className="flex gap-1.5">
                 <input
@@ -656,6 +822,42 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
                 </button>
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {/* RECENT POSTS VIEW */}
+        {!loading && !gate && tab === 'recent' ? (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between border-b border-border/60 pb-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                Today’s Active Threads ({recentState?.threads.length ?? 0})
+              </span>
+              {recentState ? (
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={recentState.page <= 1}
+                    onClick={() => void loadRecent(recentState.page - 1)}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Prev
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={recentState.page >= recentState.totalPages}
+                    onClick={() => void loadRecent(recentState.page + 1)}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Next
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-1.5">{(recentState?.threads ?? []).map(renderThreadRow)}</div>
           </div>
         ) : null}
 
@@ -915,45 +1117,38 @@ export const UnknownCheatsPanel: React.FC<{ visible?: boolean }> = ({ visible = 
           </div>
         ) : null}
 
-        {/* SESSION & VERIFICATION VIEW */}
+        {/* SESSION & ACCOUNT LOGIN VIEW */}
         {tab === 'session' ? (
-          <div className="mx-auto max-w-lg space-y-3 rounded-lg border border-border bg-[#111416] p-4">
+          <div className="mx-auto max-w-lg space-y-4 rounded-lg border border-border bg-[#111416] p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
+                <Icon name="unknowncheats" className="size-4 shrink-0 text-foreground" />
+                <h3 className="text-sm font-semibold text-foreground">UnknownCheats Account & Session</h3>
+              </div>
+              <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
                 <span
                   className={cn(
-                    'inline-block size-2 rounded-full',
-                    status?.hasCookies ? 'bg-[#C8FA62]' : 'bg-muted-foreground/50',
+                    'inline-block size-1.5 rounded-full',
+                    status?.loggedIn || status?.hasCookies ? 'bg-[#C8FA62]' : 'bg-muted-foreground/50',
                   )}
                 />
-                <h3 className="text-sm font-semibold text-foreground">UnknownCheats Session Bridge</h3>
-              </div>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {status?.hasCookies ? 'COOKIES ACTIVE' : 'NO COOKIES'}
+                {status?.username ? `@${status.username}` : status?.hasCookies ? 'COOKIES ACTIVE' : 'GUEST'}
               </span>
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {t('uc.gate.subtitle')}
+              Sign in with your UnknownCheats account directly, or use Spleen’s interactive browser login window when Cloudflare verification or 2FA is active. Spleen matches your exact browser User-Agent so verified sessions persist cleanly and are available to Spleen AI.
             </p>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" onClick={() => void handleOpenVerificationWindow()}>
-                {t('uc.action.openVerification')}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={syncingCookies}
-                onClick={() => void handleSyncVerificationCookies()}
-              >
-                {syncingCookies ? 'Syncing…' : t('uc.action.syncVerification')}
-              </Button>
-              {status?.hasCookies ? (
+            {renderLoginBox(false)}
+            {status?.hasCookies ? (
+              <div className="flex items-center justify-between rounded-md border border-border/60 bg-[#0B0D0F] px-3 py-2 text-xs">
+                <span className="text-muted-foreground">
+                  {status.username ? `Signed in as ${status.username}` : 'Verified browser session stored'}
+                </span>
                 <Button type="button" size="sm" variant="ghost" onClick={() => void handleClearCookies()}>
-                  Clear Session
+                  Sign Out
                 </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
             <div className="border-t border-border/60 pt-3">
               <div className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 Manual Cookie Header Override

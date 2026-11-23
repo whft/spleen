@@ -227,14 +227,14 @@ export function renderComposerForm({
             style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
             {showDesktopDraftPresentation ? (
-                <div className={cn('chat-input-column mb-7 flex flex-col items-center text-center', draftPresentationClassName)}>
-                    <SpleenMonolith3D size={104} className="mb-3" />
+                <div className={cn('chat-input-column relative z-10 mb-7 flex flex-col items-center text-center', draftPresentationClassName)}>
+                    <SpleenMonolith3D size={118} className="mb-3" />
                     <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
                         {renderDraftTitle(draftHeading, draftProjectLabel)}
                     </h1>
                 </div>
             ) : null}
-            <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
+            <div className={cn('chat-input-column relative z-10 overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 {/* Comment mode shows only its own shell: the normal composer's
                     furniture (chips, banners, draft selectors) stays in state
                     and returns unchanged when the comment exits. */}

@@ -1,14 +1,55 @@
 import React from 'react';
-import { RiTeamLine } from '@remixicon/react';
+import { RiAddLine, RiCloseLine } from '@remixicon/react';
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { teamsApi, type TeamRecord } from './api';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useAgentsStore, type AgentWithExtras } from '@/stores/useAgentsStore';
+import { teamsApi, type TeamMemberInput, type TeamRecord } from './api';
+
+type PresetMemberTemplate = {
+  name: string;
+  role: string;
+  description: string;
+  agent: string;
+  model: string;
+};
+
+const PRESET_TEMPLATES: Record<string, PresetMemberTemplate[]> = {
+  'full-stack': [
+    { name: 'Lead', role: 'lead', description: 'Coordinates architecture, DAG tasks, and final verification.', agent: '', model: '' },
+    { name: 'Backend', role: 'backend', description: 'Implements APIs, storage, server logic, and backend tests.', agent: '', model: '' },
+    { name: 'Frontend', role: 'frontend', description: 'Implements UI components, stores, styling, and UX polish.', agent: '', model: '' },
+    { name: 'QA', role: 'qa', description: 'Verifies edge cases, runs checks, and audits regressions.', agent: '', model: '' },
+  ],
+  'research-build': [
+    { name: 'Lead', role: 'lead', description: 'Synthesizes findings and directs execution.', agent: '', model: '' },
+    { name: 'Researcher', role: 'researcher', description: 'Explores the codebase, APIs, and system constraints.', agent: '', model: '' },
+    { name: 'Builder', role: 'builder', description: 'Applies focused code changes cleanly.', agent: '', model: '' },
+    { name: 'Verifier', role: 'verifier', description: 'Runs type-checks, builds, and validates behavior.', agent: '', model: '' },
+  ],
+  'bug-hunt': [
+    { name: 'Lead', role: 'lead', description: 'Coordinates reproduction and sign-off.', agent: '', model: '' },
+    { name: 'Investigator', role: 'investigator', description: 'Traces logs, stack frames, and root causes.', agent: '', model: '' },
+    { name: 'Fixer', role: 'fixer', description: 'Implements minimal safe fixes.', agent: '', model: '' },
+    { name: 'Reviewer', role: 'reviewer', description: 'Audits diffs and checks for regressions.', agent: '', model: '' },
+  ],
+  'multi-review': [
+    { name: 'Lead', role: 'lead', description: 'Aggregates audit reports into an actionable summary.', agent: '', model: '' },
+    { name: 'Security', role: 'security', description: 'Audits auth, input validation, and secrets safety.', agent: '', model: '' },
+    { name: 'Performance', role: 'performance', description: 'Finds bottlenecks, leaks, and unnecessary I/O.', agent: '', model: '' },
+    { name: 'Correctness', role: 'correctness', description: 'Checks edge cases, error handling, and reliability.', agent: '', model: '' },
+  ],
+  custom: [
+    { name: 'Lead', role: 'lead', description: 'Orchestrates custom team members and shared DAG tasks.', agent: '', model: '' },
+  ],
+};
 
 const PRESET_OPTIONS = [
   { id: 'full-stack', label: 'Full-Stack (Lead · Backend · Frontend · QA)' },
   { id: 'research-build', label: 'Research & Build (Lead · Researcher · Builder · Verifier)' },
   { id: 'bug-hunt', label: 'Bug Hunt (Lead · Investigator · Fixer · Reviewer)' },
   { id: 'multi-review', label: 'Multi-Review (Lead · Security · Performance · Correctness)' },
-  { id: 'custom', label: 'Custom (Lead)' },
+  { id: 'custom', label: 'Custom Roster' },
 ] as const;
 
 export const TeamLauncher: React.FC<{
@@ -17,25 +58,97 @@ export const TeamLauncher: React.FC<{
   onCancel?: () => void;
 }> = ({ directory, onCreated, onCancel }) => {
   const { t } = useI18n();
+  const projects = useProjectsStore((s) => s.projects);
+  const loadAgents = useAgentsStore((s) => s.loadAgents);
+  const getVisibleAgents = useAgentsStore((s) => s.getVisibleAgents);
+  // Subscribe to directory cache updates
+  const agentsByDirectory = useAgentsStore((s) => s.agentsByDirectory);
+
+  const defaultDir = React.useMemo(() => {
+    if (directory?.trim()) return directory.trim();
+    return projects[0]?.path?.trim() || '';
+  }, [directory, projects]);
+
+  const [selectedDirectory, setSelectedDirectory] = React.useState(defaultDir);
   const [name, setName] = React.useState('');
   const [goal, setGoal] = React.useState('');
   const [preset, setPreset] = React.useState<string>('full-stack');
+  const [roster, setRoster] = React.useState<PresetMemberTemplate[]>(() =>
+    PRESET_TEMPLATES['full-stack'].map((m) => ({ ...m })),
+  );
+  const [showRosterEditor, setShowRosterEditor] = React.useState(false);
+  const [maxParallel, setMaxParallel] = React.useState(3);
   const [useWorktrees, setUseWorktrees] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (!selectedDirectory && defaultDir) {
+      setSelectedDirectory(defaultDir);
+    }
+  }, [defaultDir, selectedDirectory]);
+
+  React.useEffect(() => {
+    if (selectedDirectory) {
+      void loadAgents(selectedDirectory);
+    }
+  }, [selectedDirectory, loadAgents]);
+
+  const availableAgents = React.useMemo(() => {
+    void agentsByDirectory;
+    return getVisibleAgents(selectedDirectory || undefined) as AgentWithExtras[];
+  }, [agentsByDirectory, getVisibleAgents, selectedDirectory]);
+
+  const handlePresetChange = (nextPreset: string) => {
+    setPreset(nextPreset);
+    const tpl = PRESET_TEMPLATES[nextPreset] ?? PRESET_TEMPLATES.custom;
+    setRoster(tpl.map((m) => ({ ...m })));
+    if (nextPreset === 'custom') setShowRosterEditor(true);
+  };
+
+  const updateRosterRow = (idx: number, patch: Partial<PresetMemberTemplate>) => {
+    setRoster((prev) => prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
+  };
+
+  const addRosterRow = () => {
+    setRoster((prev) => [
+      ...prev,
+      { name: `Specialist ${prev.length}`, role: `specialist-${prev.length}`, description: '', agent: '', model: '' },
+    ]);
+    setShowRosterEditor(true);
+  };
+
+  const removeRosterRow = (idx: number) => {
+    setRoster((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!directory) return;
+    const targetDir = selectedDirectory.trim();
+    if (!targetDir) {
+      setError('Select a project workspace directory first.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
+      const members: TeamMemberInput[] = roster
+        .filter((m) => m.name.trim() || m.role.trim())
+        .map((m) => ({
+          name: m.name.trim() || m.role.trim(),
+          role: (m.role.trim() || m.name.trim()).toLowerCase().replace(/\s+/g, '-'),
+          description: m.description.trim() || undefined,
+          agent: m.agent.trim() || undefined,
+          model: m.model.trim() || undefined,
+        }));
       const team = await teamsApi.create({
         name: name.trim() || 'AI Team',
         goal: goal.trim(),
-        directory,
+        directory: targetDir,
         preset,
         useWorktrees,
+        maxParallel,
+        members: members.length > 0 ? members : undefined,
       });
       onCreated(team);
     } catch (err) {
@@ -46,41 +159,71 @@ export const TeamLauncher: React.FC<{
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-3 rounded-lg border border-border bg-card/60 p-3.5 text-xs">
+    <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-3 rounded-lg border border-border/80 bg-card/60 p-3.5 text-xs">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-medium text-foreground">
-          <RiTeamLine className="h-4 w-4 text-primary" />
+          <Icon name="ai-teams" className="h-4 w-4 text-foreground" />
           <span>{t('teams.launcher.newTeam')}</span>
         </div>
         {onCancel ? (
-          <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onCancel} className="text-[11px] text-muted-foreground hover:text-foreground">
             {t('teams.action.cancel')}
           </button>
         ) : null}
       </div>
 
+      {/* Workspace / Project Picker */}
       <label className="flex flex-col gap-1">
-        <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.nameLabel')}</span>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t('teams.launcher.namePlaceholder')}
-          className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
-        />
+        <span className="text-[11px] font-medium text-muted-foreground">Project Workspace</span>
+        {projects.length > 0 ? (
+          <select
+            value={selectedDirectory}
+            onChange={(e) => setSelectedDirectory(e.target.value)}
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
+          >
+            {directory && !projects.some((p) => p.path === directory) ? (
+              <option value={directory}>{directory}</option>
+            ) : null}
+            {projects.map((project) => (
+              <option key={project.id} value={project.path}>
+                {project.label || project.path.split(/[\\/]/).filter(Boolean).pop() || project.path} — {project.path}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={selectedDirectory}
+            onChange={(e) => setSelectedDirectory(e.target.value)}
+            placeholder="C:\path\to\project"
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none focus:border-foreground/50"
+          />
+        )}
       </label>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.presetLabel')}</span>
-        <select
-          value={preset}
-          onChange={(e) => setPreset(e.target.value)}
-          className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
-        >
-          {PRESET_OPTIONS.map((opt) => (
-            <option key={opt.id} value={opt.id}>{opt.label}</option>
-          ))}
-        </select>
-      </label>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.nameLabel')}</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('teams.launcher.namePlaceholder')}
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.presetLabel')}</span>
+          <select
+            value={preset}
+            onChange={(e) => handlePresetChange(e.target.value)}
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
+          >
+            {PRESET_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <label className="flex flex-col gap-1">
         <span className="text-[11px] font-medium text-muted-foreground">{t('teams.launcher.goalLabel')}</span>
@@ -89,29 +232,133 @@ export const TeamLauncher: React.FC<{
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
           placeholder={t('teams.launcher.goalPlaceholder')}
-          className="resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+          className="resize-y rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-foreground/50"
         />
       </label>
 
-      <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <input
-          type="checkbox"
-          checked={useWorktrees}
-          onChange={(e) => setUseWorktrees(e.target.checked)}
-          className="rounded border-border"
-        />
-        <span>{t('teams.launcher.worktrees')}</span>
-      </label>
+      {/* Roster customization */}
+      <div className="rounded-md border border-border/70 bg-background/60 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setShowRosterEditor((v) => !v)}
+            className="text-left text-[11px] font-medium text-foreground hover:opacity-80"
+          >
+            {showRosterEditor ? '▾' : '▸'} Agents & Roster ({roster.length})
+          </button>
+          <button
+            type="button"
+            onClick={addRosterRow}
+            className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <RiAddLine className="h-3 w-3" />
+            Add Role
+          </button>
+        </div>
 
-      {error ? <div className="rounded bg-destructive/15 px-2 py-1 text-destructive">{error}</div> : null}
+        {showRosterEditor ? (
+          <div className="mt-2.5 space-y-2">
+            {roster.map((member, idx) => (
+              <div key={idx} className="rounded-md border border-border/60 bg-card/40 p-2">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    value={member.name}
+                    onChange={(e) => updateRosterRow(idx, { name: e.target.value })}
+                    placeholder="Display Name"
+                    className="rounded border border-border bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
+                  />
+                  <div className="flex gap-1">
+                    <input
+                      value={member.role}
+                      onChange={(e) => updateRosterRow(idx, { role: e.target.value })}
+                      placeholder="role (e.g. lead, reviewer)"
+                      className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 font-mono text-[11px] outline-none focus:border-foreground/50"
+                    />
+                    {roster.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => removeRosterRow(idx)}
+                        title="Remove member"
+                        className="rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <RiCloseLine className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  <select
+                    value={member.agent}
+                    onChange={(e) => updateRosterRow(idx, { agent: e.target.value })}
+                    className="rounded border border-border bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
+                  >
+                    <option value="">Agent: Default (build)</option>
+                    {availableAgents.map((ag) => (
+                      <option key={ag.name} value={ag.name}>
+                        {ag.name}{ag.scope ? ` (${ag.scope})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={member.model}
+                    onChange={(e) => updateRosterRow(idx, { model: e.target.value })}
+                    placeholder="Model override (optional)"
+                    className="rounded border border-border bg-background px-2 py-1 font-mono text-[11px] outline-none focus:border-foreground/50"
+                  />
+                </div>
+                <input
+                  value={member.description}
+                  onChange={(e) => updateRosterRow(idx, { description: e.target.value })}
+                  placeholder="Role instructions / responsibility"
+                  className="mt-1.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] outline-none focus:border-foreground/50"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {roster.map((m, idx) => (
+              <span key={idx} className="rounded border border-border/60 bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                {m.name}{m.agent ? ` · ${m.agent}` : ''}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Parallelism & Worktrees */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={useWorktrees}
+            onChange={(e) => setUseWorktrees(e.target.checked)}
+            className="rounded border-border"
+          />
+          <span>{t('teams.launcher.worktrees')}</span>
+        </label>
+        <label className="flex items-center gap-1.5 font-mono">
+          <span>Max parallel:</span>
+          <input
+            type="number"
+            min={1}
+            max={8}
+            value={maxParallel}
+            onChange={(e) => setMaxParallel(Math.max(1, Math.min(8, Number(e.target.value) || 3)))}
+            className="w-12 rounded border border-border bg-background px-1.5 py-0.5 text-center text-[11px] text-foreground"
+          />
+        </label>
+      </div>
+
+      {error ? <div className="rounded border border-border bg-muted/60 px-2 py-1 text-foreground">{error}</div> : null}
 
       <div className="flex justify-end gap-2">
         <button
           type="submit"
-          disabled={submitting || !directory}
+          disabled={submitting || !selectedDirectory.trim()}
           className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
         >
-          {t('teams.launcher.create')}
+          {submitting ? 'Launching Team…' : t('teams.launcher.create')}
         </button>
       </div>
     </form>

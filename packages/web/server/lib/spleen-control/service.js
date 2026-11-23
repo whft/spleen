@@ -325,6 +325,8 @@ export const createSpleenControlService = (dependencies) => {
     getSessionRecoveryRuntime = null,
     getDiscordClient = () => null,
     getUnknownCheatsClient = () => null,
+    getUnknownCheatsStore = () => null,
+    agentConfigApi = null,
   } = dependencies;
 
   const wait = (duration, signal) => {
@@ -1318,7 +1320,12 @@ export const createSpleenControlService = (dependencies) => {
         if (!teamId) throw new SpleenControlError('teamId is required', 400);
         if (action === 'team.get') return await teamsService.getTeam(teamId);
         if (action === 'team.stop') return await teamsService.stopTeam(teamId);
-        if (action === 'team.addMember') return await teamsService.addMember(teamId, input);
+        if (action === 'team.addMember') return await teamsService.addMember(teamId, { ...input, role: asNonEmptyString(input.memberRole) || asNonEmptyString(input.role) || 'worker' });
+        if (action === 'team.removeMember') {
+          const memberId = asNonEmptyString(input.memberId);
+          if (!memberId) throw new SpleenControlError('memberId is required', 400);
+          return await teamsService.removeMember(teamId, memberId);
+        }
         if (action === 'team.post') {
           return await teamsService.postBoardMessage({
             teamId,
@@ -1330,22 +1337,74 @@ export const createSpleenControlService = (dependencies) => {
         if (action === 'team.addTask') return await teamsService.addTask(teamId, input);
         const taskId = asNonEmptyString(input.taskId);
         if (!taskId) throw new SpleenControlError('taskId is required', 400);
+        if (action === 'team.updateTask') return await teamsService.updateTask(teamId, taskId, input);
         if (action === 'team.retryTask') return await teamsService.retryTask(teamId, taskId);
         if (action === 'team.cancelTask') return await teamsService.cancelTask(teamId, taskId);
+      }
+      if (action.startsWith('agent.')) {
+        if (!agentConfigApi) throw new SpleenControlError('Agent configuration service is unavailable', 503);
+        const targetDir = asNonEmptyString(input.directory) || asNonEmptyString(contextDirectory) || undefined;
+        if (action === 'agent.list') {
+          return { directory: targetDir ?? null, agents: agentConfigApi.listConfiguredAgents(targetDir) };
+        }
+        const agentName = asNonEmptyString(input.agentName) || asNonEmptyString(input.name);
+        if (!agentName || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(agentName)) {
+          throw new SpleenControlError('A valid agentName (letters, numbers, ., _, -) is required', 400);
+        }
+        if (action === 'agent.delete') {
+          agentConfigApi.deleteAgent(agentName, targetDir);
+          return { deleted: true, name: agentName, directory: targetDir ?? null };
+        }
+        const configPatch = {
+          ...(typeof input.description === 'string' ? { description: input.description } : {}),
+          ...(typeof input.systemPrompt === 'string'
+            ? { prompt: input.systemPrompt }
+            : (typeof input.prompt === 'string' ? { prompt: input.prompt } : {})),
+          ...(typeof input.model === 'string' && input.model.trim() ? { model: input.model.trim() } : {}),
+          ...(typeof input.agentMode === 'string' ? { mode: input.agentMode } : {}),
+        };
+        if (action === 'agent.create') {
+          const scope = input.agentScope === 'user' ? 'user' : 'project';
+          if (scope === 'project' && !targetDir) {
+            throw new SpleenControlError('directory is required to create a project-scoped agent', 400);
+          }
+          const created = agentConfigApi.createAgent(agentName, configPatch, targetDir, scope);
+          return { created: true, name: agentName, scope, agent: created };
+        }
+        if (action === 'agent.update') {
+          const updated = agentConfigApi.updateAgent(agentName, configPatch, targetDir);
+          return { updated: true, name: agentName, agent: updated };
+        }
       }
       if (action.startsWith('discord.')) {
         const discord = await Promise.resolve(getDiscordClient());
         if (!discord) throw new SpleenControlError('Discord reader is unavailable', 503);
         if (action === 'discord.status') return await discord.getStatus();
         if (action === 'discord.guilds') return { guilds: await discord.listGuilds() };
+        if (action === 'discord.dms') return { dms: await discord.listDms() };
         if (action === 'discord.channels') {
           const guildId = asNonEmptyString(input.guildId);
           return { channels: guildId ? await discord.listGuildChannels(guildId) : await discord.listDms() };
+        }
+        if (action === 'discord.members') {
+          const guildId = asNonEmptyString(input.guildId);
+          if (!guildId) throw new SpleenControlError('guildId is required', 400);
+          return { members: await discord.getGuildMembers(guildId, input.limit) };
+        }
+        if (action === 'discord.search') {
+          return await discord.searchMessages({
+            guildId: asNonEmptyString(input.guildId) || undefined,
+            channelId: asNonEmptyString(input.channelId) || undefined,
+            content: asNonEmptyString(input.query) || asNonEmptyString(input.content),
+          });
         }
         const channelId = asNonEmptyString(input.channelId);
         if (!channelId) throw new SpleenControlError('channelId is required', 400);
         if (action === 'discord.messages') {
           return { messages: await discord.getMessages(channelId, { limit: input.limit, before: input.before }) };
+        }
+        if (action === 'discord.pins') {
+          return { pins: await discord.getPins(channelId) };
         }
         if (action === 'discord.send') {
           return await discord.sendMessage(channelId, {
@@ -1353,14 +1412,43 @@ export const createSpleenControlService = (dependencies) => {
             replyToMessageId: asNonEmptyString(input.replyToMessageId) || undefined,
           });
         }
+        if (action === 'discord.react') {
+          const messageId = asNonEmptyString(input.messageId);
+          const emoji = asNonEmptyString(input.emoji);
+          if (!messageId || !emoji) throw new SpleenControlError('messageId and emoji are required', 400);
+          await discord.addReaction(channelId, messageId, emoji);
+          return { ok: true, channelId, messageId, emoji };
+        }
+        if (action === 'discord.createThread') {
+          const threadName = asNonEmptyString(input.threadName) || asNonEmptyString(input.name);
+          if (!threadName) throw new SpleenControlError('threadName is required', 400);
+          return await discord.createThread(channelId, {
+            name: threadName,
+            messageId: asNonEmptyString(input.messageId) || undefined,
+          });
+        }
       }
       if (action.startsWith('uc.')) {
         const uc = await Promise.resolve(getUnknownCheatsClient());
+        const ucStore = await Promise.resolve(getUnknownCheatsStore());
         if (!uc) throw new SpleenControlError('UnknownCheats reader is unavailable', 503);
+        if (action === 'uc.status') {
+          return ucStore ? await ucStore.getPublicStatus() : { hasCookies: false };
+        }
         if (action === 'uc.home') return await uc.getHome();
+        if (action === 'uc.recent') return await uc.getRecent({ page: input.page });
         if (action === 'uc.forum') return await uc.getForum({ url: asNonEmptyString(input.url), fid: input.fid, page: input.page });
         if (action === 'uc.thread') return await uc.getThread({ url: asNonEmptyString(input.url), tid: input.tid, page: input.page });
         if (action === 'uc.search') return await uc.search({ query: asNonEmptyString(input.query), page: input.page });
+        if (action === 'uc.bookmarks') return { bookmarks: ucStore ? await ucStore.listBookmarks() : [] };
+        if (action === 'uc.addBookmark') {
+          if (!ucStore) throw new SpleenControlError('UnknownCheats store is unavailable', 503);
+          const url = asNonEmptyString(input.url);
+          const title = asNonEmptyString(input.title) || url;
+          if (!url) throw new SpleenControlError('url is required', 400);
+          return { bookmarks: await ucStore.addBookmark({ id: asNonEmptyString(input.id) || url, title, url, forum: asNonEmptyString(input.forum) || null }) };
+        }
+        if (action === 'uc.history') return { history: ucStore ? await ucStore.listHistory() : [] };
       }
       if (action === 'projects.list') return { projects: await projects() };
       if (action === 'models.list') return models();

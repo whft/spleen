@@ -101,7 +101,7 @@ export const SpleenMonolith3DScene: React.FC<SpleenMonolith3DProps> = React.memo
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
-      camera.position.set(0, 0, 3.85);
+      camera.position.set(0, 0, 4.35);
 
       const pmremGenerator = new THREE.PMREMGenerator(renderer);
       const roomEnv = new RoomEnvironment();
@@ -182,6 +182,32 @@ export const SpleenMonolith3DScene: React.FC<SpleenMonolith3DProps> = React.memo
       group.add(coreMesh);
       bladeMeshes.push(coreMesh);
 
+      // Sculptural counter-tilted telemetry halo rings framing the monolith
+      const outerHaloGeo = new THREE.TorusGeometry(1.18, 0.01, 14, 72);
+      const innerHaloGeo = new THREE.TorusGeometry(0.98, 0.007, 12, 64);
+      geometries.push(outerHaloGeo, innerHaloGeo);
+
+      const outerHaloMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#3B4247'),
+        metalness: 0.9,
+        roughness: 0.25,
+        transparent: true,
+        opacity: 0.55,
+      });
+      const innerHaloMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color('#C8FA62'),
+        transparent: true,
+        opacity: 0.28,
+      });
+
+      const outerHalo = new THREE.Mesh(outerHaloGeo, outerHaloMat);
+      outerHalo.rotation.set(Math.PI / 2.6, 0.25, 0);
+      group.add(outerHalo);
+
+      const innerHalo = new THREE.Mesh(innerHaloGeo, innerHaloMat);
+      innerHalo.rotation.set(Math.PI / 1.9, -0.45, 0);
+      group.add(innerHalo);
+
       // Precision studio lighting: platinum key, cool slate fill, surgical lime rim glint
       const keyLight = new THREE.DirectionalLight(0xf1f2ef, 2.4);
       keyLight.position.set(2.4, 3.2, 3.5);
@@ -227,6 +253,8 @@ export const SpleenMonolith3DScene: React.FC<SpleenMonolith3DProps> = React.memo
         if (bladeMeshes[1]) {
           bladeMeshes[1].position.z = -0.045 - Math.sin(elapsed * 1.1) * 0.018;
         }
+        outerHalo.rotation.z = elapsed * 0.24;
+        innerHalo.rotation.z = -elapsed * 0.36;
 
         renderer.render(scene, camera);
         rafId = window.requestAnimationFrame(renderFrame);
@@ -310,6 +338,8 @@ export const SpleenMonolith3DScene: React.FC<SpleenMonolith3DProps> = React.memo
         coreMaterial.dispose();
         outerEdgeMaterial.dispose();
         coreEdgeMaterial.dispose();
+        outerHaloMat.dispose();
+        innerHaloMat.dispose();
         envTarget.dispose();
         pmremGenerator.dispose();
         renderer.dispose();

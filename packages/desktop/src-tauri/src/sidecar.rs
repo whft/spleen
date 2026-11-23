@@ -94,7 +94,19 @@ pub fn random_secret() -> String {
     )
 }
 
-fn free_loopback_port() -> std::io::Result<u16> {
+fn pick_server_port(lan_access_active: bool) -> std::io::Result<u16> {
+    if lan_access_active {
+        // Prefer a consistent port when LAN access is enabled so paired devices keep the same URL across restarts.
+        if let Ok(listener) = std::net::TcpListener::bind("0.0.0.0:3721") {
+            let port = listener.local_addr()?.port();
+            drop(listener);
+            return Ok(port);
+        }
+        let listener = std::net::TcpListener::bind("0.0.0.0:0")?;
+        let port = listener.local_addr()?.port();
+        drop(listener);
+        return Ok(port);
+    }
     let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
     drop(listener);
@@ -108,10 +120,18 @@ pub struct SpawnOptions<'a> {
     pub built_in_extensions_dir: &'a Path,
     pub paths: &'a SpleenPaths,
     pub password: &'a str,
+    pub lan_access_active: bool,
+    pub lan_access_blocked_reason: Option<&'a str>,
 }
 
 pub fn spawn(options: SpawnOptions<'_>) -> Result<ServerProcess, String> {
-    let port = free_loopback_port().map_err(|e| format!("no loopback port: {e}"))?;
+    let port = pick_server_port(options.lan_access_active)
+        .map_err(|e| format!("no available server port: {e}"))?;
+    let bind_host = if options.lan_access_active {
+        "0.0.0.0"
+    } else {
+        "127.0.0.1"
+    };
     let origin = format!("http://127.0.0.1:{port}");
     if !options.server_binary.exists() {
         return Err(format!(
@@ -127,13 +147,29 @@ pub fn spawn(options: SpawnOptions<'_>) -> Result<ServerProcess, String> {
         .open(&log_path)
         .map_err(|e| format!("cannot open {}: {e}", log_path.display()))?;
 
+    let mut injected = vec![
+        "SPLEEN_DATA_DIR",
+        "SPLEEN_DIST_DIR",
+        "SPLEEN_BUILTIN_EXTENSIONS_DIR",
+        "SPLEEN_OPENCODE_CWD",
+        "SPLEEN_BUNDLED_OPENCODE_CLI_DIR",
+        "SPLEEN_RUNTIME",
+        "SPLEEN_DESKTOP_NOTIFY",
+        "SPLEEN_SKIP_API_COMPRESSION",
+        "SPLEEN_RELAY_HOST",
+        "SPLEEN_DESKTOP_LAN_ACCESS_ACTIVE",
+    ];
+    if options.lan_access_blocked_reason.is_some() {
+        injected.push("SPLEEN_DESKTOP_LAN_ACCESS_BLOCKED_REASON");
+    }
+
     let mut command = Command::new(options.server_binary);
     command
         .arg("serve")
         .arg("--port")
         .arg(port.to_string())
         .arg("--host")
-        .arg("127.0.0.1")
+        .arg(bind_host)
         .arg("--ui-password")
         .arg(options.password)
         .current_dir(&options.paths.data_dir)
@@ -152,25 +188,20 @@ pub fn spawn(options: SpawnOptions<'_>) -> Result<ServerProcess, String> {
         .env("SPLEEN_DESKTOP_NOTIFY", "true")
         .env("SPLEEN_SKIP_API_COMPRESSION", "true")
         .env("SPLEEN_RELAY_HOST", "off")
+        .env(
+            "SPLEEN_DESKTOP_LAN_ACCESS_ACTIVE",
+            if options.lan_access_active { "true" } else { "false" },
+        )
         .env("NO_PROXY", "localhost,127.0.0.1")
         .env("no_proxy", "localhost,127.0.0.1")
-        .env(
-            "SPLEEN_INJECTED_ENV",
-            crate::paths::spawn_env_list(&[
-                "SPLEEN_DATA_DIR",
-                "SPLEEN_DIST_DIR",
-                "SPLEEN_BUILTIN_EXTENSIONS_DIR",
-                "SPLEEN_OPENCODE_CWD",
-                "SPLEEN_BUNDLED_OPENCODE_CLI_DIR",
-                "SPLEEN_RUNTIME",
-                "SPLEEN_DESKTOP_NOTIFY",
-                "SPLEEN_SKIP_API_COMPRESSION",
-                "SPLEEN_RELAY_HOST",
-            ]),
-        )
+        .env("SPLEEN_INJECTED_ENV", crate::paths::spawn_env_list(&injected))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    if let Some(reason) = options.lan_access_blocked_reason {
+        command.env("SPLEEN_DESKTOP_LAN_ACCESS_BLOCKED_REASON", reason);
+    }
 
     #[cfg(windows)]
     {

@@ -67,7 +67,7 @@ export const createTeamsService = ({
     broadcastEvent({ type: 'spleen:teams-updated', properties: { at: now(), ...detail } });
   };
 
-  const createMemberSession = async ({ teamName, member, directory, useWorktrees, goal }) => {
+  const createMemberSession = async ({ teamName, member, directory, useWorktrees }) => {
     if (!sessionService?.create) {
       return { sessionId: null, directory };
     }
@@ -91,16 +91,32 @@ export const createTeamsService = ({
         // Non-git directories or unavailable worktree service fall back cleanly to checkout directory.
       }
     }
-    if (sessionId && goal && member.role === 'lead' && sessionService.send) {
-      const kickoff = [
-        `You are **${member.name}** (role: ${member.role}) on AI Team "${teamName}".`,
-        `Role focus: ${member.description || 'Coordinate the team.'}`,
-        `Team goal: ${goal}`,
-        `Use Spleen tools (\`team.post\`, \`team.addTask\`, \`team.get\`) to coordinate with your teammates.`,
-      ].join('\n');
-      Promise.resolve(sessionService.send({ sessionId, directory: memberDir, prompt: kickoff })).catch(() => {});
-    }
     return { sessionId, directory: memberDir };
+  };
+
+  const buildLeadKickoffPrompt = (team) => {
+    const rosterLines = team.members.map((m) => {
+      const extras = [
+        m.agent ? `agent=${m.agent}` : null,
+        m.model ? `model=${m.model}` : null,
+        m.description ? m.description : null,
+      ].filter(Boolean).join(' · ');
+      return `- **${m.name}** (role: \`${m.role}\`, id: \`${m.id}\`)${extras ? `: ${extras}` : ''}`;
+    });
+    return [
+      `You are the **Lead Manager & Orchestrator** of AI Team **"${team.name}"** (\`teamId: "${team.id}"\`).`,
+      `Workspace directory: \`${team.directory}\``,
+      `Team goal: ${team.goal}`,
+      '',
+      '### Active Roster',
+      ...rosterLines,
+      '',
+      '### Orchestration Protocol',
+      `1. Decompose the goal into clear, well-scoped DAG tasks using \`spleen_control\` action \`team.addTask\` (\`teamId: "${team.id}"\`, \`title\`, \`prompt\`, \`assignee\` by role or member id, optional \`dependsOn\` task IDs, and \`acceptance\`). Run independent tasks in parallel (up to \`maxParallel: ${team.maxParallel}\`).`,
+      `2. If a specialized role is missing, you can create a reusable project-scoped agent with \`agent.create\` (\`agentScope: "project"\`) and recruit new members with \`team.addMember\`.`,
+      `3. Post brief coordination updates and milestones on the shared board with \`team.post\` (\`teamId: "${team.id}"\`, using \`@role\` or \`@all\` to notify teammates).`,
+      `4. Monitor execution with \`team.get\` (\`teamId: "${team.id}"\`), review outputs, resolve blockers, and deliver a concise final report once all acceptance criteria pass.`,
+    ].join('\n');
   };
 
   const dispatchPrompt = async (sessionId, directory, prompt, meta = {}) => {
@@ -169,7 +185,6 @@ export const createTeamsService = ({
         member: { name: mName, role: mRole, description: mDesc, model: asText(raw?.model), agent: asText(raw?.agent) },
         directory,
         useWorktrees,
-        goal,
       });
       resolvedMembers.push({
         id: `mem_${crypto.randomUUID().slice(0, 8)}`,
@@ -246,6 +261,12 @@ export const createTeamsService = ({
     });
 
     emitUpdate({ action: 'created', teamId });
+    if (goal && sessionService?.send) {
+      const lead = resolvedMembers.find((m) => m.role === 'lead' && m.sessionId) || resolvedMembers.find((m) => m.sessionId);
+      if (lead?.sessionId) {
+        void dispatchPrompt(lead.sessionId, lead.directory || directory, buildLeadKickoffPrompt(team));
+      }
+    }
     if (preparedTasks.length > 0) {
       await tickScheduler(teamId);
       return getTeam(teamId);
@@ -335,8 +356,7 @@ export const createTeamsService = ({
       teamName: team.name,
       member: { name, role, description, model: asText(input.model), agent: asText(input.agent) },
       directory: team.directory,
-      useWorktrees: input.useWorktree === true || team.useWorktrees,
-      goal: team.goal,
+      useWorktrees: input.useWorktrees === true || input.useWorktree === true || team.useWorktrees,
     });
     const at = now();
     const member = {

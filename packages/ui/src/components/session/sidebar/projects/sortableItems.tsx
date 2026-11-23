@@ -18,6 +18,7 @@ import { toast } from '@/components/ui';
 import { PROJECT_ICON_MAP, resolveProjectColor, ProjectIconImage } from '@/lib/projectMeta';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useI18n } from '@/lib/i18n';
+import { normalizePath } from '@/lib/pathNormalization';
 import { CrossfadeZoneHeader } from './CrossfadeZoneHeaders';
 import { useProjectFolderMissing } from './useProjectFolderMissing';
 
@@ -190,7 +191,29 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id, disabled, data: { type: 'project', sortGroup, rowKey: `project:${id}:header`, element: () => node.current }, transition: ROW_SORT_TRANSITION });
+    isOver,
+    active,
+  } = useSortable({
+    id,
+    disabled: { draggable: disabled, droppable: !projectDirectory },
+    data: {
+      type: 'project',
+      projectId: id,
+      projectDirectory: projectDirectory ?? null,
+      sortGroup,
+      rowKey: `project:${id}:header`,
+      element: () => node.current,
+    },
+    transition: ROW_SORT_TRANSITION,
+  });
+
+  const activeDragData = active?.data.current as { type?: string; sessionDirectory?: string | null } | undefined;
+  const isSessionDropTarget = Boolean(
+    isOver
+    && activeDragData?.type === 'session'
+    && projectDirectory
+    && (!activeDragData.sessionDirectory || normalizePath(activeDragData.sessionDirectory) !== normalizePath(projectDirectory)),
+  );
 
   const menuInstanceKey = `project:${id}`;
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
@@ -342,7 +365,11 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             >
             <div
               ref={setActivatorNodeRef}
-              className={cn('relative flex items-center gap-1 py-1 ps-4 pe-3.5', !disabled && 'cursor-grab active:cursor-grabbing')}
+              className={cn(
+                'relative flex items-center gap-1 py-1 ps-4 pe-3.5 transition-colors',
+                !disabled && 'cursor-grab active:cursor-grabbing',
+                isSessionDropTarget && 'mx-2 rounded-md bg-[#171B1D] ps-2 pe-2 ring-1 ring-inset ring-[#C8FA62]/70',
+              )}
               {...attributes}
               {...listeners}
             >
@@ -412,7 +439,13 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     {statusIndicator ? (
                       <span className={cn('ms-1 inline-flex flex-shrink-0 items-center', headerCoveredFadeClass)}>{statusIndicator}</span>
                     ) : null}
-                    {projectDirectory ? <DirectoryActionIndicator directory={projectDirectory} className={cn('ms-auto', headerCoveredFadeClass)} /> : null}
+                    {isSessionDropTarget ? (
+                      <span className="ms-auto shrink-0 rounded border border-[#C8FA62]/50 bg-[#0B0D0F] px-1.5 py-0.5 font-mono text-[9px] font-medium tracking-wide text-[#C8FA62]">
+                        Move here
+                      </span>
+                    ) : projectDirectory ? (
+                      <DirectoryActionIndicator directory={projectDirectory} className={cn('ms-auto', headerCoveredFadeClass)} />
+                    ) : null}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>

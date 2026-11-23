@@ -41,6 +41,14 @@ impl SpleenPaths {
         self.data_dir.join("desktop-hosts.json")
     }
 
+    pub fn web_settings_file(&self) -> PathBuf {
+        self.data_dir.join("settings.json")
+    }
+
+    pub fn ssh_instances_file(&self) -> PathBuf {
+        self.data_dir.join("ssh-instances.json")
+    }
+
     pub fn server_log(&self) -> PathBuf {
         self.logs_dir.join("server.log")
     }

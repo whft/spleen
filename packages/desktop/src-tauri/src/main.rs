@@ -4,6 +4,7 @@ mod bridge;
 mod paths;
 mod settings;
 mod sidecar;
+mod ssh;
 mod window;
 
 use paths::SpleenPaths;
@@ -19,6 +20,7 @@ pub struct AppState {
     pub server: Arc<Mutex<Option<sidecar::ServerProcess>>>,
     pub settings: Mutex<settings::DesktopSettings>,
     pub hosts: Mutex<Value>,
+    pub ssh: ssh::SshManager,
     pub client_token: Mutex<String>,
     pub origin: Mutex<String>,
 }
@@ -58,6 +60,27 @@ pub fn set_keep_awake(enabled: bool) {
 #[cfg(not(windows))]
 pub fn set_keep_awake(_enabled: bool) {}
 
+fn resolve_network_launch_config(paths: &SpleenPaths) -> (String, bool, Option<&'static str>) {
+    let raw: Value = settings::read_json_or_default(&paths.web_settings_file());
+    let lan_requested = raw
+        .get("desktopLanAccessEnabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let saved_password = raw
+        .get("desktopUiPassword")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    match (lan_requested, saved_password) {
+        (true, Some(pw)) => (pw, true, None),
+        (true, None) => (sidecar::random_secret(), false, Some("missing-password")),
+        (false, Some(pw)) => (pw, false, None),
+        (false, None) => (sidecar::random_secret(), false, None),
+    }
+}
+
 async fn boot(app: tauri::AppHandle) -> Result<(), String> {
     let (paths, server_binary, web_dist, opencode_dir, built_in_extensions) = {
         let state = app.state::<AppState>();
@@ -70,7 +93,11 @@ async fn boot(app: tauri::AppHandle) -> Result<(), String> {
         )
     };
 
-    let password = sidecar::random_secret();
+    let (password, lan_access_active, lan_access_blocked_reason) =
+        resolve_network_launch_config(&paths);
+    if lan_access_active {
+        log::info!("desktop LAN access active (binding 0.0.0.0)");
+    }
     let process = sidecar::spawn(sidecar::SpawnOptions {
         server_binary: &server_binary,
         opencode_dir: &opencode_dir,
@@ -78,6 +105,8 @@ async fn boot(app: tauri::AppHandle) -> Result<(), String> {
         built_in_extensions_dir: &built_in_extensions,
         paths: &paths,
         password: &password,
+        lan_access_active,
+        lan_access_blocked_reason,
     })?;
     let origin = process.origin.clone();
     {
@@ -124,6 +153,7 @@ async fn boot(app: tauri::AppHandle) -> Result<(), String> {
 async fn graceful_stop(app: tauri::AppHandle) {
     let taken = {
         let state = app.state::<AppState>();
+        state.ssh.shutdown_all();
         let mut guard = state.server.lock().unwrap();
         let process = guard.take();
         drop(guard);

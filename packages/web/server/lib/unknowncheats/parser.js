@@ -108,6 +108,17 @@ const parsePagination = (html, url = '') => {
   return { page, totalPages };
 };
 
+export const parseLoggedInUser = (html) => {
+  const text = String(html || '');
+  const welcomeMatch = text.match(/Welcome,\s*<a[^>]+href=["'][^"']*member\.php\?u=(\d+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/i)
+    || text.match(/Welcome,\s*<strong>\s*<a[^>]+href=["'][^"']*member\.php\?u=(\d+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/i)
+    || text.match(/<a[^>]+href=["'][^"']*\/forum\/members\/(\d+)\.html["'][^>]*>([\s\S]*?)<\/a>[\s\S]{0,120}(?:Log Out|User CP|Private Messages)/i);
+  if (!welcomeMatch) return null;
+  const username = stripTags(welcomeMatch[2]);
+  if (!username || username.length > 64) return null;
+  return { userId: welcomeMatch[1], username };
+};
+
 export const parseHome = (html) => {
   const forums = [];
   const seen = new Set();
@@ -117,15 +128,17 @@ export const parseHome = (html) => {
     const url = resolveUcUrl(rawHref);
     const title = stripTags(m[2]);
     if (!url || !title || title.length < 2 || title.length > 100) continue;
-    if (/^(home|forum|register|login|faq|search|mark forums read|today's posts)$/i.test(title)) continue;
+    if (/^(home|forum|register|login|faq|search|mark forums read|today's posts|log out|user cp)$/i.test(title)) continue;
     const fidMatch = rawHref.match(/[?&]f=(\d+)/);
     const id = fidMatch ? fidMatch[1] : rawHref.replace(/https?:\/\/[^/]+/, '');
     if (seen.has(id)) continue;
     seen.add(id);
     forums.push({ id, title, url });
   }
+  const currentUser = parseLoggedInUser(html);
   return {
     title: stripTags((String(html || '').match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || 'UnknownCheats'),
+    currentUser,
     forums: forums.slice(0, 160),
   };
 };
@@ -145,10 +158,11 @@ export const parseForumListing = (html, url = `${UC_BASE_URL}/forum/`) => {
     if (/^\d+$/.test(threadTitle) || /^(last|next|prev|page)/i.test(threadTitle)) continue;
     seen.add(tid);
 
-    const start = Math.max(0, (m.index ?? 0) - 250);
+    const start = Math.max(0, (m.index ?? 0) - 320);
     const end = Math.min(text.length, (m.index ?? 0) + m[0].length + 650);
     const ctx = text.slice(start, end);
     const sticky = /sticky|pinned/i.test(ctx);
+    const prefixMatch = ctx.match(/\[(Release|Source|Tutorial|Question|Information|Outdated|Help|Request|Discuss|Coding)\]/i);
     const authorMatch = ctx.match(/(?:Started by|member\.php\?u=\d+[^>]*>)([^<]+)<\/a>/i);
     const statsMatch = ctx.match(/Replies:\s*([\d,]+)[\s\S]*?Views:\s*([\d,]+)/i);
     threads.push({
@@ -156,6 +170,7 @@ export const parseForumListing = (html, url = `${UC_BASE_URL}/forum/`) => {
       title: threadTitle,
       url: resolveUcUrl(href),
       sticky,
+      prefix: prefixMatch ? prefixMatch[1] : null,
       author: authorMatch ? stripTags(authorMatch[1]) : null,
       replies: statsMatch ? statsMatch[1] : null,
       views: statsMatch ? statsMatch[2] : null,
@@ -163,7 +178,8 @@ export const parseForumListing = (html, url = `${UC_BASE_URL}/forum/`) => {
   }
 
   const { page, totalPages } = parsePagination(text, url);
-  return { title, url, page, totalPages, threads };
+  const currentUser = parseLoggedInUser(text);
+  return { title, url, page, totalPages, currentUser, threads };
 };
 
 const extractPostBlocks = (bodyHtml) => {

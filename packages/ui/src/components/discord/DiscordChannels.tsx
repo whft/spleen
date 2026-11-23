@@ -16,7 +16,12 @@ export const DiscordChannels: React.FC<{
   onSelect: (channel: DiscordChannel) => void;
 }> = ({ channels, threads, activeChannelId, onSelect }) => {
   const [filter, setFilter] = React.useState('');
+  const [collapsedCategories, setCollapsedCategories] = React.useState<Record<string, boolean>>({});
   const q = filter.trim().toLowerCase();
+
+  const toggleCategory = (catId: string) => {
+    setCollapsedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }));
+  };
 
   const categories = channels.filter((c) => c.type === 4);
   const regular = channels.filter((c) => c.type !== 4 && (!q || c.name.toLowerCase().includes(q)));
@@ -26,13 +31,13 @@ export const DiscordChannels: React.FC<{
     const childThreads = threads.filter((t) => t.parentId === ch.id);
     const active = ch.id === activeChannelId;
     return (
-      <div key={ch.id}>
+      <div key={ch.id} className="shrink-0">
         <button
           type="button"
           onClick={() => onSelect(ch)}
-          className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition ${
+          className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs transition ${
             nested ? 'pl-5' : ''
-          } ${active ? 'bg-primary/15 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}
+          } ${active ? 'bg-[#171B1D] font-medium text-foreground' : 'text-muted-foreground hover:bg-[#111416] hover:text-foreground'}`}
         >
           <ChannelIcon type={ch.type} nsfw={ch.nsfw} />
           <span className="truncate">{ch.name}</span>
@@ -42,11 +47,11 @@ export const DiscordChannels: React.FC<{
             key={th.id}
             type="button"
             onClick={() => onSelect(th)}
-            className={`flex w-full items-center gap-1.5 rounded py-1 pl-7 pr-2 text-left text-[11px] transition ${
-              th.id === activeChannelId ? 'bg-primary/15 font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+            className={`flex w-full items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-left text-[11px] transition ${
+              th.id === activeChannelId ? 'bg-[#171B1D] font-medium text-foreground' : 'text-muted-foreground hover:bg-[#111416] hover:text-foreground'
             }`}
           >
-            <span className="text-muted-foreground/70">↳</span>
+            <span className="shrink-0 text-muted-foreground/70">↳</span>
             <span className="truncate">{th.name}</span>
           </button>
         ))}
@@ -56,25 +61,31 @@ export const DiscordChannels: React.FC<{
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="p-2">
+      <div className="shrink-0 p-2">
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter channels…"
-          className="w-full rounded border border-border/70 bg-background px-2 py-1 text-[11px] outline-none focus:border-primary"
+          className="w-full rounded-md border border-border/70 bg-[#08090A] px-2 py-1 text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus:border-foreground/50"
         />
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto px-1.5 pb-2">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-1.5 pb-2">
         {uncategorized.map((ch) => renderChannelRow(ch))}
         {categories.map((cat) => {
           const children = regular.filter((c) => c.parentId === cat.id);
           if (children.length === 0) return null;
+          const collapsed = Boolean(collapsedCategories[cat.id]) && !q;
           return (
             <div key={cat.id} className="space-y-0.5">
-              <div className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {cat.name}
-              </div>
-              {children.map((ch) => renderChannelRow(ch, false))}
+              <button
+                type="button"
+                onClick={() => toggleCategory(cat.id)}
+                className="flex w-full items-center gap-1 px-1.5 pt-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              >
+                <span className="inline-block w-3 text-center text-[9px]">{collapsed ? '▸' : '▾'}</span>
+                <span className="truncate">{cat.name}</span>
+              </button>
+              {!collapsed ? children.map((ch) => renderChannelRow(ch, false)) : null}
             </div>
           );
         })}

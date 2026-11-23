@@ -9,9 +9,18 @@ export const sessionFolderCollision: CollisionDetection = (args) => {
       droppableContainers: args.droppableContainers.filter((container) => container.data.current?.sortGroup === sortGroup),
     });
   }
-  const folderArgs = {
+  const detect = args.pointerCoordinates ? pointerWithin : rectIntersection;
+  const folderCollisions = detect({
     ...args,
     droppableContainers: args.droppableContainers.filter((container) => container.data.current?.type === 'folder'),
-  };
-  return args.pointerCoordinates ? pointerWithin(folderArgs) : rectIntersection(folderArgs);
+  });
+  if (folderCollisions.length > 0) {
+    return folderCollisions;
+  }
+  return detect({
+    ...args,
+    droppableContainers: args.droppableContainers.filter(
+      (container) => container.data.current?.type === 'project' && Boolean(container.data.current?.projectDirectory),
+    ),
+  });
 };
