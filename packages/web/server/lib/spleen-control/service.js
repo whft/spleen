@@ -1382,6 +1382,11 @@ export const createSpleenControlService = (dependencies) => {
         if (action === 'discord.status') return await discord.getStatus();
         if (action === 'discord.guilds') return { guilds: await discord.listGuilds() };
         if (action === 'discord.dms') return { dms: await discord.listDms() };
+        if (action === 'discord.createDm') {
+          const recipientId = asNonEmptyString(input.recipientId) || asNonEmptyString(input.userId);
+          if (!recipientId) throw new SpleenControlError('recipientId is required', 400);
+          return await discord.createDm(recipientId);
+        }
         if (action === 'discord.channels') {
           const guildId = asNonEmptyString(input.guildId);
           return { channels: guildId ? await discord.listGuildChannels(guildId) : await discord.listDms() };
@@ -1391,26 +1396,120 @@ export const createSpleenControlService = (dependencies) => {
           if (!guildId) throw new SpleenControlError('guildId is required', 400);
           return { members: await discord.getGuildMembers(guildId, input.limit) };
         }
-        if (action === 'discord.search') {
-          return await discord.searchMessages({
-            guildId: asNonEmptyString(input.guildId) || undefined,
-            channelId: asNonEmptyString(input.channelId) || undefined,
-            content: asNonEmptyString(input.query) || asNonEmptyString(input.content),
+        if (action === 'discord.roles') {
+          const guildId = asNonEmptyString(input.guildId);
+          if (!guildId) throw new SpleenControlError('guildId is required', 400);
+          return { roles: await discord.getGuildRoles(guildId) };
+        }
+        if (action === 'discord.user') {
+          const userId = asNonEmptyString(input.userId);
+          if (!userId) throw new SpleenControlError('userId is required', 400);
+          return await discord.getUser(userId);
+        }
+        if (action === 'discord.createChannel') {
+          const guildId = asNonEmptyString(input.guildId);
+          const name = asNonEmptyString(input.name);
+          if (!guildId || !name) throw new SpleenControlError('guildId and name are required', 400);
+          return await discord.createChannel(guildId, {
+            name,
+            type: input.channelType ?? input.type ?? 0,
+            topic: asNonEmptyString(input.topic) || undefined,
+            parentId: asNonEmptyString(input.parentId) || undefined,
           });
+        }
+        if (action === 'discord.downloadAttachment') {
+          const attachmentUrl = asNonEmptyString(input.attachmentUrl) || asNonEmptyString(input.url);
+          if (!attachmentUrl) throw new SpleenControlError('attachmentUrl is required', 400);
+          return await discord.downloadAttachment(attachmentUrl, asNonEmptyString(input.savePath) || null);
+        }
+        if (action === 'discord.search') {
+          const guildId = asNonEmptyString(input.guildId) || null;
+          return await discord.searchMessages(guildId, {
+            channelId: asNonEmptyString(input.channelId) || undefined,
+            authorId: asNonEmptyString(input.authorId) || undefined,
+            content: asNonEmptyString(input.query) || asNonEmptyString(input.content) || undefined,
+            offset: Number(input.offset) || 0,
+          });
+        }
+        if (action === 'discord.joinThread') {
+          const threadId = asNonEmptyString(input.threadId) || asNonEmptyString(input.channelId);
+          if (!threadId) throw new SpleenControlError('threadId is required', 400);
+          await discord.joinThread(threadId);
+          return { ok: true, threadId };
+        }
+        if (action === 'discord.leaveThread') {
+          const threadId = asNonEmptyString(input.threadId) || asNonEmptyString(input.channelId);
+          if (!threadId) throw new SpleenControlError('threadId is required', 400);
+          await discord.leaveThread(threadId);
+          return { ok: true, threadId };
         }
         const channelId = asNonEmptyString(input.channelId);
         if (!channelId) throw new SpleenControlError('channelId is required', 400);
+        if (action === 'discord.channel') {
+          return await discord.getChannel(channelId);
+        }
+        if (action === 'discord.updateChannel') {
+          return await discord.updateChannel(channelId, {
+            ...(typeof input.name === 'string' ? { name: input.name } : {}),
+            ...(typeof input.topic === 'string' ? { topic: input.topic } : {}),
+            ...(input.rateLimitPerUser !== undefined ? { rateLimitPerUser: input.rateLimitPerUser } : {}),
+          });
+        }
+        if (action === 'discord.deleteChannel') {
+          await discord.deleteChannel(channelId);
+          return { ok: true, channelId };
+        }
         if (action === 'discord.messages') {
-          return { messages: await discord.getMessages(channelId, { limit: input.limit, before: input.before }) };
+          return {
+            messages: await discord.getMessages(channelId, {
+              limit: input.limit,
+              before: asNonEmptyString(input.before) || undefined,
+              after: asNonEmptyString(input.after) || undefined,
+              around: asNonEmptyString(input.around) || undefined,
+            }),
+          };
+        }
+        if (action === 'discord.message') {
+          const messageId = asNonEmptyString(input.messageId);
+          if (!messageId) throw new SpleenControlError('messageId is required', 400);
+          return await discord.getMessage(channelId, messageId);
         }
         if (action === 'discord.pins') {
           return { pins: await discord.getPins(channelId) };
         }
+        if (action === 'discord.typing') {
+          await discord.triggerTyping(channelId);
+          return { ok: true, channelId };
+        }
         if (action === 'discord.send') {
+          const content = asNonEmptyString(input.content) || asNonEmptyString(input.message) || asNonEmptyString(input.body) || '';
+          const replyToMessageId = asNonEmptyString(input.replyToMessageId) || undefined;
+          const filePath = asNonEmptyString(input.filePath);
+          if (filePath) {
+            return await discord.sendMessageFromFile(channelId, {
+              content,
+              replyToMessageId,
+              filePath,
+              filename: asNonEmptyString(input.filename) || undefined,
+            });
+          }
           return await discord.sendMessage(channelId, {
-            content: asNonEmptyString(input.content) || asNonEmptyString(input.message) || asNonEmptyString(input.body),
-            replyToMessageId: asNonEmptyString(input.replyToMessageId) || undefined,
+            content,
+            replyToMessageId,
+            files: Array.isArray(input.files) ? input.files : undefined,
           });
+        }
+        if (action === 'discord.editMessage') {
+          const messageId = asNonEmptyString(input.messageId);
+          const content = asNonEmptyString(input.content) || asNonEmptyString(input.message);
+          if (!messageId || !content) throw new SpleenControlError('messageId and content are required', 400);
+          return await discord.editMessage(channelId, messageId, { content });
+        }
+        if (action === 'discord.deleteMessage') {
+          const messageId = asNonEmptyString(input.messageId);
+          if (!messageId) throw new SpleenControlError('messageId is required', 400);
+          await discord.deleteMessage(channelId, messageId);
+          return { ok: true, channelId, messageId };
         }
         if (action === 'discord.react') {
           const messageId = asNonEmptyString(input.messageId);
@@ -1418,6 +1517,25 @@ export const createSpleenControlService = (dependencies) => {
           if (!messageId || !emoji) throw new SpleenControlError('messageId and emoji are required', 400);
           await discord.addReaction(channelId, messageId, emoji);
           return { ok: true, channelId, messageId, emoji };
+        }
+        if (action === 'discord.unreact') {
+          const messageId = asNonEmptyString(input.messageId);
+          const emoji = asNonEmptyString(input.emoji);
+          if (!messageId || !emoji) throw new SpleenControlError('messageId and emoji are required', 400);
+          await discord.removeReaction(channelId, messageId, emoji);
+          return { ok: true, channelId, messageId, emoji };
+        }
+        if (action === 'discord.pin') {
+          const messageId = asNonEmptyString(input.messageId);
+          if (!messageId) throw new SpleenControlError('messageId is required', 400);
+          await discord.pinMessage(channelId, messageId);
+          return { ok: true, channelId, messageId };
+        }
+        if (action === 'discord.unpin') {
+          const messageId = asNonEmptyString(input.messageId);
+          if (!messageId) throw new SpleenControlError('messageId is required', 400);
+          await discord.unpinMessage(channelId, messageId);
+          return { ok: true, channelId, messageId };
         }
         if (action === 'discord.createThread') {
           const threadName = asNonEmptyString(input.threadName) || asNonEmptyString(input.name);

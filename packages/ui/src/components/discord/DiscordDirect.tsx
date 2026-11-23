@@ -2,6 +2,7 @@ import React from 'react';
 import { RiUserAddLine } from '@remixicon/react';
 import { useI18n } from '@/lib/i18n';
 import { discordApi, type DiscordChannel } from '@/lib/discord/api';
+import { setDiscordDragData } from '@/lib/discord/dragRef';
 import { DiscordAvatar } from './DiscordAvatar';
 
 export const DiscordDirect: React.FC<{
@@ -71,8 +72,18 @@ export const DiscordDirect: React.FC<{
             <button
               key={dm.id}
               type="button"
+              draggable
+              onDragStart={(e) => {
+                setDiscordDragData(e.dataTransfer, {
+                  kind: 'dm',
+                  channelId: dm.id,
+                  name: dm.name,
+                  recipientId: peer?.id ?? null,
+                });
+              }}
+              title={`${dm.name} — drag to AI composer to reference`}
               onClick={() => onSelect(dm)}
-              className={`flex w-full shrink-0 items-center gap-2 rounded-[10px] px-2 py-1.5 text-start text-xs transition ${
+              className={`flex w-full shrink-0 cursor-grab items-center gap-2 rounded-[10px] px-2 py-1.5 text-start text-xs transition active:cursor-grabbing ${
                 active ? 'bg-interactive-selection font-medium text-foreground' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
               }`}
             >

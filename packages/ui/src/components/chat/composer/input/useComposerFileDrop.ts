@@ -10,6 +10,7 @@ import type { useComposerDraftText } from './useComposerDraftText';
 import React from 'react';
 import { toast } from '@/components/ui';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { DISCORD_REF_MIME, formatDiscordRefForComposer, parseDiscordDragData } from '@/lib/discord/dragRef';
 import { confirmMention } from '../../composer/language/mentions';
 import { appendInlineText } from '../../composer/text';
 import { collectDroppedFileUris, collectDroppedFiles, hasDraggedFiles } from '../../composer/attachments/dataTransfer';
@@ -79,7 +80,8 @@ export function useComposerFileDrop({
         e.preventDefault();
         e.stopPropagation();
         dragEnterCountRef.current++;
-        const isInternal = e.dataTransfer.types?.includes('application/x-spleen-file-path') ?? false;
+        const isInternal = (e.dataTransfer.types?.includes('application/x-spleen-file-path')
+            || e.dataTransfer.types?.includes(DISCORD_REF_MIME)) ?? false;
         if (isInternal !== isInternalDrag) {
             setIsInternalDrag(isInternal);
         }
@@ -131,6 +133,31 @@ export function useComposerFileDrop({
         setIsDragging(false);
 
         if (!currentSessionId && !newSessionDraftOpen) return;
+
+        // Internal drag: Discord message / channel / thread / DM / attachment → chat input
+        const discordRef = parseDiscordDragData(e.dataTransfer);
+        if (discordRef) {
+            const formatted = formatDiscordRefForComposer(discordRef);
+            const textarea = composerRef.current;
+            const currentMessage = composerText.get();
+            if (textarea) {
+                const { start: pos, end } = textarea.getSelection();
+                const before = currentMessage.slice(0, pos);
+                const after = currentMessage.slice(end);
+                const needBreakBefore = before.length > 0 && !/\n$/.test(before);
+                const needBreakAfter = after.length > 0 && !/^\n/.test(after);
+                const insert = `${needBreakBefore ? '\n' : ''}${formatted}${needBreakAfter ? '\n' : '\n'}`;
+                textarea.replaceRange(pos, end, insert);
+                cursorPosRef.current = pos + insert.length;
+                textarea.focus();
+            } else {
+                const existing = currentMessage.trimEnd();
+                setMessage(existing ? `${existing}\n${formatted}\n` : `${formatted}\n`);
+            }
+            toast.success('Added Discord reference to composer');
+            clearDropTextSuppression();
+            return;
+        }
 
         // Internal drag: file tree → chat input (relative path as @mention)
         const internalPath = e.dataTransfer.getData('application/x-spleen-file-path');

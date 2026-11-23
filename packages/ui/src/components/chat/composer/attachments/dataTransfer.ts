@@ -1,4 +1,5 @@
 
+import { DISCORD_REF_MIME } from '@/lib/discord/dragRef';
 import { parseDroppedFileReferences, VS_CODE_DROP_DATA_TYPES } from './filePaths';
 
 export const INTERNAL_FILE_PATH_TYPE = 'application/x-spleen-file-path';
@@ -8,6 +9,7 @@ const FILE_BEARING_TYPES = [
     'text/uri-list',
     'codefiles',
     INTERNAL_FILE_PATH_TYPE,
+    DISCORD_REF_MIME,
 ];
 
 function readData(dataTransfer: DataTransfer, type: string): string {

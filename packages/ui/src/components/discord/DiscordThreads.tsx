@@ -1,6 +1,7 @@
 import React from 'react';
 import { RiAddLine, RiPushpinLine, RiSearchLine, RiSparklingLine } from '@remixicon/react';
 import { discordApi, type DiscordChannel, type DiscordMessage } from '@/lib/discord/api';
+import { setDiscordDragData } from '@/lib/discord/dragRef';
 
 export const DiscordThreads: React.FC<{
   threads: DiscordChannel[];
@@ -98,8 +99,18 @@ export const DiscordThreads: React.FC<{
               <button
                 key={th.id}
                 type="button"
+                draggable
+                onDragStart={(e) => {
+                  setDiscordDragData(e.dataTransfer, {
+                    kind: 'thread',
+                    channelId: th.id,
+                    threadName: th.name,
+                    guildId,
+                  });
+                }}
+                title={`#${th.name} — drag to AI composer to reference`}
                 onClick={() => onSelectThread(th)}
-                className="flex w-full items-center justify-between rounded border border-border/60 bg-card/40 px-2.5 py-2 text-start hover:bg-muted"
+                className="flex w-full cursor-grab items-center justify-between rounded border border-border/60 bg-card/40 px-2.5 py-2 text-start hover:bg-muted active:cursor-grabbing"
               >
                 <span className="truncate font-medium">#{th.name}</span>
               </button>

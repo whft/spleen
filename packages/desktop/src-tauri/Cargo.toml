@@ -1,6 +1,6 @@
 [package]
 name = "spleen-desktop"
-version = "1.2.0"
+version = "1.2.1"
 description = "Spleen Windows desktop host"
 edition = "2021"
 publish = false

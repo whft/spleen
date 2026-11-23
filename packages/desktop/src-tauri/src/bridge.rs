@@ -265,6 +265,7 @@ async fn update_payload(app: &AppHandle) -> Result<Value, String> {
 #[tauri::command]
 pub async fn spleen_desktop_invoke(
     app: AppHandle,
+    caller: tauri::WebviewWindow,
     state: tauri::State<'_, AppState>,
     cmd: String,
     args: Value,
@@ -272,32 +273,35 @@ pub async fn spleen_desktop_invoke(
     match cmd.as_str() {
         "desktop_get_app_version" => Ok(json!(app.package_info().version.to_string())),
         "desktop_get_current_window_state" => {
-            let window = window_of(&app)?;
             Ok(json!({
-                "visible": window.is_visible().unwrap_or(false),
-                "maximized": window.is_maximized().unwrap_or(false),
-                "fullscreen": window.is_fullscreen().unwrap_or(false),
-                "focused": window.is_focused().unwrap_or(false),
+                "visible": caller.is_visible().unwrap_or(false),
+                "maximized": caller.is_maximized().unwrap_or(false),
+                "fullscreen": caller.is_fullscreen().unwrap_or(false),
+                "focused": caller.is_focused().unwrap_or(false),
             }))
         }
         "desktop_is_window_fullscreen" => {
-            Ok(json!(window_of(&app)?.is_fullscreen().unwrap_or(false)))
+            Ok(json!(caller.is_fullscreen().unwrap_or(false)))
         }
         "desktop_minimize_current_window" => {
-            window_of(&app)?.minimize().map_err(|e| e.to_string())?;
+            caller.minimize().map_err(|e| e.to_string())?;
             Ok(json!(true))
         }
         "desktop_toggle_current_window_maximized" => {
-            let window = window_of(&app)?;
-            if window.is_maximized().unwrap_or(false) {
-                window.unmaximize().map_err(|e| e.to_string())?;
+            if caller.is_maximized().unwrap_or(false) {
+                caller.unmaximize().map_err(|e| e.to_string())?;
             } else {
-                window.maximize().map_err(|e| e.to_string())?;
+                caller.maximize().map_err(|e| e.to_string())?;
             }
-            Ok(json!(true))
+            let now_maximized = caller.is_maximized().unwrap_or(false);
+            let _ = caller.emit(
+                "spleen:window-maximized-changed",
+                json!({ "maximized": now_maximized }),
+            );
+            Ok(json!({ "maximized": now_maximized }))
         }
         "desktop_close_current_window" => {
-            window_of(&app)?.close().map_err(|e| e.to_string())?;
+            caller.close().map_err(|e| e.to_string())?;
             Ok(json!(true))
         }
         "desktop_focus_window" | "desktop_focus_main_window" => {
@@ -305,25 +309,25 @@ pub async fn spleen_desktop_invoke(
             Ok(json!(true))
         }
         "desktop_start_window_drag" => {
-            window_of(&app)?.start_dragging().map_err(|e| e.to_string())?;
+            caller.start_dragging().map_err(|e| e.to_string())?;
             Ok(json!(true))
         }
         "desktop_set_window_title" => {
             let title = arg_str(&args, "title");
             if !title.is_empty() {
-                window_of(&app)?.set_title(&title).map_err(|e| e.to_string())?;
+                caller.set_title(&title).map_err(|e| e.to_string())?;
             }
             Ok(json!(true))
         }
         "desktop_set_window_pinned" => {
             let pinned = arg_bool(&args, "pinned");
-            window_of(&app)?
+            caller
                 .set_always_on_top(pinned)
                 .map_err(|e| e.to_string())?;
             Ok(json!(true))
         }
         "desktop_get_window_pinned" => {
-            Ok(json!(window_of(&app)?.is_always_on_top().unwrap_or(false)))
+            Ok(json!(caller.is_always_on_top().unwrap_or(false)))
         }
         "desktop_get_minimize_to_tray" => Ok(json!({
             "supported": true,

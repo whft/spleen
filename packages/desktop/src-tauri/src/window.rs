@@ -31,26 +31,64 @@ fn init_script(bootstrap: &Bootstrap) -> String {
     window.__SPLEEN_DESKTOP_BOOT_OUTCOME__ = {{ target: 'local', status: 'ok', localAvailable: true }};
   }} catch (error) {{ console.error('[spleen] bootstrap globals failed', error); }}
 
-  var tauri = window.__TAURI__;
+  function getCoreInvoke() {{
+    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {{
+      return window.__TAURI__.core.invoke;
+    }}
+    if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {{
+      return window.__TAURI_INTERNALS__.invoke;
+    }}
+    return null;
+  }}
   function invoke(cmd, args) {{
-    if (!tauri || !tauri.core) return Promise.reject(new Error('tauri ipc unavailable'));
-    return tauri.core.invoke('spleen_desktop_invoke', {{ cmd: cmd, args: args || {{}} }});
+    var coreInvoke = getCoreInvoke();
+    if (coreInvoke) {{
+      return coreInvoke('spleen_desktop_invoke', {{ cmd: cmd, args: args || {{}} }});
+    }}
+    var curWin = window.__TAURI__ && window.__TAURI__.window && typeof window.__TAURI__.window.getCurrentWindow === 'function'
+      ? window.__TAURI__.window.getCurrentWindow()
+      : null;
+    if (curWin) {{
+      if (cmd === 'desktop_minimize_current_window') return curWin.minimize();
+      if (cmd === 'desktop_close_current_window') return curWin.close();
+      if (cmd === 'desktop_start_window_drag') return curWin.startDragging();
+      if (cmd === 'desktop_toggle_current_window_maximized') {{
+        return curWin.toggleMaximize().then(function () {{
+          return curWin.isMaximized().then(function (m) {{ return {{ maximized: Boolean(m) }}; }});
+        }});
+      }}
+    }}
+    return Promise.reject(new Error('tauri ipc unavailable'));
   }}
   window.__SPLEEN_DESKTOP__ = {{
     invoke: invoke,
     openExternal: function (url) {{ return invoke('desktop_open_external_url', {{ url: url }}); }},
     openDialog: function (options) {{
-      if (!tauri || !tauri.core) return Promise.reject(new Error('tauri ipc unavailable'));
-      return tauri.core.invoke('spleen_desktop_open_dialog', {{ options: options || {{}} }});
+      var coreInvoke = getCoreInvoke();
+      if (!coreInvoke) return Promise.reject(new Error('tauri ipc unavailable'));
+      return coreInvoke('spleen_desktop_open_dialog', {{ options: options || {{}} }});
     }},
     grantFileAccess: function (filePath) {{ return Promise.resolve({{ granted: true, path: filePath }}); }},
     pathForFile: function (file) {{ return file && typeof file.path === 'string' ? file.path : ''; }},
     listen: function (event, handler) {{
-      if (!tauri || !tauri.event) return Promise.resolve(function () {{}});
-      return tauri.event.listen(event, function (e) {{ handler({{ payload: e.payload }}); }});
+      var ev = window.__TAURI__ && window.__TAURI__.event;
+      if (!ev || typeof ev.listen !== 'function') return Promise.resolve(function () {{}});
+      return ev.listen(event, function (e) {{ handler({{ payload: e.payload }}); }});
     }},
     pickThemeFile: function () {{ return invoke('desktop_pick_theme_file', {{}}); }}
   }};
+  function wireMaxState() {{
+    var ev = window.__TAURI__ && window.__TAURI__.event;
+    if (!ev || typeof ev.listen !== 'function') return;
+    ev.listen('spleen:window-maximized-changed', function (e) {{
+      window.dispatchEvent(new CustomEvent('spleen:window-maximized-changed', {{ detail: e.payload }}));
+    }});
+  }}
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', wireMaxState, {{ once: true }});
+  }} else {{
+    wireMaxState();
+  }}
 }})();"#
     )
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { RiDownloadLine, RiFileTextLine } from '@remixicon/react';
 import type { DiscordAttachment, DiscordEmbed, DiscordMessage } from '@/lib/discord/api';
+import { setDiscordDragData } from '@/lib/discord/dragRef';
 
 const colorHex = (num?: number): string => {
   if (typeof num !== 'number' || num <= 0) return 'var(--border)';
@@ -10,7 +11,10 @@ const colorHex = (num?: number): string => {
 export const DiscordAttachmentList: React.FC<{
   attachments: DiscordAttachment[];
   onPreviewImage: (url: string, alt?: string) => void;
-}> = ({ attachments, onPreviewImage }) => {
+  channelId?: string | null;
+  messageId?: string | null;
+  author?: string | null;
+}> = ({ attachments, onPreviewImage, channelId, messageId, author }) => {
   if (!attachments.length) return null;
   return (
     <div className="mt-1.5 flex flex-wrap gap-2">
@@ -19,13 +23,28 @@ export const DiscordAttachmentList: React.FC<{
         const isImg = mime.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(att.filename);
         const isVideo = mime.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(att.filename);
         const isAudio = mime.startsWith('audio/') || /\.(mp3|ogg|wav|flac|m4a)$/i.test(att.filename);
+        const handleDragStart = (e: React.DragEvent) => {
+          e.stopPropagation();
+          setDiscordDragData(e.dataTransfer, {
+            kind: 'attachment',
+            channelId,
+            messageId,
+            author,
+            filename: att.filename,
+            url: att.url,
+            contentType: att.contentType,
+          });
+        };
         if (isImg) {
           return (
             <button
               key={att.id}
               type="button"
+              draggable
+              onDragStart={handleDragStart}
+              title={`Drag to AI composer or click to preview ${att.filename}`}
               onClick={() => onPreviewImage(att.url, att.filename)}
-              className="overflow-hidden rounded-lg border border-border/60 bg-card/50 transition hover:opacity-90"
+              className="cursor-grab overflow-hidden rounded-lg border border-border/60 bg-card/50 transition hover:opacity-90 active:cursor-grabbing"
             >
               <img src={att.proxyUrl || att.url} alt={att.filename} className="max-h-64 max-w-xs object-contain" loading="lazy" />
             </button>
@@ -51,7 +70,10 @@ export const DiscordAttachmentList: React.FC<{
             href={att.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-card/70 px-3 py-2 text-xs hover:bg-muted"
+            draggable
+            onDragStart={handleDragStart}
+            title={`Drag to AI composer or open ${att.filename}`}
+            className="inline-flex cursor-grab items-center gap-2 rounded-lg border border-border/70 bg-card/70 px-3 py-2 text-xs hover:bg-muted active:cursor-grabbing"
           >
             <RiFileTextLine className="h-4 w-4 text-primary" />
             <span className="max-w-[200px] truncate font-medium">{att.filename}</span>

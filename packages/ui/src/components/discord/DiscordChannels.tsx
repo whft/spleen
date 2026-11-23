@@ -1,6 +1,7 @@
 import React from 'react';
 import { RiHashtag, RiLockLine, RiMegaphoneLine, RiVolumeUpLine } from '@remixicon/react';
 import type { DiscordChannel } from '@/lib/discord/api';
+import { setDiscordDragData } from '@/lib/discord/dragRef';
 
 const ChannelIcon: React.FC<{ type: number; nsfw: boolean }> = ({ type, nsfw }) => {
   if (type === 2 || type === 13) return <RiVolumeUpLine className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
@@ -34,8 +35,19 @@ export const DiscordChannels: React.FC<{
       <div key={ch.id} className="shrink-0">
         <button
           type="button"
+          draggable
+          onDragStart={(e) => {
+            setDiscordDragData(e.dataTransfer, {
+              kind: 'channel',
+              channelId: ch.id,
+              channelName: ch.name,
+              guildId: ch.guildId,
+              topic: ch.topic,
+            });
+          }}
+          title={`#${ch.name} — drag to AI composer to reference`}
           onClick={() => onSelect(ch)}
-          className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-start text-xs transition ${
+          className={`flex w-full cursor-grab items-center gap-1.5 rounded-md px-2 py-1 text-start text-xs transition active:cursor-grabbing ${
             nested ? 'ps-5' : ''
           } ${active ? 'bg-interactive-selection font-medium text-foreground' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'}`}
         >
@@ -46,8 +58,18 @@ export const DiscordChannels: React.FC<{
           <button
             key={th.id}
             type="button"
+            draggable
+            onDragStart={(e) => {
+              setDiscordDragData(e.dataTransfer, {
+                kind: 'thread',
+                channelId: th.id,
+                threadName: th.name,
+                guildId: th.guildId ?? ch.guildId,
+              });
+            }}
+            title={`${th.name} — drag to AI composer to reference`}
             onClick={() => onSelect(th)}
-            className={`flex w-full items-center gap-1.5 rounded-md py-1 ps-7 pe-2 text-start text-[11px] transition ${
+            className={`flex w-full cursor-grab items-center gap-1.5 rounded-md py-1 ps-7 pe-2 text-start text-[11px] transition active:cursor-grabbing ${
               th.id === activeChannelId ? 'bg-interactive-selection font-medium text-foreground' : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
             }`}
           >

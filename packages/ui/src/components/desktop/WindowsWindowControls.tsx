@@ -125,6 +125,7 @@ export const WindowsWindowControls = React.memo(function WindowsWindowControls({
     return (
       <div
         dir="ltr"
+        onMouseDown={(e) => e.stopPropagation()}
         className={cn(
           'app-region-no-drag group/wctl flex h-8 shrink-0 items-center',
           isLeft ? 'me-1' : 'ms-1 me-3',
@@ -199,7 +200,12 @@ export const WindowsWindowControls = React.memo(function WindowsWindowControls({
   };
 
   return (
-    <div dir="ltr" className={containerClassName} aria-label={t('header.windowControls.groupAria')}>
+    <div
+      dir="ltr"
+      onMouseDown={(e) => e.stopPropagation()}
+      className={containerClassName}
+      aria-label={t('header.windowControls.groupAria')}
+    >
       {order.map(renderControl)}
     </div>
   );

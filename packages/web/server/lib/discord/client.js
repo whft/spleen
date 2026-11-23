@@ -1,4 +1,10 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
+const DISCORD_CDN_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class DiscordApiError extends Error {
@@ -216,6 +222,17 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
   };
 
   const searchMessages = async (guildId, { content, authorId, channelId, offset = 0 } = {}) => {
+    if (!guildId) {
+      if (!channelId) throw new DiscordApiError('guildId or channelId is required to search messages', 400, 'MISSING_SCOPE');
+      const recent = await getMessages(channelId, { limit: 100 });
+      const needle = typeof content === 'string' ? content.trim().toLowerCase() : '';
+      const filtered = recent.filter((m) => {
+        if (authorId && m.author?.id !== String(authorId)) return false;
+        if (needle && !m.content.toLowerCase().includes(needle)) return false;
+        return true;
+      });
+      return { totalResults: filtered.length, messages: filtered };
+    }
     const params = new URLSearchParams();
     if (content) params.set('content', content);
     if (authorId) params.set('author_id', authorId);
@@ -325,7 +342,69 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     return normalizeChannel(thread);
   };
 
+  const getMessage = async (channelId, messageId) => {
+    const msg = await apiFetch(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`);
+    return normalizeMessage(msg);
+  };
+
+  const getChannel = async (channelId) => {
+    const ch = await apiFetch(`/channels/${encodeURIComponent(channelId)}`);
+    return normalizeChannel(ch);
+  };
+
+  const getUser = async (userId) => {
+    const u = await apiFetch(`/users/${encodeURIComponent(userId)}`);
+    return normalizeUser(u);
+  };
+
+  const deleteChannel = (channelId) => apiFetch(`/channels/${encodeURIComponent(channelId)}`, { method: 'DELETE' });
+
   const joinThread = (threadId) => apiFetch(`/channels/${encodeURIComponent(threadId)}/thread-members/@me`, { method: 'PUT' });
+
+  const leaveThread = (threadId) => apiFetch(`/channels/${encodeURIComponent(threadId)}/thread-members/@me`, { method: 'DELETE' });
+
+  const sendMessageFromFile = async (channelId, { content = '', replyToMessageId, filePath, filename } = {}) => {
+    const resolved = path.resolve(String(filePath || ''));
+    const bytes = await fs.readFile(resolved);
+    return sendMessage(channelId, {
+      content,
+      replyToMessageId,
+      files: [{ name: filename || path.basename(resolved), bytes }],
+    });
+  };
+
+  const downloadAttachment = async (attachmentUrl, savePath = null) => {
+    let parsed;
+    try {
+      parsed = new URL(String(attachmentUrl || '').trim());
+    } catch {
+      throw new DiscordApiError('Valid Discord attachment URL is required', 400, 'INVALID_URL');
+    }
+    if (parsed.protocol !== 'https:' || !DISCORD_CDN_HOSTS.has(parsed.hostname.toLowerCase())) {
+      throw new DiscordApiError('Only Discord CDN attachment URLs are allowed', 400, 'UNSUPPORTED_HOST');
+    }
+    const response = await fetchImpl(parsed.toString(), { signal: AbortSignal.timeout(30_000) });
+    if (!response.ok) {
+      throw new DiscordApiError(`Failed to download attachment (${response.status})`, response.status, 'DOWNLOAD_FAILED');
+    }
+    const arrayBuf = await response.arrayBuffer();
+    if (arrayBuf.byteLength > MAX_ATTACHMENT_BYTES) {
+      throw new DiscordApiError('Attachment exceeds 50 MB download limit', 413, 'FILE_TOO_LARGE');
+    }
+    const rawName = path.basename(parsed.pathname) || 'discord-attachment';
+    const safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const targetPath = savePath
+      ? path.resolve(String(savePath))
+      : path.join(os.tmpdir(), `spleen-discord-${Date.now()}-${safeName}`);
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, Buffer.from(arrayBuf));
+    return {
+      path: targetPath,
+      filename: safeName,
+      bytes: arrayBuf.byteLength,
+      contentType: response.headers.get('content-type') || 'application/octet-stream',
+    };
+  };
 
   const createChannel = async (guildId, { name, type = 0, topic, parentId } = {}) => {
     const ch = await apiFetch(`/guilds/${encodeURIComponent(guildId)}/channels`, {
@@ -359,9 +438,14 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     createDm,
     getGuildMembers,
     getGuildRoles,
+    getChannel,
+    getUser,
+    getMessage,
     getMessages,
     searchMessages,
     sendMessage,
+    sendMessageFromFile,
+    downloadAttachment,
     editMessage,
     deleteMessage,
     addReaction,
@@ -372,8 +456,10 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     triggerTyping,
     createThread,
     joinThread,
+    leaveThread,
     createChannel,
     updateChannel,
+    deleteChannel,
     updatePreferences,
   };
 };

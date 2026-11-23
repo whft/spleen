@@ -17,6 +17,7 @@ import {
 import { Icon } from '@/components/icon/Icon';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
+import { setDiscordDragData } from '@/lib/discord/dragRef';
 import {
   discordApi,
   type DiscordChannel,
@@ -531,10 +532,31 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
               {messages.map((msg, idx) => {
                 const grouped = shouldGroupWithPrevious(idx > 0 ? messages[idx - 1] : null, msg);
                 const isOwn = status.user?.id && msg.author?.id === status.user.id;
+                const authorName = msg.author?.globalName || msg.author?.username || 'Unknown';
                 return (
                   <div
                     key={msg.id}
-                    className={`group relative rounded px-1.5 py-0.5 hover:bg-muted/40 ${grouped ? 'ps-11' : 'pt-2'}`}
+                    draggable
+                    onDragStart={(e) => {
+                      setDiscordDragData(e.dataTransfer, {
+                        kind: 'message',
+                        channelId: activeChannel?.id ?? msg.channelId,
+                        channelName: activeChannel?.name ?? null,
+                        guildId: selectedGuildId !== '__dms__' ? selectedGuildId : null,
+                        guildName: activeGuild?.name ?? null,
+                        messageId: msg.id,
+                        author: authorName,
+                        content: msg.content,
+                        timestamp: msg.timestamp,
+                        attachments: msg.attachments.map((a) => ({
+                          filename: a.filename,
+                          url: a.url,
+                          contentType: a.contentType,
+                        })),
+                      });
+                    }}
+                    title="Drag message to AI composer to reference it"
+                    className={`group relative cursor-grab rounded px-1.5 py-0.5 hover:bg-muted/40 active:cursor-grabbing ${grouped ? 'ps-11' : 'pt-2'}`}
                   >
                     {msg.referencedMessage ? (
                       <div className="mb-0.5 flex items-center gap-1.5 ps-11 text-[11px] text-muted-foreground">
@@ -577,6 +599,9 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
                     <div className={!grouped ? 'ps-[42px]' : ''}>
                       <DiscordAttachmentList
                         attachments={msg.attachments}
+                        channelId={activeChannel?.id ?? msg.channelId}
+                        messageId={msg.id}
+                        author={authorName}
                         onPreviewImage={(url, alt) => setLightboxImage({ url, alt })}
                       />
                       {msg.embeds.map((em, i) => (

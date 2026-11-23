@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 pub struct AppState {
     pub paths: SpleenPaths,
@@ -250,6 +250,13 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if let WindowEvent::Resized(_) = event {
+                let maximized = window.is_maximized().unwrap_or(false);
+                let _ = window.emit(
+                    "spleen:window-maximized-changed",
+                    serde_json::json!({ "maximized": maximized }),
+                );
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() != "main" {
                     return;
