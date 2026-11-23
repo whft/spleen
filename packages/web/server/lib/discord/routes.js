@@ -26,7 +26,11 @@ export const registerDiscordRoutes = (app, { client, gateway = null, requireAuth
 
   app.get('/api/discord/status', wrap(async (_req, res) => {
     const status = await client.getStatus();
-    res.json({ ...status, gatewayConnected: gateway?.isConnected?.() ?? false });
+    res.json({
+      ...status,
+      gatewayConnected: gateway?.isConnected?.() ?? false,
+      gatewayHealth: gateway?.getHealth ? gateway.getHealth() : null,
+    });
   }));
 
   app.post('/api/discord/connect', express.json({ limit: '32kb' }), wrap(async (req, res) => {
@@ -44,7 +48,85 @@ export const registerDiscordRoutes = (app, { client, gateway = null, requireAuth
     const patch = {};
     if (req.body?.rememberedGuildId !== undefined) patch.rememberedGuildId = req.body.rememberedGuildId;
     if (Array.isArray(req.body?.mutedChannelIds)) patch.mutedChannelIds = req.body.mutedChannelIds;
+    if (req.body?.applicationId !== undefined) patch.applicationId = asNonEmptyString(req.body.applicationId);
+    if (req.body?.publicKey !== undefined) patch.publicKey = asNonEmptyString(req.body.publicKey);
+    if (req.body?.safetyPolicy !== undefined && client.safety) {
+      await client.safety.updatePolicy(req.body.safetyPolicy);
+    }
     res.json(await client.updatePreferences(patch));
+  }));
+
+  app.post('/api/discord/interactions', express.raw({ type: 'application/json', limit: '256kb' }), async (req, res) => {
+    try {
+      if (!client.interactions) {
+        res.status(503).json({ error: 'Discord interactions manager is unavailable' });
+        return;
+      }
+      const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body ?? {}), 'utf8');
+      const result = await client.interactions.handleHttpInteraction({
+        rawBody,
+        signature: asNonEmptyString(req.headers['x-signature-ed25519']),
+        timestamp: asNonEmptyString(req.headers['x-signature-timestamp']),
+      });
+      res.status(result.status).json(result.body);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get('/api/discord/policy', wrap(async (_req, res) => {
+    res.json(await client.safety.getPolicy());
+  }));
+
+  app.patch('/api/discord/policy', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    res.json(await client.safety.updatePolicy(req.body ?? {}));
+  }));
+
+  app.get('/api/discord/audit-trail', wrap(async (req, res) => {
+    res.json({ entries: client.safety.listAuditTrail(req.query?.limit) });
+  }));
+
+  app.get('/api/discord/events', wrap(async (req, res) => {
+    res.json({
+      events: gateway?.listEvents ? gateway.listEvents({
+        eventType: asNonEmptyString(req.query?.eventType),
+        guildId: asNonEmptyString(req.query?.guildId),
+        channelId: asNonEmptyString(req.query?.channelId),
+        limit: req.query?.limit,
+      }) : [],
+    });
+  }));
+
+  app.post('/api/discord/oauth/authorize', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    res.json(await client.oauth.buildAuthorizeUrl(req.body ?? {}));
+  }));
+
+  app.post('/api/discord/oauth/callback', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    res.json(await client.oauth.exchangeCode(req.body ?? {}));
+  }));
+
+  app.post('/api/discord/oauth/refresh', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    res.json(await client.oauth.refreshAccessToken(req.body ?? {}));
+  }));
+
+  app.post('/api/discord/oauth/revoke', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    res.json(await client.oauth.revokeToken(req.body ?? {}));
+  }));
+
+  app.get('/api/discord/oauth/status', wrap(async (_req, res) => {
+    res.json(await client.oauth.getOAuthStatus());
+  }));
+
+  app.post('/api/discord/voice/join', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    res.json(await client.voice.joinVoiceChannel(req.body ?? {}));
+  }));
+
+  app.post('/api/discord/voice/leave', express.json({ limit: '32kb' }), wrap(async (req, res) => {
+    res.json(await client.voice.leaveVoiceChannel(req.body ?? {}));
+  }));
+
+  app.get('/api/discord/voice/status', wrap(async (req, res) => {
+    res.json(client.voice.getVoiceStatus({ guildId: asNonEmptyString(req.query?.guildId) }));
   }));
 
   app.get('/api/discord/stream', async (req, res) => {

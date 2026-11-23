@@ -2863,8 +2863,8 @@ async function main(options = {}) {
   });
   teamsRuntime.start();
   const discordStore = createDiscordStore({ filePath: path.join(SPLEEN_DATA_DIR, 'discord.json') });
-  discordClientRuntime = createDiscordClient({ store: discordStore });
   const discordGateway = createDiscordGateway({ store: discordStore });
+  discordClientRuntime = createDiscordClient({ store: discordStore, gateway: discordGateway });
   registerDiscordRoutes(app, {
     client: discordClientRuntime,
     gateway: discordGateway,

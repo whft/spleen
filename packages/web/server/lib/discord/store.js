@@ -1,13 +1,18 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { asNonEmptyString } from '../shared/guards.js';
 
 const DEFAULT_STATE = () => ({
   version: 1,
   token: '',
   tokenType: 'user',
+  applicationId: null,
+  publicKey: null,
   rememberedGuildId: null,
   mutedChannelIds: [],
   user: null,
+  safetyPolicy: null,
+  oauth: null,
 });
 
 export const maskToken = (token) => {
@@ -33,9 +38,13 @@ export const createDiscordStore = ({ filePath, fsImpl = fs } = {}) => {
         version: 1,
         token: typeof parsed?.token === 'string' ? parsed.token : '',
         tokenType: parsed?.tokenType === 'bot' ? 'bot' : 'user',
+        applicationId: asNonEmptyString(parsed?.applicationId),
+        publicKey: asNonEmptyString(parsed?.publicKey),
         rememberedGuildId: typeof parsed?.rememberedGuildId === 'string' ? parsed.rememberedGuildId : null,
         mutedChannelIds: Array.isArray(parsed?.mutedChannelIds) ? parsed.mutedChannelIds : [],
         user: parsed?.user ?? null,
+        safetyPolicy: parsed?.safetyPolicy ?? null,
+        oauth: parsed?.oauth ?? null,
       };
     } catch {
       cache = DEFAULT_STATE();
@@ -69,6 +78,11 @@ export const createDiscordStore = ({ filePath, fsImpl = fs } = {}) => {
       connected: Boolean(state.token),
       tokenType: state.tokenType,
       tokenHint: maskToken(state.token),
+      applicationId: state.applicationId ?? null,
+      hasPublicKey: Boolean(state.publicKey),
+      oauthAuthorized: Boolean(state.oauth?.accessToken),
+      oauthScopes: Array.isArray(state.oauth?.scopes) ? state.oauth.scopes : [],
+      safetyPolicy: state.safetyPolicy ?? null,
       rememberedGuildId: state.rememberedGuildId,
       mutedChannelIds: state.mutedChannelIds,
       user: state.user,

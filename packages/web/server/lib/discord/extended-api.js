@@ -505,12 +505,100 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
   });
 
   const listEmojis = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/emojis`);
+  const createEmoji = (guildId, payload = {}, reason = null) => rawApi({
+    method: 'POST',
+    path: `/guilds/${encodeURIComponent(guildId)}/emojis`,
+    body: payload,
+    reason,
+  });
+  const updateEmoji = (guildId, emojiId, patch = {}, reason = null) => rawApi({
+    method: 'PATCH',
+    path: `/guilds/${encodeURIComponent(guildId)}/emojis/${encodeURIComponent(emojiId)}`,
+    body: patch,
+    reason,
+  });
+  const deleteEmoji = (guildId, emojiId, reason = null) => rawApi({
+    method: 'DELETE',
+    path: `/guilds/${encodeURIComponent(guildId)}/emojis/${encodeURIComponent(emojiId)}`,
+    reason,
+  });
   const listStickers = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/stickers`);
   const listSoundboardSounds = (guildId = null) => (
     asNonEmptyString(guildId)
       ? apiFetch(`/guilds/${encodeURIComponent(guildId)}/soundboard-sounds`)
       : apiFetch('/soundboard-default-sounds')
   );
+
+  const getGuildWidget = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/widget`);
+  const updateGuildWidget = (guildId, patch = {}, reason = null) => rawApi({
+    method: 'PATCH',
+    path: `/guilds/${encodeURIComponent(guildId)}/widget`,
+    body: patch,
+    reason,
+  });
+  const getGuildOnboarding = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/onboarding`);
+  const updateGuildOnboarding = (guildId, patch = {}, reason = null) => rawApi({
+    method: 'PUT',
+    path: `/guilds/${encodeURIComponent(guildId)}/onboarding`,
+    body: patch,
+    reason,
+  });
+  const getGuildWelcomeScreen = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/welcome-screen`);
+  const updateGuildWelcomeScreen = (guildId, patch = {}, reason = null) => rawApi({
+    method: 'PATCH',
+    path: `/guilds/${encodeURIComponent(guildId)}/welcome-screen`,
+    body: patch,
+    reason,
+  });
+  const listGuildTemplates = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/templates`);
+  const createGuildTemplate = (guildId, { name, description = null } = {}) => rawApi({
+    method: 'POST',
+    path: `/guilds/${encodeURIComponent(guildId)}/templates`,
+    body: { name: String(name || 'Template'), description },
+  });
+  const syncGuildTemplate = (guildId, code) => rawApi({
+    method: 'PUT',
+    path: `/guilds/${encodeURIComponent(guildId)}/templates/${encodeURIComponent(code)}`,
+  });
+  const deleteGuildTemplate = (guildId, code) => rawApi({
+    method: 'DELETE',
+    path: `/guilds/${encodeURIComponent(guildId)}/templates/${encodeURIComponent(code)}`,
+  });
+  const getGuildPruneCount = (guildId, { days = 7, includeRoles = [] } = {}) => rawApi({
+    method: 'GET',
+    path: `/guilds/${encodeURIComponent(guildId)}/prune`,
+    query: {
+      days: Math.min(30, Math.max(1, Number(days) || 7)),
+      include_roles: Array.isArray(includeRoles) && includeRoles.length > 0 ? includeRoles.map(String).join(',') : undefined,
+    },
+  });
+  const pruneGuild = (guildId, { days = 7, computePruneCount = true, includeRoles = [], reason = null } = {}) => rawApi({
+    method: 'POST',
+    path: `/guilds/${encodeURIComponent(guildId)}/prune`,
+    body: {
+      days: Math.min(30, Math.max(1, Number(days) || 7)),
+      compute_prune_count: Boolean(computePruneCount),
+      include_roles: Array.isArray(includeRoles) ? includeRoles.map(String) : [],
+    },
+    reason,
+  });
+  const leaveGuild = (guildId) => apiFetch(`/users/@me/guilds/${encodeURIComponent(guildId)}`, { method: 'DELETE' });
+
+  const listSkus = (applicationId) => apiFetch(`/applications/${encodeURIComponent(applicationId)}/skus`);
+  const listEntitlements = (applicationId, query = {}) => rawApi({
+    method: 'GET',
+    path: `/applications/${encodeURIComponent(applicationId)}/entitlements`,
+    query,
+  });
+  const createTestEntitlement = (applicationId, payload = {}) => rawApi({
+    method: 'POST',
+    path: `/applications/${encodeURIComponent(applicationId)}/entitlements`,
+    body: payload,
+  });
+  const consumeEntitlement = (applicationId, entitlementId) => rawApi({
+    method: 'POST',
+    path: `/applications/${encodeURIComponent(applicationId)}/entitlements/${encodeURIComponent(entitlementId)}/consume`,
+  });
 
   const listAutoModRules = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/auto-moderation/rules`);
   const createAutoModRule = (guildId, payload = {}) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/auto-moderation/rules`, {
@@ -584,8 +672,28 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     updateScheduledEvent,
     deleteScheduledEvent,
     listEmojis,
+    createEmoji,
+    updateEmoji,
+    deleteEmoji,
     listStickers,
     listSoundboardSounds,
+    getGuildWidget,
+    updateGuildWidget,
+    getGuildOnboarding,
+    updateGuildOnboarding,
+    getGuildWelcomeScreen,
+    updateGuildWelcomeScreen,
+    listGuildTemplates,
+    createGuildTemplate,
+    syncGuildTemplate,
+    deleteGuildTemplate,
+    getGuildPruneCount,
+    pruneGuild,
+    leaveGuild,
+    listSkus,
+    listEntitlements,
+    createTestEntitlement,
+    consumeEntitlement,
     listAutoModRules,
     createAutoModRule,
     updateAutoModRule,

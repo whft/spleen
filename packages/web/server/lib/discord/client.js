@@ -3,6 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { asNonEmptyString, isRecord } from '../shared/guards.js';
 import { createExtendedDiscordApi } from './extended-api.js';
+import { calculateEffectivePermissions, createDiscordSafetyGuard } from './safety.js';
+import { createDiscordInteractionsManager, ensureComponentsV2Flags } from './interactions.js';
+import { createDiscordOAuthManager } from './oauth.js';
+import { createDiscordVoiceManager } from './voice.js';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 const DISCORD_CDN_HOSTS = new Set([
@@ -138,7 +142,7 @@ export const normalizeChannel = (c) => ({
   recipients: Array.isArray(c.recipients) ? c.recipients.map(normalizeUser) : [],
 });
 
-export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCORD_API_BASE } = {}) => {
+export const createDiscordClient = ({ store, gateway = null, fetchImpl = fetch, apiBase = DISCORD_API_BASE, WebSocketImpl = globalThis.WebSocket } = {}) => {
   const authHeaderFor = (token, tokenType) => (tokenType === 'bot' ? `Bot ${token}` : token);
 
   const apiFetch = async (endpoint, options = {}, retry = 0, explicitAuth = null) => {
@@ -316,6 +320,9 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
   ) => {
     const text = typeof content === 'string' ? content : '';
     const fileList = Array.isArray(files) ? files : [];
+    const resolvedFlags = Array.isArray(components) && components.length > 0
+      ? ensureComponentsV2Flags(components, flags)
+      : flags;
     const payload = {
       ...(text ? { content: text } : {}),
       ...(replyToMessageId ? { message_reference: { message_id: String(replyToMessageId) } } : {}),
@@ -324,7 +331,7 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
       ...(poll && typeof poll === 'object' ? { poll } : {}),
       ...(tts ? { tts: true } : {}),
       ...(Array.isArray(stickerIds) && stickerIds.length > 0 ? { sticker_ids: stickerIds.map(String) } : {}),
-      ...(flags !== undefined ? { flags: Number(flags) } : {}),
+      ...(resolvedFlags !== undefined ? { flags: Number(resolvedFlags) } : {}),
       ...(allowedMentions && typeof allowedMentions === 'object' ? { allowed_mentions: allowedMentions } : {}),
     };
 
@@ -358,8 +365,12 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     const body = {};
     if (patch.content !== undefined) body.content = patch.content;
     if (Array.isArray(patch.embeds)) body.embeds = patch.embeds;
-    if (Array.isArray(patch.components)) body.components = patch.components;
-    if (patch.flags !== undefined) body.flags = Number(patch.flags);
+    if (Array.isArray(patch.components)) {
+      body.components = patch.components;
+      const v2Flags = ensureComponentsV2Flags(patch.components, patch.flags);
+      if (v2Flags !== undefined) body.flags = Number(v2Flags);
+    }
+    if (patch.flags !== undefined && body.flags === undefined) body.flags = Number(patch.flags);
     if (isRecord(patch.allowedMentions)) body.allowed_mentions = patch.allowedMentions;
     if (Array.isArray(patch.attachments)) body.attachments = patch.attachments;
     const edited = await apiFetch(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, {
@@ -594,9 +605,43 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
   const updatePreferences = (patch) => store.saveConfig(patch).then(() => store.getPublicStatus());
 
   const extended = createExtendedDiscordApi({ apiFetch, encodeEmoji });
+  const safety = createDiscordSafetyGuard({ store });
+  const interactions = createDiscordInteractionsManager({ apiFetch, store });
+  const oauth = createDiscordOAuthManager({ store, fetchImpl, apiBase });
+  const voice = createDiscordVoiceManager({ store, gateway, WebSocketImpl });
+
+  if (gateway?.setInteractionHandler) {
+    gateway.setInteractionHandler((payload) => {
+      interactions.recordInboundInteraction(payload);
+    });
+  }
+
+  const checkPermissions = async ({ guildId, userId = null, channelId = null } = {}) => {
+    const state = store ? await store.read() : null;
+    const targetUserId = asNonEmptyString(userId) || asNonEmptyString(state?.user?.id ? String(state.user.id) : null);
+    if (!targetUserId) throw new DiscordApiError('userId is required to compute permissions', 400, 'USER_ID_REQUIRED');
+    const [guild, member, roles, channel] = await Promise.all([
+      extended.getGuild(guildId),
+      extended.getGuildMember(guildId, targetUserId),
+      getGuildRoles(guildId),
+      asNonEmptyString(channelId) ? apiFetch(`/channels/${encodeURIComponent(channelId)}`) : Promise.resolve(null),
+    ]);
+    return {
+      guildId: String(guildId),
+      userId: targetUserId,
+      channelId: asNonEmptyString(channelId),
+      ...calculateEffectivePermissions({ guild, member, roles, channel }),
+    };
+  };
 
   return {
     ...extended,
+    safety,
+    interactions,
+    oauth,
+    voice,
+    gateway,
+    checkPermissions,
     getStatus,
     connect,
     disconnect,

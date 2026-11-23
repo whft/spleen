@@ -1,5 +1,7 @@
 import { asNonEmptyString } from '../shared/guards.js';
 import { SpleenControlError } from './error.js';
+import { handleDiscordExtendedAction } from './discord-extended-actions.js';
+import { READ_ONLY_DISCORD_ACTIONS } from '../discord/safety.js';
 
 const str = (v) => asNonEmptyString(v) ?? '';
 const idStr = (v) => {
@@ -18,7 +20,28 @@ export const handleDiscordControlAction = async (action, input = {}, discord, co
   if (!discord) throw new SpleenControlError('Discord reader is unavailable', 503);
   const baseDir = str(input.directory) || str(context?.contextDirectory) || null;
 
-  switch (action) {
+  if (discord.safety?.evaluateAction) {
+    const decision = await discord.safety.evaluateAction(action, input);
+    if (decision.blockedForConfirmation) return decision.preview;
+  }
+
+  const recordMutation = (result) => {
+    if (discord.safety?.recordAudit && !READ_ONLY_DISCORD_ACTIONS.has(action)) {
+      discord.safety.recordAudit({
+        action,
+        status: 'executed',
+        guildId: str(input.guildId) || null,
+        channelId: str(input.channelId) || str(input.threadId) || null,
+      });
+    }
+    return result;
+  };
+
+  const extendedResult = await handleDiscordExtendedAction(action, input, discord);
+  if (extendedResult !== null) return recordMutation(extendedResult);
+
+  const runCoreAction = async () => {
+    switch (action) {
     case 'discord.status': return await discord.getStatus();
     case 'discord.me': return await discord.getMe();
     case 'discord.application': return await discord.getApplication();
@@ -534,5 +557,7 @@ export const handleDiscordControlAction = async (action, input = {}, discord, co
     });
     default:
       throw new SpleenControlError(`Unsupported Discord action: ${action}`, 400);
-  }
+    }
+  };
+  return recordMutation(await runCoreAction());
 };
