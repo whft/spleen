@@ -107,14 +107,15 @@ export const createAutonomySupervisor = ({
     return created;
   };
 
-  const replanObjective = (objectiveId, { reason = 'replan', newTasks = [], cancelTaskIds = [] } = {}) => {
+  const replanObjective = (objectiveId, { reason = 'replan', newTasks = [], addTasks = [], cancelTaskIds = [] } = {}) => {
     const obj = store.getObjective(objectiveId);
     if (!obj) throw new Error(`Objective not found: ${objectiveId}`);
     for (const cid of cancelTaskIds) {
       store.updateTask(cid, { status: 'cancelled', error: `Cancelled during replan: ${reason}` });
     }
     const added = [];
-    for (const spec of newTasks) {
+    const specs = newTasks.length > 0 ? newTasks : addTasks;
+    for (const spec of specs) {
       added.push(addTask(objectiveId, spec));
     }
     store.updateObjective(objectiveId, { loopPhase: 'replan', status: obj.status === 'blocked' ? 'active' : obj.status, failureStreak: 0 });
@@ -285,9 +286,12 @@ export const createAutonomySupervisor = ({
     }).slice(0, slots);
 
     if (ready.length > 0 && executeTask) {
+      let turnsUsed = objective.turnsUsed;
       for (const task of ready) {
+        if (turnsUsed >= maxTurns) break;
+        turnsUsed += 1;
         const phaseByKind = { research: 'research', verify: 'validate', curate: 'remember', code: 'experiment', test: 'observe' };
-        store.updateObjective(objective.id, { loopPhase: phaseByKind[task.kind] || 'experiment', turnsUsed: objective.turnsUsed + 1 });
+        store.updateObjective(objective.id, { loopPhase: phaseByKind[task.kind] || 'experiment', turnsUsed });
         store.updateTask(task.id, {
           status: 'running',
           leaseOwner: workerId,

@@ -277,4 +277,9 @@ describe('useUpdateStore checkForUpdates', () => {
     await secondRenderer.getState().restartToUpdate()
     expect(restartAttempts).toBe(0)
   })
+
+  test('parses Rust update_check_failed prefix into actionable message', () => {
+    const message = getUpdateCheckErrorMessage(new Error('update_check_failed: failed to fetch release manifest'))
+    expect(message).toContain('failed to fetch release manifest')
+  })
 })

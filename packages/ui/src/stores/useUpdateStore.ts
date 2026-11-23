@@ -268,20 +268,39 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
         ]);
         const desktopInfo = desktopResult.status === 'fulfilled' ? desktopResult.value : null;
         const apiInfo = apiResult.status === 'fulfilled' ? apiResult.value : null;
-        if (!desktopInfo && !apiInfo) {
+        suggestedSec = apiInfo?.nextSuggestedCheckInSec ?? null;
+        if (!desktopInfo) {
+          if (apiInfo?.available) {
+            const previousVersion = get().info?.version ?? null;
+            const offeredVersion = apiInfo.version ?? null;
+            const versionChanged =
+              previousVersion !== null &&
+              offeredVersion !== null &&
+              previousVersion !== offeredVersion;
+            const nextState: Partial<UpdateState> = {
+              checking: false,
+              available: true,
+              info: apiInfo,
+              lastChecked: Date.now(),
+              nextCheckInSec: suggestedSec,
+            };
+            if (versionChanged) {
+              nextState.downloaded = false;
+              nextState.progress = null;
+            }
+            set(nextState);
+            return suggestedSec;
+          }
           if (desktopResult.status === 'rejected') throw desktopResult.reason;
           throw new Error(formatMessage(useI18nStore.getState().dictionary, 'updateDialog.error.restartUnavailable'));
         }
-        const mergedInfo: UpdateInfo = desktopInfo
-          ? {
-            ...apiInfo,
-            ...desktopInfo,
-            body: desktopInfo.body || apiInfo?.body,
-            releaseUrl: desktopInfo.releaseUrl || apiInfo?.releaseUrl,
-            downloadUrl: desktopInfo.downloadUrl || apiInfo?.downloadUrl,
-          }
-          : apiInfo!;
-        suggestedSec = apiInfo?.nextSuggestedCheckInSec ?? null;
+        const mergedInfo: UpdateInfo = {
+          ...apiInfo,
+          ...desktopInfo,
+          body: desktopInfo.body || apiInfo?.body,
+          releaseUrl: desktopInfo.releaseUrl || apiInfo?.releaseUrl,
+          downloadUrl: desktopInfo.downloadUrl || apiInfo?.downloadUrl,
+        };
         const previousVersion = get().info?.version ?? null;
         const offeredVersion = mergedInfo.version ?? null;
         const versionChanged =

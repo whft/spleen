@@ -19,6 +19,7 @@ export const bootstrapAutonomyPlatform = (app, {
   getScheduledTasksRuntime = null,
   getDiscordGateway = null,
   executeTask = null,
+  autoStart = true,
 } = {}) => {
   const autonomyStore = createAutonomyStore({ dbPath: path.join(dataDir, 'autonomy.sqlite3') });
   const memfsStore = createMemFsStore({ dbPath: path.join(dataDir, 'memory.sqlite3') });
@@ -43,7 +44,9 @@ export const bootstrapAutonomyPlatform = (app, {
     },
   });
 
-  supervisor.start();
+  if (autoStart) {
+    supervisor.start();
+  }
   registerAutonomyRoutes(app, { supervisor, requireAuthorized });
   registerMemFsRoutes(app, { memfsStore, curator: memoryCurator, requireAuthorized });
   registerResearchRoutes(app, { store: researchStore, ingestor: researchIngestor, requireAuthorized });
