@@ -20,6 +20,7 @@ import { useI18n } from '@/lib/i18n';
 import { setDiscordDragData } from '@/lib/discord/dragRef';
 import {
   discordApi,
+  isForumChannel,
   type DiscordChannel,
   type DiscordGuild,
   type DiscordMember,
@@ -33,6 +34,7 @@ import { DiscordChannels } from './DiscordChannels';
 import { DiscordConnectForm } from './DiscordConnectForm';
 import { DiscordDirect } from './DiscordDirect';
 import { DiscordAttachmentList, DiscordEmbedCard, DiscordPollCard } from './DiscordEmbed';
+import { DiscordForumView } from './DiscordForumView';
 import { DiscordMarkdown } from './DiscordMarkdown';
 import { DiscordMembers } from './DiscordMembers';
 import { DiscordServerManage } from './DiscordServerManage';
@@ -116,8 +118,12 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
       setThreads(ths);
       setMembers(mems);
       setRoles(rls);
-      const firstText = chs.find((c) => c.type === 0 || c.type === 5) ?? chs[0] ?? null;
-      setActiveChannel((prev) => (prev && prev.guildId === guildId && chs.some((c) => c.id === prev.id) ? prev : firstText));
+      const firstText = chs.find((c) => c.type === 0 || c.type === 5 || isForumChannel(c)) ?? chs[0] ?? null;
+      setActiveChannel((prev) => {
+        if (!prev || prev.guildId !== guildId) return firstText;
+        if (chs.some((c) => c.id === prev.id) || ths.some((t) => t.id === prev.id) || prev.parentId) return prev;
+        return firstText;
+      });
     } catch {
       setChannels([]);
       setThreads([]);
@@ -155,9 +161,14 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
 
   React.useEffect(() => {
     if (!status?.connected || !activeChannel?.id) return;
+    if (isForumChannel(activeChannel)) {
+      setMessages([]);
+      setPins([]);
+      return;
+    }
     void loadMessages(activeChannel.id);
     void discordApi.pins(activeChannel.id).then(setPins).catch(() => setPins([]));
-  }, [status?.connected, activeChannel?.id, loadMessages]);
+  }, [status?.connected, activeChannel, loadMessages]);
 
   // Live Gateway SSE stream
   React.useEffect(() => {
@@ -443,69 +454,43 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
         {/* Top Channel Bar */}
         <div className="oc-workspace-toolbar flex min-h-10 shrink-0 items-center justify-between gap-2 px-3 text-xs">
           <div className="min-w-0 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowChannels((v) => !v)}
-              title={showChannels ? 'Hide channels' : 'Show channels'}
-              className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:text-foreground motion-reduce:transition-none"
-            >
+            <button type="button" onClick={() => setShowChannels((v) => !v)} title={showChannels ? 'Hide channels' : 'Show channels'} className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:text-foreground motion-reduce:transition-none">
               <RiLayoutLeftLine className="h-3.5 w-3.5" />
             </button>
+            {(() => {
+              const forumParent = activeChannel?.parentId ? channels.find((c) => c.id === activeChannel.parentId && isForumChannel(c)) : null;
+              return forumParent ? (
+                <button type="button" onClick={() => setActiveChannel(forumParent)} className="shrink-0 rounded-md border border-edge px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-interactive-hover hover:text-foreground">
+                  ← {forumParent.name}
+                </button>
+              ) : null;
+            })()}
             <span className="font-semibold truncate">
-              {activeChannel ? `# ${activeChannel.name}` : 'Select a channel'}
+              {activeChannel ? `${isForumChannel(activeChannel) ? 'Forum:' : '#'} ${activeChannel.name}` : 'Select a channel'}
             </span>
-            {activeChannel?.topic ? (
-              <span className="hidden truncate text-[11px] text-muted-foreground md:inline">{activeChannel.topic}</span>
-            ) : null}
+            {activeChannel?.topic ? <span className="hidden truncate text-[11px] text-muted-foreground md:inline">{activeChannel.topic}</span> : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {activeChannel && messages.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const snippet = messages.slice(-15).map((m) => `${m.author?.username || 'user'}: ${m.content}`).join('\n');
-                  sendToAi(`[Discord #${activeChannel.name} transcript]\n${snippet}`);
-                }}
-                className="inline-flex items-center gap-1 rounded border border-border/70 px-2 py-0.5 text-[11px] text-primary hover:bg-primary/10"
-              >
+            {activeChannel && !isForumChannel(activeChannel) && messages.length > 0 ? (
+              <button type="button" onClick={() => { const snippet = messages.slice(-15).map((m) => `${m.author?.username || 'user'}: ${m.content}`).join('\n'); sendToAi(`[Discord #${activeChannel.name} transcript]\n${snippet}`); }} className="inline-flex items-center gap-1 rounded border border-border/70 px-2 py-0.5 text-[11px] text-primary hover:bg-primary/10">
                 <RiSparklingLine className="h-3.5 w-3.5" />
                 {t('discord.action.sendToAi')}
               </button>
             ) : null}
-            {activeChannel ? (
-              <button
-                type="button"
-                onClick={() => void loadMessages(activeChannel.id)}
-                title="Refresh"
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
+            {activeChannel && !isForumChannel(activeChannel) ? (
+              <button type="button" onClick={() => void loadMessages(activeChannel.id)} title="Refresh" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
                 <RiRefreshLine className="h-3.5 w-3.5" />
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setRightDrawer((d) => (d === 'threads' ? 'none' : 'threads'))}
-              title="Pins, Threads & Search"
-              className={`rounded p-1 ${rightDrawer === 'threads' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
-            >
+            <button type="button" onClick={() => setRightDrawer((d) => (d === 'threads' ? 'none' : 'threads'))} title="Pins, Threads & Search" className={`rounded p-1 ${rightDrawer === 'threads' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}>
               <RiPushpinLine className="h-3.5 w-3.5" />
             </button>
             {selectedGuildId !== '__dms__' ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setRightDrawer((d) => (d === 'members' ? 'none' : 'members'))}
-                  title="Members"
-                  className={`rounded p-1 ${rightDrawer === 'members' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
-                >
+                <button type="button" onClick={() => setRightDrawer((d) => (d === 'members' ? 'none' : 'members'))} title="Members" className={`rounded p-1 ${rightDrawer === 'members' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}>
                   <RiGroupLine className="h-3.5 w-3.5" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setRightDrawer((d) => (d === 'manage' ? 'none' : 'manage'))}
-                  title="Server Manage"
-                  className={`rounded p-1 ${rightDrawer === 'manage' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
-                >
+                <button type="button" onClick={() => setRightDrawer((d) => (d === 'manage' ? 'none' : 'manage'))} title="Server Manage" className={`rounded p-1 ${rightDrawer === 'manage' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted'}`}>
                   <RiSettings3Line className="h-3.5 w-3.5" />
                 </button>
               </>
@@ -515,6 +500,21 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
 
         {/* Content Split */}
         <div className="flex min-h-0 flex-1">
+          {activeChannel && isForumChannel(activeChannel) ? (
+            <DiscordForumView
+              key={activeChannel.id}
+              channel={activeChannel}
+              guildId={selectedGuildId !== '__dms__' ? selectedGuildId : null}
+              guildName={activeGuild?.name ?? null}
+              cachedThreads={threads}
+              onOpenPost={(post) => {
+                setThreads((prev) => (prev.some((item) => item.id === post.id) ? prev : [post, ...prev]));
+                setActiveChannel(post);
+              }}
+              onPostCreated={(post) => setThreads((prev) => (prev.some((item) => item.id === post.id) ? prev : [post, ...prev]))}
+              onSendToAi={sendToAi}
+            />
+          ) : (
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
               {messages.length >= 40 && activeChannel ? (
@@ -757,6 +757,7 @@ export const DiscordPanel: React.FC<{ visible?: boolean }> = ({ visible = true }
               </div>
             ) : null}
           </div>
+          )}
 
           {/* Right Drawer */}
           {rightDrawer !== 'none' ? (

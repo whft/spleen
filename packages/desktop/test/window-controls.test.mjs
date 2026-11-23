@@ -38,3 +38,13 @@ test('loopback titlebar actions use the current Tauri window rather than custom 
   assert.deepEqual(calls, ['spleen:window-maximized-changed', 'minimize', 'drag', 'close']);
   await assert.rejects(invoke('desktop_get_app_version'), /custom IPC denied/);
 });
+
+test('desktop capability allows custom bridge commands from the loopback UI origin', () => {
+  const buildRs = readFileSync(new URL('../src-tauri/build.rs', import.meta.url), 'utf8');
+  const capability = JSON.parse(readFileSync(new URL('../src-tauri/capabilities/desktop.json', import.meta.url), 'utf8'));
+  assert.match(buildRs, /spleen_desktop_invoke/);
+  assert.match(buildRs, /spleen_desktop_open_dialog/);
+  assert.ok(capability.remote?.urls?.includes('http://127.0.0.1:*/*'));
+  assert.ok(capability.permissions?.includes('allow-spleen-desktop-invoke'));
+  assert.ok(capability.permissions?.includes('allow-spleen-desktop-open-dialog'));
+});

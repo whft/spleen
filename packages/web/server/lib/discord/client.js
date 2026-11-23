@@ -97,6 +97,24 @@ export const normalizeChannel = (c) => ({
   nsfw: Boolean(c.nsfw),
   rateLimitPerUser: Number(c.rate_limit_per_user ?? 0),
   lastMessageId: c.last_message_id ? String(c.last_message_id) : null,
+  ownerId: c.owner_id ? String(c.owner_id) : null,
+  messageCount: Number.isFinite(Number(c.message_count ?? c.total_message_sent))
+    ? Number(c.message_count ?? c.total_message_sent)
+    : null,
+  memberCount: Number.isFinite(Number(c.member_count)) ? Number(c.member_count) : null,
+  archived: Boolean(c.thread_metadata?.archived),
+  locked: Boolean(c.thread_metadata?.locked),
+  archiveTimestamp: c.thread_metadata?.archive_timestamp ?? null,
+  createTimestamp: c.thread_metadata?.create_timestamp ?? null,
+  appliedTags: Array.isArray(c.applied_tags) ? c.applied_tags.map(String) : [],
+  availableTags: Array.isArray(c.available_tags)
+    ? c.available_tags.map((tag) => ({
+        id: String(tag.id),
+        name: tag.name ?? '',
+        emojiName: tag.emoji_name ?? null,
+        moderated: Boolean(tag.moderated),
+      }))
+    : [],
   recipients: Array.isArray(c.recipients) ? c.recipients.map(normalizeUser) : [],
 });
 
@@ -431,6 +449,15 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     if (typeof patch.name === 'string') body.name = patch.name;
     if (typeof patch.topic === 'string') body.topic = patch.topic;
     if (patch.rateLimitPerUser !== undefined) body.rate_limit_per_user = Number(patch.rateLimitPerUser);
+    if (patch.nsfw !== undefined) body.nsfw = Boolean(patch.nsfw);
+    if (patch.position !== undefined) body.position = Number(patch.position);
+    if (patch.parentId !== undefined) body.parent_id = patch.parentId;
+    if (patch.archived !== undefined) body.archived = Boolean(patch.archived);
+    if (patch.locked !== undefined) body.locked = Boolean(patch.locked);
+    if (patch.autoArchiveDuration !== undefined) body.auto_archive_duration = Number(patch.autoArchiveDuration);
+    if (Array.isArray(patch.appliedTags)) body.applied_tags = patch.appliedTags.map(String);
+    if (Array.isArray(patch.availableTags)) body.available_tags = patch.availableTags;
+    if (patch.flags !== undefined) body.flags = Number(patch.flags);
     const ch = await apiFetch(`/channels/${encodeURIComponent(channelId)}`, {
       method: 'PATCH',
       body: JSON.stringify(body),

@@ -1,11 +1,12 @@
 import React from 'react';
-import { RiHashtag, RiLockLine, RiMegaphoneLine, RiVolumeUpLine } from '@remixicon/react';
+import { RiDiscussLine, RiHashtag, RiLockLine, RiMegaphoneLine, RiVolumeUpLine } from '@remixicon/react';
 import type { DiscordChannel } from '@/lib/discord/api';
 import { setDiscordDragData } from '@/lib/discord/dragRef';
 
 const ChannelIcon: React.FC<{ type: number; nsfw: boolean }> = ({ type, nsfw }) => {
   if (type === 2 || type === 13) return <RiVolumeUpLine className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   if (type === 5) return <RiMegaphoneLine className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+  if (type === 15 || type === 16) return <RiDiscussLine className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   if (nsfw) return <RiLockLine className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   return <RiHashtag className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
 };

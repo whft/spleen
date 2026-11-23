@@ -1,4 +1,5 @@
 import express from 'express';
+import { asNonEmptyString } from '../shared/guards.js';
 import { DiscordApiError } from './client.js';
 
 const sendError = (res, error) => {
@@ -167,6 +168,22 @@ export const registerDiscordRoutes = (app, { client, gateway = null, requireAuth
 
   app.post('/api/discord/channels/:channelId/threads', express.json({ limit: '64kb' }), wrap(async (req, res) => {
     res.status(201).json(await client.createThread(req.params.channelId, req.body ?? {}));
+  }));
+
+  app.get('/api/discord/channels/:channelId/forum-posts', wrap(async (req, res) => {
+    const tagParam = asNonEmptyString(req.query?.tags) ?? '';
+    const tagIds = tagParam ? tagParam.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    res.json(await client.listForumPosts(req.params.channelId, {
+      guildId: asNonEmptyString(req.query?.guildId),
+      archived: req.query?.archived === 'true',
+      limit: req.query?.limit,
+      before: asNonEmptyString(req.query?.before) ?? undefined,
+      tagIds,
+    }));
+  }));
+
+  app.post('/api/discord/channels/:channelId/forum-posts', express.json({ limit: '128kb' }), wrap(async (req, res) => {
+    res.status(201).json(await client.createForumPost(req.params.channelId, req.body ?? {}));
   }));
 
   app.post('/api/discord/threads/:threadId/join', wrap(async (req, res) => {

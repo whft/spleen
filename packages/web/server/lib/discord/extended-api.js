@@ -234,6 +234,90 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
   const addThreadMember = (threadId, userId) => apiFetch(`/channels/${encodeURIComponent(threadId)}/thread-members/${encodeURIComponent(userId)}`, { method: 'PUT' });
   const removeThreadMember = (threadId, userId) => apiFetch(`/channels/${encodeURIComponent(threadId)}/thread-members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
 
+  const listForumPosts = async (channelId, {
+    guildId = null,
+    archived = false,
+    limit = 25,
+    before = null,
+    sortBy = 'last_message_time',
+    sortOrder = 'desc',
+    tagIds = [],
+  } = {}) => {
+    const capped = Math.min(50, Math.max(1, Number(limit) || 25));
+    const searchQuery = {
+      archived: archived ? 'true' : 'false',
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      limit: capped,
+    };
+    if (Array.isArray(tagIds) && tagIds.length > 0) {
+      searchQuery.tag = tagIds.map(String).join(',');
+    }
+    const searchRes = await rawApi({
+      method: 'GET',
+      path: `/channels/${encodeURIComponent(channelId)}/threads/search`,
+      query: searchQuery,
+    }).catch(() => null);
+
+    const firstByThread = new Map();
+    if (Array.isArray(searchRes?.first_messages)) {
+      for (const msg of searchRes.first_messages) {
+        const normalized = normalizeMessage(msg);
+        if (normalized?.channelId) firstByThread.set(normalized.channelId, normalized);
+      }
+    }
+
+    const byId = new Map();
+    if (Array.isArray(searchRes?.threads)) {
+      for (const rawThread of searchRes.threads) {
+        const post = normalizeChannel(rawThread);
+        byId.set(post.id, { ...post, firstMessage: firstByThread.get(post.id) ?? null });
+      }
+    }
+
+    let hasMore = Boolean(searchRes?.has_more);
+    if (byId.size === 0) {
+      if (archived) {
+        const archivedRes = await listArchivedThreads(channelId, { type: 'public', limit: capped, before }).catch(() => ({ threads: [], hasMore: false }));
+        hasMore = archivedRes.hasMore;
+        for (const post of archivedRes.threads) {
+          byId.set(post.id, { ...post, firstMessage: null });
+        }
+      } else {
+        const [activeRes, archivedRes] = await Promise.all([
+          guildId
+            ? apiFetch(`/guilds/${encodeURIComponent(guildId)}/threads/active`).catch(() => ({ threads: [] }))
+            : Promise.resolve({ threads: [] }),
+          listArchivedThreads(channelId, { type: 'public', limit: capped, before }).catch(() => ({ threads: [], hasMore: false })),
+        ]);
+        const activeThreads = Array.isArray(activeRes?.threads) ? activeRes.threads : [];
+        for (const rawThread of activeThreads) {
+          if (String(rawThread.parent_id ?? '') !== String(channelId)) continue;
+          const post = normalizeChannel(rawThread);
+          byId.set(post.id, { ...post, firstMessage: null });
+        }
+        if (byId.size === 0) {
+          hasMore = archivedRes.hasMore;
+          for (const post of archivedRes.threads) {
+            byId.set(post.id, { ...post, firstMessage: null });
+          }
+        }
+      }
+    }
+
+    const filterTags = Array.isArray(tagIds) ? tagIds.map(String).filter(Boolean) : [];
+    const posts = [...byId.values()]
+      .filter((post) => filterTags.length === 0 || filterTags.every((tag) => post.appliedTags.includes(tag)))
+      .sort((a, b) => {
+        if (a.archived !== b.archived) return a.archived ? 1 : -1;
+        const aId = /^\d+$/.test(String(a.lastMessageId || a.id)) ? BigInt(a.lastMessageId || a.id) : 0n;
+        const bId = /^\d+$/.test(String(b.lastMessageId || b.id)) ? BigInt(b.lastMessageId || b.id) : 0n;
+        return bId > aId ? 1 : (bId < aId ? -1 : 0);
+      });
+
+    return { posts, hasMore };
+  };
+
   const createForumPost = async (channelId, { name, content, embeds, appliedTags, autoArchiveDuration = 1440 } = {}) => {
     const res = await apiFetch(`/channels/${encodeURIComponent(channelId)}/threads`, {
       method: 'POST',
@@ -325,6 +409,7 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     endPoll,
     getPollVoters,
     listArchivedThreads,
+    listForumPosts,
     listThreadMembers,
     addThreadMember,
     removeThreadMember,

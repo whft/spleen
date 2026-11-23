@@ -29,11 +29,23 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       topic: str(input.topic) || undefined,
       parentId: str(input.parentId) || undefined,
     });
-    case 'discord.updateChannel': return await discord.updateChannel(req(input.channelId, 'channelId'), {
-      ...(typeof input.name === 'string' ? { name: input.name } : {}),
-      ...(typeof input.topic === 'string' ? { topic: input.topic } : {}),
-      ...(input.rateLimitPerUser !== undefined ? { rateLimitPerUser: input.rateLimitPerUser } : {}),
-    });
+    case 'discord.updateChannel':
+    case 'discord.updateThread': {
+      const patch = {};
+      if (typeof input.name === 'string') patch.name = input.name;
+      if (typeof input.topic === 'string') patch.topic = input.topic;
+      if (input.rateLimitPerUser !== undefined) patch.rateLimitPerUser = input.rateLimitPerUser;
+      if (input.nsfw !== undefined) patch.nsfw = input.nsfw;
+      if (input.position !== undefined) patch.position = input.position;
+      if (input.parentId !== undefined) patch.parentId = input.parentId;
+      if (input.archived !== undefined) patch.archived = input.archived;
+      if (input.locked !== undefined) patch.locked = input.locked;
+      if (input.autoArchiveDuration !== undefined) patch.autoArchiveDuration = input.autoArchiveDuration;
+      if (Array.isArray(input.appliedTags)) patch.appliedTags = input.appliedTags;
+      if (Array.isArray(input.availableTags)) patch.availableTags = input.availableTags;
+      if (input.flags !== undefined) patch.flags = input.flags;
+      return await discord.updateChannel(req(input.threadId || input.channelId, 'channelId'), patch);
+    }
     case 'discord.deleteChannel': {
       const channelId = req(input.channelId, 'channelId');
       await discord.deleteChannel(channelId);
@@ -245,6 +257,15 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       messageId: str(input.messageId) || undefined,
       autoArchiveDuration: input.autoArchiveDuration,
     });
+    case 'discord.listForumPosts': return await discord.listForumPosts(req(input.channelId, 'channelId'), {
+      guildId: str(input.guildId) || null,
+      archived: Boolean(input.archived),
+      limit: input.limit,
+      before: str(input.before) || null,
+      sortBy: str(input.sortBy) || 'last_message_time',
+      sortOrder: str(input.sortOrder) || 'desc',
+      tagIds: Array.isArray(input.tagIds) ? input.tagIds : (Array.isArray(input.appliedTags) ? input.appliedTags : []),
+    });
     case 'discord.createForumPost': return await discord.createForumPost(req(input.channelId, 'channelId'), {
       name: req(input.title || input.name || input.threadName, 'title'),
       content: str(input.content || input.message),
@@ -252,6 +273,36 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       appliedTags: input.appliedTags,
       autoArchiveDuration: input.autoArchiveDuration,
     });
+    case 'discord.followChannel': return await discord.rawApi({
+      method: 'POST',
+      path: `/channels/${encodeURIComponent(req(input.channelId, 'channelId'))}/followers`,
+      body: { webhook_channel_id: req(input.targetChannelId || input.webhookChannelId, 'targetChannelId') },
+    });
+    case 'discord.updateGuild': return await discord.rawApi({
+      method: 'PATCH',
+      path: `/guilds/${encodeURIComponent(req(input.guildId, 'guildId'))}`,
+      body: input.patch ?? input,
+      reason: str(input.reason) || null,
+    });
+    case 'discord.createStageInstance': return await discord.rawApi({
+      method: 'POST',
+      path: '/stage-instances',
+      body: {
+        channel_id: req(input.channelId, 'channelId'),
+        topic: req(input.topic, 'topic'),
+        privacy_level: Number(input.privacyLevel ?? 2),
+      },
+      reason: str(input.reason) || null,
+    });
+    case 'discord.deleteStageInstance': {
+      const channelId = req(input.channelId, 'channelId');
+      await discord.rawApi({
+        method: 'DELETE',
+        path: `/stage-instances/${encodeURIComponent(channelId)}`,
+        reason: str(input.reason) || null,
+      });
+      return { ok: true, channelId };
+    }
     case 'discord.archivedThreads': return await discord.listArchivedThreads(req(input.channelId, 'channelId'), {
       type: input.threadType ?? input.type ?? 'public',
       limit: input.limit,

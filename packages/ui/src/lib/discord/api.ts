@@ -30,6 +30,13 @@ export type DiscordGuild = {
   permissions: string | null;
 };
 
+export type DiscordForumTag = {
+  id: string;
+  name: string;
+  emojiName: string | null;
+  moderated: boolean;
+};
+
 export type DiscordChannel = {
   id: string;
   guildId: string | null;
@@ -41,8 +48,24 @@ export type DiscordChannel = {
   nsfw: boolean;
   rateLimitPerUser: number;
   lastMessageId: string | null;
+  ownerId?: string | null;
+  messageCount?: number | null;
+  memberCount?: number | null;
+  archived?: boolean;
+  locked?: boolean;
+  archiveTimestamp?: string | null;
+  createTimestamp?: string | null;
+  appliedTags?: string[];
+  availableTags?: DiscordForumTag[];
   recipients: DiscordUser[];
 };
+
+export type DiscordForumPost = DiscordChannel & {
+  firstMessage?: DiscordMessage | null;
+};
+
+export const isForumChannel = (channel: Pick<DiscordChannel, 'type'> | null | undefined): boolean =>
+  channel?.type === 15 || channel?.type === 16;
 
 export type DiscordAttachment = {
   id: string;
@@ -173,6 +196,22 @@ export const discordApi = {
   typing: (channelId: string) => requestJson(`/api/discord/channels/${encodeURIComponent(channelId)}/typing`, { method: 'POST' }),
   createThread: (channelId: string, name: string, messageId?: string) =>
     requestJson<DiscordChannel>(`/api/discord/channels/${encodeURIComponent(channelId)}/threads`, { method: 'POST', body: JSON.stringify({ name, ...(messageId ? { messageId } : {}) }) }),
+  forumPosts: (channelId: string, params?: { guildId?: string | null; archived?: boolean; limit?: number; tags?: string[] }) => {
+    const qs = new URLSearchParams();
+    if (params?.guildId) qs.set('guildId', params.guildId);
+    if (params?.archived) qs.set('archived', 'true');
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.tags?.length) qs.set('tags', params.tags.join(','));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return requestJson<{ posts: DiscordForumPost[]; hasMore: boolean }>(
+      `/api/discord/channels/${encodeURIComponent(channelId)}/forum-posts${suffix}`,
+    );
+  },
+  createForumPost: (channelId: string, body: { name: string; content: string; appliedTags?: string[] }) =>
+    requestJson<DiscordChannel>(`/api/discord/channels/${encodeURIComponent(channelId)}/forum-posts`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   createChannel: (guildId: string, input: { name: string; topic?: string; type?: number }) =>
     requestJson<DiscordChannel>(`/api/discord/guilds/${encodeURIComponent(guildId)}/channels`, { method: 'POST', body: JSON.stringify(input) }),
   updateChannel: (channelId: string, input: { name?: string; topic?: string; rateLimitPerUser?: number }) =>
