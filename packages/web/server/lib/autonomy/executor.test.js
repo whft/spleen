@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import express from 'express';
 import { createAutonomyStore } from './store.js';
 import { createEvidenceVerifier } from './verifier.js';
 import { createAutonomySupervisor } from './supervisor.js';
 import { createAutonomySessionExecutor } from './executor.js';
+import { bootstrapAutonomyPlatform } from './bootstrap.js';
 
 const tempDirs = [];
 
@@ -136,5 +138,30 @@ describe('autonomy live session executor', () => {
     expect(sent[0].sessionId).toBe('ses_auto_1');
     expect(supervisor.getObjective(obj.id).sessionId).toBe('ses_auto_1');
     store.close();
+  });
+
+  it('defaults autonomy.create from handleControlAction to the calling chat sessionId', async () => {
+    const dataDir = createTempDir('spleen-exec-ctx-data-');
+    const workDir = createTempDir('spleen-exec-ctx-work-');
+    const app = express();
+    app.use(express.json());
+    const platform = bootstrapAutonomyPlatform(app, { dataDir, autoStart: false });
+
+    const created = await platform.handleControlAction(
+      'autonomy.create',
+      { title: 'Keep researching in this chat', mode: 'ongoing', runImmediately: false },
+      { contextDirectory: workDir, contextSessionId: 'ses_caller_chat_42' },
+    );
+    expect(created.sessionId).toBe('ses_caller_chat_42');
+    expect(created.directory).toBe(workDir);
+    expect(created.tasks.length).toBe(1);
+
+    const switched = await platform.handleControlAction(
+      'autonomy.attachSession',
+      { objectiveId: created.id, sessionId: 'ses_other_99' },
+      { contextDirectory: workDir, contextSessionId: 'ses_caller_chat_42' },
+    );
+    expect(switched.sessionId).toBe('ses_other_99');
+    platform.stop();
   });
 });

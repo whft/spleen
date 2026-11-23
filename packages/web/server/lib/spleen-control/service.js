@@ -1373,7 +1373,7 @@ export const createSpleenControlService = (dependencies) => {
       if (action.startsWith('autonomy.') || action.startsWith('memfs.') || action.startsWith('research.')) {
         const platform = await Promise.resolve(getAutonomyPlatform());
         if (!platform) throw new SpleenControlError('Autonomy platform is unavailable', 503);
-        return await platform.handleControlAction(action, input, { contextDirectory });
+        return await platform.handleControlAction(action, input, { contextDirectory, contextSessionId: options.contextSessionId });
       }
       if (action.startsWith('uc.')) {
         const uc = await Promise.resolve(getUnknownCheatsClient());

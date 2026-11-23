@@ -93,14 +93,32 @@ export const bootstrapAutonomyPlatform = (app, {
 
   const handleControlAction = async (action, input = {}, context = {}) => {
     const dir = asNonEmptyString(input.directory) || asNonEmptyString(context?.contextDirectory) || process.cwd();
+    const callerSessionId = asNonEmptyString(context?.contextSessionId);
     switch (action) {
-      case 'autonomy.create': return supervisor.createObjective({ ...input, directory: dir });
+      case 'autonomy.create': {
+        const targetSessionId = input.newSession === true
+          ? null
+          : (asNonEmptyString(input.sessionId) || callerSessionId);
+        const created = supervisor.createObjective({ ...input, directory: dir, sessionId: targetSessionId });
+        if (autoStart && input.runImmediately !== false) {
+          void supervisor.tick();
+        }
+        return created;
+      }
       case 'autonomy.list': return { objectives: supervisor.listObjectives({ status: asNonEmptyString(input.status), directory: asNonEmptyString(input.directory), limit: input.limit }) };
       case 'autonomy.get': return supervisor.getObjective(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id));
       case 'autonomy.addTask': return supervisor.addTask(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id), input);
+      case 'autonomy.attachSession': return supervisor.attachSession(
+        asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id),
+        input.newSession === true ? null : (asNonEmptyString(input.sessionId) || callerSessionId),
+      );
       case 'autonomy.replan': return supervisor.replanObjective(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id), input);
       case 'autonomy.pause': return supervisor.pauseObjective(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id), asNonEmptyString(input.reason) || 'Paused');
-      case 'autonomy.resume': return supervisor.resumeObjective(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id));
+      case 'autonomy.resume': {
+        const resumed = supervisor.resumeObjective(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id));
+        if (autoStart && resumed) void supervisor.tick();
+        return resumed;
+      }
       case 'autonomy.cancel': return supervisor.cancelObjective(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id), asNonEmptyString(input.reason) || 'Cancelled');
       case 'autonomy.verify': return await supervisor.verifyObjective(asNonEmptyString(input.objectiveId) || asNonEmptyString(input.id), { autoDetect: input.autoDetect === true });
       case 'memfs.save': return memfsStore.saveMemory({ ...input, scopeId: asNonEmptyString(input.scopeId) ?? dir });
