@@ -314,7 +314,7 @@ describe('managed agent tool runtime', () => {
     // The control tool keeps its own session id, a plain string.
     expect(tools.spleen.input.properties.parameters.properties.sessionId).toEqual({ type: 'string' });
     for (const tool of ['spleen', 'spleen_web', 'spleen_memory']) {
-      for (const field of ['kind', 'expected', 'completed', 'planId', 'dependsOn', 'ready']) {
+      for (const field of ['kind', 'expected', 'completed', 'planId', 'ready']) {
         expect(tools[tool].input.properties.parameters.properties).not.toHaveProperty(field);
       }
     }
@@ -989,7 +989,7 @@ describe('managed agent tool runtime', () => {
     expect(tools.spleen.input.properties.action.enum.filter((action) => action.startsWith('schedule.'))).toEqual([]);
     const scheduleParameters = tools.spleen_schedule.input.properties.parameters.properties;
     expect(Object.keys(scheduleParameters)).toEqual(expect.arrayContaining(['taskId', 'daily', 'cron', 'prompt', 'model', 'projectId']));
-    for (const field of ['taskId', 'daily', 'cron', 'disabled', 'targetSessionId']) {
+    for (const field of ['daily', 'cron', 'disabled']) {
       expect(tools.spleen.input.properties.parameters.properties).not.toHaveProperty(field);
     }
     expect(scheduleParameters.disabled.type).toBe('boolean');

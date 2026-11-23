@@ -1,6 +1,54 @@
+import { asNonEmptyString, isRecord } from '../shared/guards.js';
 import { DiscordApiError, normalizeChannel, normalizeMessage, normalizeUser } from './client.js';
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+
+const buildEndpointWithQuery = (cleanPath, query) => {
+  const qIndex = cleanPath.indexOf('?');
+  const basePath = qIndex === -1 ? cleanPath : cleanPath.slice(0, qIndex);
+  const existingQs = qIndex === -1 ? '' : cleanPath.slice(qIndex + 1);
+  const params = new URLSearchParams(existingQs);
+
+  const queryStr = asNonEmptyString(query);
+  if (queryStr) {
+    let parsedObj = null;
+    if (queryStr.startsWith('{') && queryStr.endsWith('}')) {
+      try {
+        const candidate = JSON.parse(queryStr);
+        if (isRecord(candidate)) parsedObj = candidate;
+      } catch {
+        parsedObj = null;
+      }
+    }
+    if (parsedObj) {
+      for (const [k, v] of Object.entries(parsedObj)) {
+        if (v !== undefined && v !== null && String(v) !== '') params.set(k, String(v));
+      }
+    } else {
+      const extra = new URLSearchParams(queryStr.replace(/^\?/, ''));
+      for (const [k, v] of extra.entries()) params.set(k, v);
+    }
+  } else if (isRecord(query)) {
+    for (const [k, v] of Object.entries(query)) {
+      if (v !== undefined && v !== null && String(v) !== '') params.set(k, String(v));
+    }
+  }
+
+  const qs = params.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
+};
+
+const serializeRawBody = (body) => {
+  const rawStr = asNonEmptyString(body);
+  if (rawStr && (rawStr.startsWith('{') || rawStr.startsWith('['))) {
+    try {
+      return JSON.stringify(JSON.parse(rawStr));
+    } catch {
+      return JSON.stringify(body);
+    }
+  }
+  return JSON.stringify(body);
+};
 
 export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
   const rawApi = async ({ method = 'GET', path = '/', query = null, body = undefined, reason = null } = {}) => {
@@ -9,24 +57,16 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
       throw new DiscordApiError(`Unsupported HTTP method: ${upper}`, 400, 'INVALID_METHOD');
     }
     const cleanPath = String(path || '').trim();
-    if (!cleanPath.startsWith('/') || cleanPath.startsWith('//') || cleanPath.includes('://')) {
+    if (!cleanPath.startsWith('/') || cleanPath.startsWith('//') || cleanPath.includes('://') || /(^|\/)\.\.(\/|$|\?)/.test(cleanPath)) {
       throw new DiscordApiError('Discord API path must be a relative path starting with /', 400, 'INVALID_PATH');
     }
-    let endpoint = cleanPath;
-    if (query && typeof query === 'object' && !Array.isArray(query)) {
-      const params = new URLSearchParams();
-      for (const [k, v] of Object.entries(query)) {
-        if (v !== undefined && v !== null && String(v) !== '') params.set(k, String(v));
-      }
-      const qs = params.toString();
-      if (qs) endpoint += (endpoint.includes('?') ? '&' : '?') + qs;
+    const endpoint = buildEndpointWithQuery(cleanPath, query);
+    const requestInit = { method: upper };
+    if (reason) requestInit.headers = { 'X-Audit-Log-Reason': encodeURIComponent(String(reason)) };
+    if (body !== undefined && upper !== 'GET' && upper !== 'DELETE') {
+      requestInit.body = serializeRawBody(body);
     }
-    const headers = reason ? { 'X-Audit-Log-Reason': encodeURIComponent(String(reason)) } : undefined;
-    return apiFetch(endpoint, {
-      method: upper,
-      ...(headers ? { headers } : {}),
-      ...(body !== undefined && upper !== 'GET' && upper !== 'DELETE' ? { body: JSON.stringify(body) } : {}),
-    });
+    return apiFetch(endpoint, requestInit);
   };
 
   const getMe = async () => normalizeUser(await apiFetch('/users/@me'));
@@ -125,6 +165,8 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
 
   const listBans = (guildId, limit = 100) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/bans?limit=${Math.min(1000, Math.max(1, Number(limit) || 100))}`);
 
+  const getBan = (guildId, userId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/bans/${encodeURIComponent(userId)}`);
+
   const banMember = (guildId, userId, { deleteMessageSeconds = 0, reason = null } = {}) => rawApi({
     method: 'PUT',
     path: `/guilds/${encodeURIComponent(guildId)}/bans/${encodeURIComponent(userId)}`,
@@ -138,15 +180,25 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     reason,
   });
 
-  const getAuditLogs = (guildId, { userId, actionType, limit = 25 } = {}) => rawApi({
+  const getAuditLogs = (guildId, { userId, actionType, before, limit = 25 } = {}) => rawApi({
     method: 'GET',
     path: `/guilds/${encodeURIComponent(guildId)}/audit-logs`,
     query: {
       user_id: userId,
       action_type: actionType,
+      before,
       limit: Math.min(100, Math.max(1, Number(limit) || 25)),
     },
   });
+
+  const getUserVoiceState = (guildId, userId) => apiFetch(
+    `/guilds/${encodeURIComponent(guildId)}/voice-states/${encodeURIComponent(userId)}`,
+  );
+
+  const setVoiceChannelStatus = (channelId, status = '') => apiFetch(
+    `/channels/${encodeURIComponent(channelId)}/voice-status`,
+    { method: 'PUT', body: JSON.stringify({ status: String(status ?? '') }) },
+  );
 
   const setChannelPermission = (channelId, overwriteId, { type = 0, allow = '0', deny = '0', reason = null } = {}) => rawApi({
     method: 'PUT',
@@ -172,9 +224,11 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     await apiFetch(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/crosspost`, { method: 'POST' }),
   );
 
-  const getReactions = async (channelId, messageId, emoji, limit = 50) => {
+  const getReactions = async (channelId, messageId, emoji, limit = 50, after = null) => {
+    const params = new URLSearchParams({ limit: String(Math.min(100, Math.max(1, Number(limit) || 50))) });
+    if (asNonEmptyString(after)) params.set('after', String(after).trim());
     const users = await apiFetch(
-      `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeEmoji(emoji)}?limit=${Math.min(100, Math.max(1, Number(limit) || 50))}`,
+      `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeEmoji(emoji)}?${params.toString()}`,
     );
     return (Array.isArray(users) ? users : []).map(normalizeUser);
   };
@@ -210,24 +264,28 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     await apiFetch(`/channels/${encodeURIComponent(channelId)}/polls/${encodeURIComponent(messageId)}/expire`, { method: 'POST' }),
   );
 
-  const getPollVoters = async (channelId, messageId, answerId, limit = 50) => {
+  const getPollVoters = async (channelId, messageId, answerId, limit = 50, after = null) => {
+    const params = new URLSearchParams({ limit: String(Math.min(100, Math.max(1, Number(limit) || 50))) });
+    if (asNonEmptyString(after)) params.set('after', String(after).trim());
     const res = await apiFetch(
-      `/channels/${encodeURIComponent(channelId)}/polls/${encodeURIComponent(messageId)}/answers/${encodeURIComponent(answerId)}?limit=${Math.min(100, Math.max(1, Number(limit) || 50))}`,
+      `/channels/${encodeURIComponent(channelId)}/polls/${encodeURIComponent(messageId)}/answers/${encodeURIComponent(answerId)}?${params.toString()}`,
     );
     return { users: (Array.isArray(res?.users) ? res.users : []).map(normalizeUser) };
   };
 
-  const listArchivedThreads = async (channelId, { type = 'public', limit = 25, before = null } = {}) => {
+  const listArchivedThreads = async (channelId, { type = 'public', limit = 50, before = null } = {}) => {
     const kind = type === 'private' ? 'private' : 'public';
+    const capped = Math.min(100, Math.max(1, Number(limit) || 50));
     const res = await rawApi({
       method: 'GET',
       path: `/channels/${encodeURIComponent(channelId)}/threads/archived/${kind}`,
-      query: { limit, before },
+      query: { limit: capped, before },
     });
-    return {
-      threads: (Array.isArray(res?.threads) ? res.threads : []).map(normalizeChannel),
-      hasMore: Boolean(res?.has_more),
-    };
+    const threads = (Array.isArray(res?.threads) ? res.threads : []).map(normalizeChannel);
+    const hasMore = Boolean(res?.has_more);
+    const lastThread = threads.length > 0 ? threads[threads.length - 1] : null;
+    const nextBefore = hasMore ? (lastThread?.archiveTimestamp ?? lastThread?.id ?? null) : null;
+    return { threads, hasMore, nextBefore };
   };
 
   const listThreadMembers = (threadId) => apiFetch(`/channels/${encodeURIComponent(threadId)}/thread-members`);
@@ -239,25 +297,57 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     archived = false,
     limit = 25,
     before = null,
+    offset = 0,
     sortBy = 'last_message_time',
     sortOrder = 'desc',
     tagIds = [],
   } = {}) => {
-    const capped = Math.min(50, Math.max(1, Number(limit) || 25));
-    const searchQuery = {
-      archived: archived ? 'true' : 'false',
-      sort_by: sortBy,
-      sort_order: sortOrder,
-      limit: capped,
-    };
-    if (Array.isArray(tagIds) && tagIds.length > 0) {
-      searchQuery.tag = tagIds.map(String).join(',');
+    const filterTags = Array.isArray(tagIds) ? tagIds.map(String).filter(Boolean) : [];
+    const safeOffset = Number.isFinite(Number(offset)) ? Math.max(0, Number(offset)) : 0;
+
+    if (asNonEmptyString(before)) {
+      const archivedRes = await listArchivedThreads(channelId, {
+        type: 'public',
+        limit: Math.min(100, Math.max(1, Number(limit) || 50)),
+        before: String(before).trim(),
+      });
+      const posts = archivedRes.threads
+        .map((post) => ({ ...post, firstMessage: null }))
+        .filter((post) => filterTags.length === 0 || filterTags.every((tag) => post.appliedTags.includes(tag)));
+      return {
+        posts,
+        hasMore: archivedRes.hasMore,
+        nextBefore: archivedRes.nextBefore,
+        nextOffset: null,
+      };
     }
-    const searchRes = await rawApi({
+
+    const cappedSearch = Math.min(50, Math.max(1, Number(limit) || 25));
+    const buildSearchQuery = (queryLimit) => {
+      const q = {
+        archived: archived ? 'true' : 'false',
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        limit: queryLimit,
+      };
+      if (safeOffset > 0) q.offset = safeOffset;
+      if (filterTags.length > 0) q.tag = filterTags.join(',');
+      return q;
+    };
+
+    let searchRes = await rawApi({
       method: 'GET',
       path: `/channels/${encodeURIComponent(channelId)}/threads/search`,
-      query: searchQuery,
+      query: buildSearchQuery(cappedSearch),
     }).catch(() => null);
+
+    if (!searchRes && cappedSearch > 25) {
+      searchRes = await rawApi({
+        method: 'GET',
+        path: `/channels/${encodeURIComponent(channelId)}/threads/search`,
+        query: buildSearchQuery(25),
+      }).catch(() => null);
+    }
 
     const firstByThread = new Map();
     if (Array.isArray(searchRes?.first_messages)) {
@@ -276,19 +366,36 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     }
 
     let hasMore = Boolean(searchRes?.has_more);
-    if (byId.size === 0) {
+    let nextBefore = null;
+    let nextOffset = null;
+    const rawSearchCount = Array.isArray(searchRes?.threads) ? searchRes.threads.length : 0;
+
+    if (searchRes && (byId.size > 0 || safeOffset > 0)) {
+      if (hasMore && rawSearchCount > 0) {
+        nextOffset = safeOffset + rawSearchCount;
+        const lastRaw = searchRes.threads[rawSearchCount - 1];
+        nextBefore = lastRaw?.thread_metadata?.archive_timestamp ?? (lastRaw?.id ? String(lastRaw.id) : null);
+      }
+    } else if (byId.size === 0) {
+      const fallbackLimit = Math.min(100, Math.max(1, Number(limit) || 50));
       if (archived) {
-        const archivedRes = await listArchivedThreads(channelId, { type: 'public', limit: capped, before }).catch(() => ({ threads: [], hasMore: false }));
+        const archivedRes = await listArchivedThreads(channelId, { type: 'public', limit: fallbackLimit, before }).catch(() => ({ threads: [], hasMore: false, nextBefore: null }));
         hasMore = archivedRes.hasMore;
+        nextBefore = archivedRes.nextBefore;
         for (const post of archivedRes.threads) {
           byId.set(post.id, { ...post, firstMessage: null });
         }
       } else {
+        let resolvedGuildId = asNonEmptyString(guildId);
+        if (!resolvedGuildId) {
+          const chInfo = await apiFetch(`/channels/${encodeURIComponent(channelId)}`).catch(() => null);
+          resolvedGuildId = asNonEmptyString(chInfo?.guild_id ? String(chInfo.guild_id) : null);
+        }
         const [activeRes, archivedRes] = await Promise.all([
-          guildId
-            ? apiFetch(`/guilds/${encodeURIComponent(guildId)}/threads/active`).catch(() => ({ threads: [] }))
+          resolvedGuildId
+            ? apiFetch(`/guilds/${encodeURIComponent(resolvedGuildId)}/threads/active`).catch(() => ({ threads: [] }))
             : Promise.resolve({ threads: [] }),
-          listArchivedThreads(channelId, { type: 'public', limit: capped, before }).catch(() => ({ threads: [], hasMore: false })),
+          listArchivedThreads(channelId, { type: 'public', limit: fallbackLimit, before }).catch(() => ({ threads: [], hasMore: false, nextBefore: null })),
         ]);
         const activeThreads = Array.isArray(activeRes?.threads) ? activeRes.threads : [];
         for (const rawThread of activeThreads) {
@@ -298,6 +405,7 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
         }
         if (byId.size === 0) {
           hasMore = archivedRes.hasMore;
+          nextBefore = archivedRes.nextBefore;
           for (const post of archivedRes.threads) {
             byId.set(post.id, { ...post, firstMessage: null });
           }
@@ -305,7 +413,6 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
       }
     }
 
-    const filterTags = Array.isArray(tagIds) ? tagIds.map(String).filter(Boolean) : [];
     const posts = [...byId.values()]
       .filter((post) => filterTags.length === 0 || filterTags.every((tag) => post.appliedTags.includes(tag)))
       .sort((a, b) => {
@@ -315,7 +422,13 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
         return bId > aId ? 1 : (bId < aId ? -1 : 0);
       });
 
-    return { posts, hasMore };
+    return {
+      posts,
+      hasMore,
+      nextBefore,
+      nextOffset,
+      totalResults: Number.isFinite(Number(searchRes?.total_results)) ? Number(searchRes.total_results) : posts.length,
+    };
   };
 
   const createForumPost = async (channelId, { name, content, embeds, appliedTags, autoArchiveDuration = 1440 } = {}) => {
@@ -335,6 +448,8 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
   };
 
   const listInvites = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/invites`);
+  const listChannelInvites = (channelId) => apiFetch(`/channels/${encodeURIComponent(channelId)}/invites`);
+  const getInvite = (inviteCode) => apiFetch(`/invites/${encodeURIComponent(inviteCode)}?with_counts=true&with_expiration=true`);
   const createInvite = (channelId, { maxAge = 86400, maxUses = 0, temporary = false, unique = false } = {}) => apiFetch(
     `/channels/${encodeURIComponent(channelId)}/invites`,
     {
@@ -345,17 +460,38 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
   const deleteInvite = (inviteCode) => apiFetch(`/invites/${encodeURIComponent(inviteCode)}`, { method: 'DELETE' });
 
   const listWebhooks = (channelId) => apiFetch(`/channels/${encodeURIComponent(channelId)}/webhooks`);
+  const listGuildWebhooks = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/webhooks`);
   const createWebhook = (channelId, { name } = {}) => apiFetch(`/channels/${encodeURIComponent(channelId)}/webhooks`, {
     method: 'POST',
     body: JSON.stringify({ name: String(name || 'Spleen Webhook') }),
   });
+  const updateWebhook = (webhookId, patch = {}, reason = null) => rawApi({
+    method: 'PATCH',
+    path: `/webhooks/${encodeURIComponent(webhookId)}`,
+    body: patch,
+    reason,
+  });
   const deleteWebhook = (webhookId) => apiFetch(`/webhooks/${encodeURIComponent(webhookId)}`, { method: 'DELETE' });
-  const executeWebhook = (webhookId, webhookToken, payload = {}) => apiFetch(
-    `/webhooks/${encodeURIComponent(webhookId)}/${encodeURIComponent(webhookToken)}?wait=true`,
-    { method: 'POST', body: JSON.stringify(payload) },
-  );
+  const executeWebhook = (webhookId, webhookToken, payload = {}, { threadId = null } = {}) => {
+    const params = new URLSearchParams({ wait: 'true' });
+    if (asNonEmptyString(threadId)) params.set('thread_id', String(threadId).trim());
+    return apiFetch(
+      `/webhooks/${encodeURIComponent(webhookId)}/${encodeURIComponent(webhookToken)}?${params.toString()}`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    );
+  };
 
   const listScheduledEvents = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/scheduled-events?with_user_count=true`);
+  const listEventUsers = (guildId, eventId, { limit = 100, before, after, withMember = false } = {}) => rawApi({
+    method: 'GET',
+    path: `/guilds/${encodeURIComponent(guildId)}/scheduled-events/${encodeURIComponent(eventId)}/users`,
+    query: {
+      limit: Math.min(100, Math.max(1, Number(limit) || 100)),
+      before,
+      after,
+      with_member: withMember ? 'true' : undefined,
+    },
+  });
   const createScheduledEvent = (guildId, payload = {}) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/scheduled-events`, {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -370,19 +506,33 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
 
   const listEmojis = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/emojis`);
   const listStickers = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/stickers`);
+  const listSoundboardSounds = (guildId = null) => (
+    asNonEmptyString(guildId)
+      ? apiFetch(`/guilds/${encodeURIComponent(guildId)}/soundboard-sounds`)
+      : apiFetch('/soundboard-default-sounds')
+  );
 
   const listAutoModRules = (guildId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/auto-moderation/rules`);
   const createAutoModRule = (guildId, payload = {}) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/auto-moderation/rules`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+  const updateAutoModRule = (guildId, ruleId, patch = {}, reason = null) => rawApi({
+    method: 'PATCH',
+    path: `/guilds/${encodeURIComponent(guildId)}/auto-moderation/rules/${encodeURIComponent(ruleId)}`,
+    body: patch,
+    reason,
+  });
   const deleteAutoModRule = (guildId, ruleId) => apiFetch(`/guilds/${encodeURIComponent(guildId)}/auto-moderation/rules/${encodeURIComponent(ruleId)}`, {
     method: 'DELETE',
   });
 
+  const getApplication = () => apiFetch('/applications/@me');
+
   return {
     rawApi,
     getMe,
+    getApplication,
     listRelationships,
     getGuild,
     getGuildMember,
@@ -396,9 +546,12 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     deleteRole,
     kickMember,
     listBans,
+    getBan,
     banMember,
     unbanMember,
     getAuditLogs,
+    getUserVoiceState,
+    setVoiceChannelStatus,
     setChannelPermission,
     deleteChannelPermission,
     bulkDeleteMessages,
@@ -415,20 +568,27 @@ export const createExtendedDiscordApi = ({ apiFetch, encodeEmoji }) => {
     removeThreadMember,
     createForumPost,
     listInvites,
+    listChannelInvites,
+    getInvite,
     createInvite,
     deleteInvite,
     listWebhooks,
+    listGuildWebhooks,
     createWebhook,
+    updateWebhook,
     deleteWebhook,
     executeWebhook,
     listScheduledEvents,
+    listEventUsers,
     createScheduledEvent,
     updateScheduledEvent,
     deleteScheduledEvent,
     listEmojis,
     listStickers,
+    listSoundboardSounds,
     listAutoModRules,
     createAutoModRule,
+    updateAutoModRule,
     deleteAutoModRule,
   };
 };

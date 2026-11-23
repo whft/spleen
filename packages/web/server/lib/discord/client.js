@@ -1,18 +1,26 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { asNonEmptyString, isRecord } from '../shared/guards.js';
 import { createExtendedDiscordApi } from './extended-api.js';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
-const DISCORD_CDN_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
+const DISCORD_CDN_HOSTS = new Set([
+  'cdn.discordapp.com',
+  'media.discordapp.net',
+  'images-ext-1.discordapp.net',
+  'images-ext-2.discordapp.net',
+]);
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const toSnowflake = (value) => (/^\d+$/.test(String(value || '')) ? BigInt(value) : 0n);
 
 export class DiscordApiError extends Error {
   constructor(message, status = 500, code = null, retryAfterMs = null) {
     super(message);
     this.name = 'DiscordApiError';
     this.status = status;
+    this.statusCode = status;
     this.code = code;
     this.retryAfterMs = retryAfterMs;
   }
@@ -71,11 +79,22 @@ export const normalizeMessage = (m) => {
       me: Boolean(r.me),
     })) : [],
     mentions: Array.isArray(m.mentions) ? m.mentions.map(normalizeUser) : [],
+    mentionRoles: Array.isArray(m.mention_roles) ? m.mention_roles.map(String) : [],
+    mentionChannels: Array.isArray(m.mention_channels) ? m.mention_channels : [],
+    components: Array.isArray(m.components) ? m.components : [],
+    flags: Number(m.flags ?? 0),
+    messageReference: m.message_reference ? {
+      type: Number(m.message_reference.type ?? 0),
+      messageId: m.message_reference.message_id ? String(m.message_reference.message_id) : null,
+      channelId: m.message_reference.channel_id ? String(m.message_reference.channel_id) : null,
+      guildId: m.message_reference.guild_id ? String(m.message_reference.guild_id) : null,
+    } : null,
     referencedMessage: m.referenced_message ? {
       id: String(m.referenced_message.id),
       content: m.referenced_message.content ?? '',
       author: normalizeUser(m.referenced_message.author),
     } : null,
+    interactionMetadata: m.interaction_metadata ?? null,
     thread: m.thread ? {
       id: String(m.thread.id),
       name: m.thread.name ?? 'Thread',
@@ -83,6 +102,7 @@ export const normalizeMessage = (m) => {
     } : null,
     poll: m.poll ?? null,
     messageSnapshots: Array.isArray(m.message_snapshots) ? m.message_snapshots : [],
+    jumpUrl: `https://discord.com/channels/${m.guild_id ? String(m.guild_id) : '@me'}/${String(m.channel_id ?? m.channelId ?? '')}/${String(m.id)}`,
   };
 };
 
@@ -147,14 +167,21 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
       return apiFetch(endpoint, options, retry + 1, explicitAuth);
     }
 
+    const method = (asNonEmptyString(options.method) || 'GET').toUpperCase();
+    if ((response.status === 502 || response.status === 503 || response.status === 504) && method === 'GET' && retry < 2) {
+      await sleep(300 * (retry + 1));
+      return apiFetch(endpoint, options, retry + 1, explicitAuth);
+    }
+
     if (response.status === 204) return null;
     const text = await response.text();
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = null; }
 
     if (!response.ok) {
-      const msg = json?.message || text || `Discord API error (${response.status})`;
-      throw new DiscordApiError(msg, response.status, json?.code ?? null);
+      const apiMsg = asNonEmptyString(json?.message) || asNonEmptyString(text) || `Discord API error (${response.status})`;
+      const codeSuffix = json?.code !== undefined && json?.code !== null ? ` [Discord code ${json.code}]` : '';
+      throw new DiscordApiError(`${apiMsg}${codeSuffix}`, response.status, json?.code ?? null);
     }
     return json;
   };
@@ -214,8 +241,10 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     return normalizeChannel(ch);
   };
 
-  const getGuildMembers = async (guildId, limit = 100) => {
-    const members = await apiFetch(`/guilds/${encodeURIComponent(guildId)}/members?limit=${Math.min(1000, Math.max(1, Number(limit) || 100))}`);
+  const getGuildMembers = async (guildId, limit = 100, after = null) => {
+    const params = new URLSearchParams({ limit: String(Math.min(1000, Math.max(1, Number(limit) || 100))) });
+    if (asNonEmptyString(after)) params.set('after', String(after).trim());
+    const members = await apiFetch(`/guilds/${encodeURIComponent(guildId)}/members?${params.toString()}`);
     return (Array.isArray(members) ? members : []).map((m) => ({
       user: normalizeUser(m.user),
       nick: m.nick ?? null,
@@ -227,17 +256,23 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
   const getGuildRoles = async (guildId) => {
     const roles = await apiFetch(`/guilds/${encodeURIComponent(guildId)}/roles`);
     return (Array.isArray(roles) ? roles : [])
-      .map((r) => ({ id: String(r.id), name: r.name, color: r.color ?? 0, position: Number(r.position ?? 0), permissions: r.permissions }))
+      .map((r) => ({ id: String(r.id), name: r.name, color: r.color ?? 0, position: Number(r.position ?? 0), permissions: r.permissions, managed: Boolean(r.managed), hoist: Boolean(r.hoist), mentionable: Boolean(r.mentionable) }))
       .sort((a, b) => b.position - a.position);
   };
 
   const getMessages = async (channelId, { limit = 50, before, after, around } = {}) => {
     const params = new URLSearchParams({ limit: String(Math.min(100, Math.max(1, Number(limit) || 50))) });
-    if (before) params.set('before', String(before));
-    if (after) params.set('after', String(after));
-    if (around) params.set('around', String(around));
+    if (before !== undefined && before !== null && String(before).trim() !== '') params.set('before', String(before).trim());
+    if (after !== undefined && after !== null && String(after).trim() !== '') params.set('after', String(after).trim());
+    if (around !== undefined && around !== null && String(around).trim() !== '') params.set('around', String(around).trim());
     const list = await apiFetch(`/channels/${encodeURIComponent(channelId)}/messages?${params.toString()}`);
-    return (Array.isArray(list) ? list : []).map(normalizeMessage).reverse();
+    return (Array.isArray(list) ? list : [])
+      .map(normalizeMessage)
+      .filter(Boolean)
+      .sort((a, b) => {
+        const diff = toSnowflake(a.id) - toSnowflake(b.id);
+        return diff < 0n ? -1 : (diff > 0n ? 1 : 0);
+      });
   };
 
   const searchMessages = async (guildId, { content, authorId, channelId, offset = 0 } = {}) => {
@@ -319,10 +354,17 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     return normalizeMessage(created);
   };
 
-  const editMessage = async (channelId, messageId, { content }) => {
+  const editMessage = async (channelId, messageId, patch = {}) => {
+    const body = {};
+    if (patch.content !== undefined) body.content = patch.content;
+    if (Array.isArray(patch.embeds)) body.embeds = patch.embeds;
+    if (Array.isArray(patch.components)) body.components = patch.components;
+    if (patch.flags !== undefined) body.flags = Number(patch.flags);
+    if (isRecord(patch.allowedMentions)) body.allowed_mentions = patch.allowedMentions;
+    if (Array.isArray(patch.attachments)) body.attachments = patch.attachments;
     const edited = await apiFetch(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(body),
     });
     return normalizeMessage(edited);
   };
@@ -339,10 +381,14 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     { method: 'PUT' },
   );
 
-  const removeReaction = (channelId, messageId, emoji) => apiFetch(
-    `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeEmoji(emoji)}/@me`,
-    { method: 'DELETE' },
-  );
+  const removeReaction = (channelId, messageId, emoji, userId = '@me') => {
+    const target = asNonEmptyString(userId) || '@me';
+    const segment = target === '@me' ? '@me' : encodeURIComponent(target);
+    return apiFetch(
+      `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions/${encodeEmoji(emoji)}/${segment}`,
+      { method: 'DELETE' },
+    );
+  };
 
   const getPins = async (channelId) => {
     const list = await apiFetch(`/channels/${encodeURIComponent(channelId)}/pins`);
@@ -373,8 +419,33 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
   };
 
   const getMessage = async (channelId, messageId) => {
-    const msg = await apiFetch(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`);
-    return normalizeMessage(msg);
+    const chId = String(channelId);
+    const msgId = String(messageId);
+    try {
+      const msg = await apiFetch(`/channels/${encodeURIComponent(chId)}/messages/${encodeURIComponent(msgId)}`);
+      return normalizeMessage(msg);
+    } catch (err) {
+      const status = Number(err?.status ?? err?.statusCode ?? 0);
+      const isStarterLookup = chId === msgId;
+      if (status !== 403 && !(status === 404 && isStarterLookup)) throw err;
+
+      const around = await getMessages(chId, { around: msgId, limit: 5 }).catch(() => []);
+      const exact = around.find((m) => m.id === msgId);
+      if (exact) return exact;
+
+      if (isStarterLookup) {
+        const oldest = await getMessages(chId, { after: '0', limit: 1 }).catch(() => []);
+        if (oldest[0]?.id === msgId) return oldest[0];
+        if (oldest[0]) {
+          throw new DiscordApiError(
+            `Starter message ${msgId} was not found in thread ${chId} (it may have been deleted; oldest remaining message is ${oldest[0].id})`,
+            404,
+            10008,
+          );
+        }
+      }
+      throw new DiscordApiError(`Message ${msgId} was not found in channel ${chId}`, 404, 10008);
+    }
   };
 
   const getChannel = async (channelId) => {
@@ -393,17 +464,40 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
 
   const leaveThread = (threadId) => apiFetch(`/channels/${encodeURIComponent(threadId)}/thread-members/@me`, { method: 'DELETE' });
 
-  const sendMessageFromFile = async (channelId, { content = '', replyToMessageId, filePath, filename } = {}) => {
-    const resolved = path.resolve(String(filePath || ''));
-    const bytes = await fs.readFile(resolved);
+  const resolveLocalPath = (rawPath, baseDir = null) => {
+    const trimmed = String(rawPath || '').trim();
+    if (path.isAbsolute(trimmed)) return path.resolve(trimmed);
+    return baseDir ? path.resolve(String(baseDir), trimmed) : path.resolve(trimmed);
+  };
+
+  const sendMessageFromFile = async (
+    channelId,
+    { content = '', replyToMessageId, filePath, filePaths = [], filename, baseDir = null, embeds, components, poll, tts, flags, allowedMentions } = {},
+  ) => {
+    const pathsToRead = Array.isArray(filePaths) && filePaths.length > 0
+      ? filePaths.filter((p) => asNonEmptyString(p))
+      : (asNonEmptyString(filePath) ? [filePath] : []);
+    const files = [];
+    for (let idx = 0; idx < pathsToRead.length; idx += 1) {
+      const resolved = resolveLocalPath(pathsToRead[idx], baseDir);
+      const bytes = await fs.readFile(resolved);
+      const name = idx === 0 && asNonEmptyString(filename) ? filename : path.basename(resolved);
+      files.push({ name, bytes });
+    }
     return sendMessage(channelId, {
       content,
       replyToMessageId,
-      files: [{ name: filename || path.basename(resolved), bytes }],
+      files,
+      embeds,
+      components,
+      poll,
+      tts,
+      flags,
+      allowedMentions,
     });
   };
 
-  const downloadAttachment = async (attachmentUrl, savePath = null) => {
+  const downloadAttachment = async (attachmentUrl, savePath = null, { baseDir = null } = {}) => {
     let parsed;
     try {
       parsed = new URL(String(attachmentUrl || '').trim());
@@ -423,35 +517,67 @@ export const createDiscordClient = ({ store, fetchImpl = fetch, apiBase = DISCOR
     }
     const rawName = path.basename(parsed.pathname) || 'discord-attachment';
     const safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const targetPath = savePath
-      ? path.resolve(String(savePath))
-      : path.join(os.tmpdir(), `spleen-discord-${Date.now()}-${safeName}`);
+    const rawSavePath = asNonEmptyString(savePath);
+    let targetPath;
+    if (rawSavePath) {
+      const resolved = resolveLocalPath(rawSavePath, baseDir);
+      const endsWithSep = rawSavePath.endsWith('/') || rawSavePath.endsWith('\\');
+      let isExistingDir = false;
+      if (!endsWithSep) {
+        const stat = await fs.stat(resolved).catch(() => null);
+        isExistingDir = Boolean(stat?.isDirectory());
+      }
+      targetPath = endsWithSep || isExistingDir ? path.join(resolved, safeName) : resolved;
+    } else {
+      targetPath = path.join(os.tmpdir(), `spleen-discord-${Date.now()}-${safeName}`);
+    }
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.writeFile(targetPath, Buffer.from(arrayBuf));
     return {
       path: targetPath,
+      requestedSavePath: rawSavePath ?? null,
       filename: safeName,
       bytes: arrayBuf.byteLength,
       contentType: response.headers.get('content-type') || 'application/octet-stream',
     };
   };
 
-  const createChannel = async (guildId, { name, type = 0, topic, parentId } = {}) => {
+  const createChannel = async (guildId, options = {}) => {
+    const body = { name: options.name, type: options.type ?? 0 };
+    if (asNonEmptyString(options.topic)) body.topic = options.topic;
+    if (asNonEmptyString(options.parentId)) body.parent_id = options.parentId;
+    if (options.nsfw !== undefined) body.nsfw = Boolean(options.nsfw);
+    if (options.rateLimitPerUser !== undefined) body.rate_limit_per_user = Number(options.rateLimitPerUser);
+    if (options.bitrate !== undefined) body.bitrate = Number(options.bitrate);
+    if (options.userLimit !== undefined) body.user_limit = Number(options.userLimit);
+    if (options.defaultAutoArchiveDuration !== undefined) body.default_auto_archive_duration = Number(options.defaultAutoArchiveDuration);
+    if (options.defaultSortOrder !== undefined) body.default_sort_order = Number(options.defaultSortOrder);
+    if (options.defaultForumLayout !== undefined) body.default_forum_layout = Number(options.defaultForumLayout);
+    if (Array.isArray(options.availableTags)) body.available_tags = options.availableTags;
     const ch = await apiFetch(`/guilds/${encodeURIComponent(guildId)}/channels`, {
       method: 'POST',
-      body: JSON.stringify({ name, type, ...(topic ? { topic } : {}), ...(parentId ? { parent_id: parentId } : {}) }),
+      body: JSON.stringify(body),
     });
     return normalizeChannel(ch);
   };
 
   const updateChannel = async (channelId, patch = {}) => {
     const body = {};
-    if (typeof patch.name === 'string') body.name = patch.name;
-    if (typeof patch.topic === 'string') body.topic = patch.topic;
+    if (asNonEmptyString(patch.name) !== null || patch.name === '') body.name = patch.name;
+    if (asNonEmptyString(patch.topic) !== null || patch.topic === '') body.topic = patch.topic;
     if (patch.rateLimitPerUser !== undefined) body.rate_limit_per_user = Number(patch.rateLimitPerUser);
     if (patch.nsfw !== undefined) body.nsfw = Boolean(patch.nsfw);
     if (patch.position !== undefined) body.position = Number(patch.position);
     if (patch.parentId !== undefined) body.parent_id = patch.parentId;
+    if (patch.bitrate !== undefined) body.bitrate = Number(patch.bitrate);
+    if (patch.userLimit !== undefined) body.user_limit = Number(patch.userLimit);
+    if (patch.rtcRegion !== undefined) body.rtc_region = patch.rtcRegion;
+    if (patch.videoQualityMode !== undefined) body.video_quality_mode = Number(patch.videoQualityMode);
+    if (patch.defaultAutoArchiveDuration !== undefined) body.default_auto_archive_duration = Number(patch.defaultAutoArchiveDuration);
+    if (patch.defaultThreadRateLimitPerUser !== undefined) body.default_thread_rate_limit_per_user = Number(patch.defaultThreadRateLimitPerUser);
+    if (patch.defaultSortOrder !== undefined) body.default_sort_order = patch.defaultSortOrder === null ? null : Number(patch.defaultSortOrder);
+    if (patch.defaultForumLayout !== undefined) body.default_forum_layout = Number(patch.defaultForumLayout);
+    if (patch.defaultReactionEmoji !== undefined) body.default_reaction_emoji = patch.defaultReactionEmoji;
     if (patch.archived !== undefined) body.archived = Boolean(patch.archived);
     if (patch.locked !== undefined) body.locked = Boolean(patch.locked);
     if (patch.autoArchiveDuration !== undefined) body.auto_archive_duration = Number(patch.autoArchiveDuration);

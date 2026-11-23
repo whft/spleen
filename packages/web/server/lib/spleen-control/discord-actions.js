@@ -1,18 +1,27 @@
+import { asNonEmptyString } from '../shared/guards.js';
 import { SpleenControlError } from './error.js';
 
-const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : '');
+const str = (v) => asNonEmptyString(v) ?? '';
+const idStr = (v) => {
+  const s = asNonEmptyString(v);
+  if (s) return s;
+  if (Number.isSafeInteger(v) && v >= 0) return String(v);
+  return '';
+};
 const req = (v, label) => {
-  const s = str(v);
+  const s = idStr(v);
   if (!s) throw new SpleenControlError(`${label} is required`, 400);
   return s;
 };
 
-export const handleDiscordControlAction = async (action, input = {}, discord) => {
+export const handleDiscordControlAction = async (action, input = {}, discord, context = {}) => {
   if (!discord) throw new SpleenControlError('Discord reader is unavailable', 503);
+  const baseDir = str(input.directory) || str(context?.contextDirectory) || null;
 
   switch (action) {
     case 'discord.status': return await discord.getStatus();
     case 'discord.me': return await discord.getMe();
+    case 'discord.application': return await discord.getApplication();
     case 'discord.relationships': return { relationships: await discord.listRelationships() };
     case 'discord.guilds': return { guilds: await discord.listGuilds() };
     case 'discord.guild': return await discord.getGuild(req(input.guildId, 'guildId'));
@@ -20,7 +29,14 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
     case 'discord.createDm': return await discord.createDm(req(input.recipientId || input.userId, 'recipientId'));
     case 'discord.channels': {
       const guildId = str(input.guildId);
-      return { channels: guildId ? await discord.listGuildChannels(guildId) : await discord.listDms() };
+      if (guildId) {
+        const res = await discord.listGuildChannels(guildId);
+        return {
+          channels: Array.isArray(res?.channels) ? res.channels : [],
+          threads: Array.isArray(res?.threads) ? res.threads : [],
+        };
+      }
+      return { channels: await discord.listDms(), threads: [] };
     }
     case 'discord.channel': return await discord.getChannel(req(input.channelId, 'channelId'));
     case 'discord.createChannel': return await discord.createChannel(req(input.guildId, 'guildId'), {
@@ -28,16 +44,33 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       type: input.channelType ?? input.type ?? 0,
       topic: str(input.topic) || undefined,
       parentId: str(input.parentId) || undefined,
+      nsfw: input.nsfw,
+      rateLimitPerUser: input.rateLimitPerUser,
+      bitrate: input.bitrate,
+      userLimit: input.userLimit,
+      defaultAutoArchiveDuration: input.defaultAutoArchiveDuration,
+      defaultSortOrder: input.defaultSortOrder,
+      defaultForumLayout: input.defaultForumLayout,
+      availableTags: input.availableTags,
     });
     case 'discord.updateChannel':
     case 'discord.updateThread': {
       const patch = {};
-      if (typeof input.name === 'string') patch.name = input.name;
-      if (typeof input.topic === 'string') patch.topic = input.topic;
+      if (asNonEmptyString(input.name) !== null || input.name === '') patch.name = input.name;
+      if (asNonEmptyString(input.topic) !== null || input.topic === '') patch.topic = input.topic;
       if (input.rateLimitPerUser !== undefined) patch.rateLimitPerUser = input.rateLimitPerUser;
       if (input.nsfw !== undefined) patch.nsfw = input.nsfw;
       if (input.position !== undefined) patch.position = input.position;
       if (input.parentId !== undefined) patch.parentId = input.parentId;
+      if (input.bitrate !== undefined) patch.bitrate = input.bitrate;
+      if (input.userLimit !== undefined) patch.userLimit = input.userLimit;
+      if (input.rtcRegion !== undefined) patch.rtcRegion = input.rtcRegion;
+      if (input.videoQualityMode !== undefined) patch.videoQualityMode = input.videoQualityMode;
+      if (input.defaultAutoArchiveDuration !== undefined) patch.defaultAutoArchiveDuration = input.defaultAutoArchiveDuration;
+      if (input.defaultThreadRateLimitPerUser !== undefined) patch.defaultThreadRateLimitPerUser = input.defaultThreadRateLimitPerUser;
+      if (input.defaultSortOrder !== undefined) patch.defaultSortOrder = input.defaultSortOrder;
+      if (input.defaultForumLayout !== undefined) patch.defaultForumLayout = input.defaultForumLayout;
+      if (input.defaultReactionEmoji !== undefined) patch.defaultReactionEmoji = input.defaultReactionEmoji;
       if (input.archived !== undefined) patch.archived = input.archived;
       if (input.locked !== undefined) patch.locked = input.locked;
       if (input.autoArchiveDuration !== undefined) patch.autoArchiveDuration = input.autoArchiveDuration;
@@ -68,8 +101,14 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       await discord.deleteChannelPermission(channelId, overwriteId, str(input.reason) || null);
       return { ok: true, channelId, overwriteId };
     }
-    case 'discord.members': return { members: await discord.getGuildMembers(req(input.guildId, 'guildId'), input.limit) };
+    case 'discord.members': return { members: await discord.getGuildMembers(req(input.guildId, 'guildId'), input.limit, idStr(input.after) || null) };
     case 'discord.member': return await discord.getGuildMember(req(input.guildId, 'guildId'), req(input.userId, 'userId'));
+    case 'discord.voiceState': return await discord.getUserVoiceState(req(input.guildId, 'guildId'), req(input.userId, 'userId'));
+    case 'discord.setVoiceStatus': {
+      const channelId = req(input.channelId, 'channelId');
+      await discord.setVoiceChannelStatus(channelId, input.status ?? input.topic ?? '');
+      return { ok: true, channelId };
+    }
     case 'discord.searchMembers': return {
       members: await discord.searchGuildMembers(req(input.guildId, 'guildId'), req(input.query, 'query'), input.limit),
     };
@@ -115,6 +154,7 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       return { ok: true, guildId, userId };
     }
     case 'discord.listBans': return { bans: await discord.listBans(req(input.guildId, 'guildId'), input.limit) };
+    case 'discord.ban': return await discord.getBan(req(input.guildId, 'guildId'), req(input.userId, 'userId'));
     case 'discord.banMember': {
       const guildId = req(input.guildId, 'guildId');
       const userId = req(input.userId, 'userId');
@@ -133,19 +173,51 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
     case 'discord.auditLogs': return await discord.getAuditLogs(req(input.guildId, 'guildId'), {
       userId: str(input.userId) || undefined,
       actionType: input.actionType,
+      before: idStr(input.before) || undefined,
       limit: input.limit,
     });
     case 'discord.user': return await discord.getUser(req(input.userId, 'userId'));
-    case 'discord.messages': return {
-      messages: await discord.getMessages(req(input.channelId, 'channelId'), {
-        limit: input.limit,
-        before: str(input.before) || undefined,
-        after: str(input.after) || undefined,
-        around: str(input.around) || undefined,
-      }),
-    };
-    case 'discord.message': return await discord.getMessage(req(input.channelId, 'channelId'), req(input.messageId, 'messageId'));
-    case 'discord.pins': return { pins: await discord.getPins(req(input.channelId, 'channelId')) };
+    case 'discord.messages': {
+      const channelId = req(input.channelId || input.threadId, 'channelId');
+      const before = idStr(input.before) || undefined;
+      const after = idStr(input.after) || undefined;
+      const around = idStr(input.around) || undefined;
+      const cursorCount = [before, after, around].filter(Boolean).length;
+      if (cursorCount > 1) {
+        throw new SpleenControlError('Provide at most one of before, after, or around', 400);
+      }
+      let messages;
+      try {
+        messages = await discord.getMessages(channelId, {
+          limit: input.limit,
+          before,
+          after,
+          around,
+        });
+      } catch (err) {
+        if (err?.code === 50024) {
+          throw new SpleenControlError(
+            `Channel ${channelId} does not support direct messages (for example, a Forum or Media channel). Use discord.listForumPosts or discord.archivedThreads to list posts, then call discord.messages with a post threadId.`,
+            400,
+          );
+        }
+        throw err;
+      }
+      if (messages.length === 0 && cursorCount === 0 && discord.getChannel) {
+        const ch = await discord.getChannel(channelId).catch(() => null);
+        if (ch && (ch.type === 15 || ch.type === 16)) {
+          return {
+            messages: [],
+            channelType: ch.type,
+            isForumChannel: true,
+            hint: `Channel ${channelId} is a Discord Forum/Media channel (type ${ch.type}). Use discord.listForumPosts or discord.archivedThreads to list posts, then call discord.messages with a post threadId.`,
+          };
+        }
+      }
+      return { messages };
+    }
+    case 'discord.message': return await discord.getMessage(req(input.channelId || input.threadId, 'channelId'), req(input.messageId, 'messageId'));
+    case 'discord.pins': return { pins: await discord.getPins(req(input.channelId || input.threadId, 'channelId')) };
     case 'discord.search': return await discord.searchMessages(str(input.guildId) || null, {
       channelId: str(input.channelId) || undefined,
       authorId: str(input.authorId) || undefined,
@@ -153,16 +225,25 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       offset: Number(input.offset) || 0,
     });
     case 'discord.send': {
-      const channelId = req(input.channelId, 'channelId');
+      const channelId = req(input.channelId || input.threadId, 'channelId');
       const content = str(input.content) || str(input.message) || str(input.body);
       const replyToMessageId = str(input.replyToMessageId) || undefined;
       const filePath = str(input.filePath);
-      if (filePath) {
+      const filePaths = Array.isArray(input.filePaths) ? input.filePaths.filter((p) => asNonEmptyString(p)) : [];
+      if (filePath || filePaths.length > 0) {
         return await discord.sendMessageFromFile(channelId, {
           content,
           replyToMessageId,
           filePath,
+          filePaths,
           filename: str(input.filename) || undefined,
+          baseDir,
+          embeds: Array.isArray(input.embeds) ? input.embeds : undefined,
+          components: Array.isArray(input.components) ? input.components : undefined,
+          poll: input.poll,
+          tts: input.tts,
+          flags: input.flags,
+          allowedMentions: input.allowedMentions,
         });
       }
       return await discord.sendMessage(channelId, {
@@ -178,11 +259,23 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
         allowedMentions: input.allowedMentions,
       });
     }
-    case 'discord.editMessage': return await discord.editMessage(
-      req(input.channelId, 'channelId'),
-      req(input.messageId, 'messageId'),
-      { content: req(input.content || input.message, 'content') },
-    );
+    case 'discord.editMessage': {
+      const patch = {};
+      if (input.content !== undefined || input.message !== undefined) patch.content = input.content ?? input.message;
+      if (Array.isArray(input.embeds)) patch.embeds = input.embeds;
+      if (Array.isArray(input.components)) patch.components = input.components;
+      if (input.flags !== undefined) patch.flags = input.flags;
+      if (input.allowedMentions !== undefined) patch.allowedMentions = input.allowedMentions;
+      if (Array.isArray(input.attachments)) patch.attachments = input.attachments;
+      if (Object.keys(patch).length === 0) {
+        throw new SpleenControlError('At least one of content, embeds, components, flags, or attachments is required', 400);
+      }
+      return await discord.editMessage(
+        req(input.channelId || input.threadId, 'channelId'),
+        req(input.messageId, 'messageId'),
+        patch,
+      );
+    }
     case 'discord.deleteMessage': {
       const channelId = req(input.channelId, 'channelId');
       const messageId = req(input.messageId, 'messageId');
@@ -209,11 +302,18 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       const channelId = req(input.channelId, 'channelId');
       const messageId = req(input.messageId, 'messageId');
       const emoji = req(input.emoji, 'emoji');
-      await discord.removeReaction(channelId, messageId, emoji);
-      return { ok: true, channelId, messageId, emoji };
+      const userId = str(input.userId) || '@me';
+      await discord.removeReaction(channelId, messageId, emoji, userId);
+      return { ok: true, channelId, messageId, emoji, userId };
     }
     case 'discord.getReactions': return {
-      users: await discord.getReactions(req(input.channelId, 'channelId'), req(input.messageId, 'messageId'), req(input.emoji, 'emoji'), input.limit),
+      users: await discord.getReactions(
+        req(input.channelId, 'channelId'),
+        req(input.messageId, 'messageId'),
+        req(input.emoji, 'emoji'),
+        input.limit,
+        idStr(input.after) || null,
+      ),
     };
     case 'discord.clearReactions': {
       const channelId = req(input.channelId, 'channelId');
@@ -251,6 +351,7 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       req(input.messageId, 'messageId'),
       req(String(input.answerId ?? ''), 'answerId'),
       input.limit,
+      idStr(input.after) || null,
     );
     case 'discord.createThread': return await discord.createThread(req(input.channelId, 'channelId'), {
       name: req(input.threadName || input.name, 'threadName'),
@@ -262,6 +363,7 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       archived: Boolean(input.archived),
       limit: input.limit,
       before: str(input.before) || null,
+      offset: Number.isFinite(Number(input.offset)) ? Math.max(0, Number(input.offset)) : 0,
       sortBy: str(input.sortBy) || 'last_message_time',
       sortOrder: str(input.sortOrder) || 'desc',
       tagIds: Array.isArray(input.tagIds) ? input.tagIds : (Array.isArray(input.appliedTags) ? input.appliedTags : []),
@@ -284,6 +386,10 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       body: input.patch ?? input,
       reason: str(input.reason) || null,
     });
+    case 'discord.getStageInstance': return await discord.rawApi({
+      method: 'GET',
+      path: `/stage-instances/${encodeURIComponent(req(input.channelId, 'channelId'))}`,
+    });
     case 'discord.createStageInstance': return await discord.rawApi({
       method: 'POST',
       path: '/stage-instances',
@@ -294,6 +400,17 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       },
       reason: str(input.reason) || null,
     });
+    case 'discord.updateStageInstance': {
+      const stagePatch = {};
+      if (asNonEmptyString(input.topic)) stagePatch.topic = input.topic;
+      if (input.privacyLevel !== undefined) stagePatch.privacy_level = Number(input.privacyLevel);
+      return await discord.rawApi({
+        method: 'PATCH',
+        path: `/stage-instances/${encodeURIComponent(req(input.channelId, 'channelId'))}`,
+        body: stagePatch,
+        reason: str(input.reason) || null,
+      });
+    }
     case 'discord.deleteStageInstance': {
       const channelId = req(input.channelId, 'channelId');
       await discord.rawApi({
@@ -331,15 +448,27 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       await discord.removeThreadMember(threadId, userId);
       return { ok: true, threadId, userId };
     }
-    case 'discord.listInvites': return { invites: await discord.listInvites(req(input.guildId, 'guildId')) };
+    case 'discord.listInvites': {
+      const channelId = str(input.channelId);
+      if (channelId) return { invites: await discord.listChannelInvites(channelId) };
+      return { invites: await discord.listInvites(req(input.guildId, 'guildId')) };
+    }
+    case 'discord.getInvite': return await discord.getInvite(req(input.inviteCode || input.code, 'inviteCode'));
     case 'discord.createInvite': return await discord.createInvite(req(input.channelId, 'channelId'), input);
     case 'discord.deleteInvite': {
       const inviteCode = req(input.inviteCode || input.code, 'inviteCode');
       await discord.deleteInvite(inviteCode);
       return { ok: true, inviteCode };
     }
-    case 'discord.listWebhooks': return { webhooks: await discord.listWebhooks(req(input.channelId, 'channelId')) };
+    case 'discord.listWebhooks': {
+      const guildId = str(input.guildId);
+      const channelId = str(input.channelId);
+      if (channelId) return { webhooks: await discord.listWebhooks(channelId) };
+      if (guildId) return { webhooks: await discord.listGuildWebhooks(guildId) };
+      throw new SpleenControlError('channelId or guildId is required', 400);
+    }
     case 'discord.createWebhook': return await discord.createWebhook(req(input.channelId, 'channelId'), { name: input.name });
+    case 'discord.updateWebhook': return await discord.updateWebhook(req(input.webhookId, 'webhookId'), input.patch ?? input, str(input.reason) || null);
     case 'discord.deleteWebhook': {
       const webhookId = req(input.webhookId, 'webhookId');
       await discord.deleteWebhook(webhookId);
@@ -349,8 +478,17 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
       req(input.webhookId, 'webhookId'),
       req(input.webhookToken, 'webhookToken'),
       input.payload ?? { content: input.content, embeds: input.embeds, username: input.username, avatar_url: input.avatarUrl },
+      { threadId: str(input.threadId) || null },
     );
     case 'discord.listEvents': return { events: await discord.listScheduledEvents(req(input.guildId, 'guildId')) };
+    case 'discord.listEventUsers': return {
+      users: await discord.listEventUsers(req(input.guildId, 'guildId'), req(input.eventId, 'eventId'), {
+        limit: input.limit,
+        before: idStr(input.before) || undefined,
+        after: idStr(input.after) || undefined,
+        withMember: Boolean(input.withMember),
+      }),
+    };
     case 'discord.createEvent': return await discord.createScheduledEvent(req(input.guildId, 'guildId'), input.event ?? input);
     case 'discord.updateEvent': return await discord.updateScheduledEvent(req(input.guildId, 'guildId'), req(input.eventId, 'eventId'), input.patch ?? input);
     case 'discord.deleteEvent': {
@@ -361,18 +499,32 @@ export const handleDiscordControlAction = async (action, input = {}, discord) =>
     }
     case 'discord.listEmojis': return { emojis: await discord.listEmojis(req(input.guildId, 'guildId')) };
     case 'discord.listStickers': return { stickers: await discord.listStickers(req(input.guildId, 'guildId')) };
+    case 'discord.listSoundboardSounds': return await discord.listSoundboardSounds(str(input.guildId) || null);
     case 'discord.listAutoModRules': return { rules: await discord.listAutoModRules(req(input.guildId, 'guildId')) };
     case 'discord.createAutoModRule': return await discord.createAutoModRule(req(input.guildId, 'guildId'), input.rule ?? input);
+    case 'discord.updateAutoModRule': return await discord.updateAutoModRule(
+      req(input.guildId, 'guildId'),
+      req(input.ruleId, 'ruleId'),
+      input.patch ?? input.rule ?? input,
+      str(input.reason) || null,
+    );
     case 'discord.deleteAutoModRule': {
       const guildId = req(input.guildId, 'guildId');
       const ruleId = req(input.ruleId, 'ruleId');
       await discord.deleteAutoModRule(guildId, ruleId);
       return { ok: true, guildId, ruleId };
     }
-    case 'discord.downloadAttachment': return await discord.downloadAttachment(
-      req(input.attachmentUrl || input.url, 'attachmentUrl'),
-      str(input.savePath) || null,
-    );
+    case 'discord.downloadAttachment': {
+      if (input.savePath !== undefined && input.savePath !== null && !asNonEmptyString(input.savePath)) {
+        throw new SpleenControlError('savePath must be a non-empty file path string', 400);
+      }
+      const requestedSavePath = str(input.savePath) || str(input.outputPath) || str(input.dest) || null;
+      return await discord.downloadAttachment(
+        req(input.attachmentUrl || input.url, 'attachmentUrl'),
+        requestedSavePath,
+        { baseDir },
+      );
+    }
     case 'discord.api': return await discord.rawApi({
       method: input.method || 'GET',
       path: req(input.path, 'path'),

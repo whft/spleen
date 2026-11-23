@@ -1379,7 +1379,7 @@ export const createSpleenControlService = (dependencies) => {
       }
       if (action.startsWith('discord.')) {
         const discord = await Promise.resolve(getDiscordClient());
-        return await handleDiscordControlAction(action, input, discord);
+        return await handleDiscordControlAction(action, input, discord, { contextDirectory });
       }
       if (action.startsWith('uc.')) {
         const uc = await Promise.resolve(getUnknownCheatsClient());

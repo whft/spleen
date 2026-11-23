@@ -62,6 +62,7 @@ import {
   secretRunCommandLine,
 } from '../spleen-control/secret-run.js';
 import { createCallbackAddress } from './callback-address.js';
+import { DISCORD_PARAMETER_PROPERTIES } from './discord-parameters.js';
 
 const TOOL_SCHEMA_VERSION = 1;
 const PLUGIN_ID = 'spleen-agent-tool';
@@ -226,13 +227,6 @@ const ALL_PARAMETER_PROPERTIES = {
   relation: { type: 'string', enum: ['reference', 'supervise', 'delegate'], description: 'chat.link: connection kind' },
   note: { type: 'string', description: 'chat.link: short note describing how the sessions relate' },
   linkId: { type: 'string', description: 'chat.unlink: link id to remove' },
-  guildId: { type: 'string', description: 'discord.channels / discord.members / discord.search: Discord guild id' },
-  channelId: { type: 'string', description: 'discord.messages / discord.pins / discord.send / discord.react / discord.createThread: Discord channel id' },
-  content: { type: 'string', description: 'discord.send / discord.search: message text or search query' },
-  replyToMessageId: { type: 'string', description: 'discord.send: optional message id to reply to' },
-  before: { type: 'string', description: 'discord.messages: fetch messages before this message id' },
-  emoji: { type: 'string', description: 'discord.react: unicode emoji or custom name:id' },
-  threadName: { type: 'string', description: 'discord.createThread: title for the new Discord thread' },
   fid: { type: 'integer', description: 'uc.forum: UnknownCheats forum id' },
   tid: { type: 'integer', description: 'uc.thread: UnknownCheats thread id' },
   forum: { type: 'string', description: 'uc.addBookmark: optional forum name label' },
@@ -256,12 +250,12 @@ const CONTROL_PARAMETER_PROPERTIES = {
   name: { type: 'string', description: 'team.create / team.addMember / agent.* / discord.createThread: display name or identifier' },
   taskId: { type: 'string', description: 'team.updateTask / team.retryTask / team.cancelTask: task id' },
   targetSessionId: { type: 'string', description: 'chat.link: connected target session id' },
-  body: { type: 'string', description: 'team.post / discord.send: message body text' },
-  url: { type: 'string', description: 'session.unlink / uc.forum / uc.thread / uc.addBookmark: URL' },
+  url: { type: 'string', description: 'session.unlink / uc.forum / uc.thread / uc.addBookmark / discord.downloadAttachment: URL' },
   identifier: { type: 'string', description: 'session.unlink: the identifier of the link to remove, when no url' },
   source: { type: 'string', description: 'wait.start: "timer", "pr", or <extension>/<wait> as wait.list names it' },
   args: { type: 'object', description: 'wait.start: the arguments the source\'s params list, such as { "minutes": 10 } or { "url": "https://github.com/o/r/pull/1" }' },
   waitId: { type: 'string', description: 'wait.stop: the wait to stop; without it every wait of this session' },
+  ...DISCORD_PARAMETER_PROPERTIES,
 };
 const SCHEDULE_PARAMETER_PROPERTIES = {
   ...pickParameters(SCHEDULE_PARAMETER_NAMES),
@@ -427,11 +421,11 @@ export const managedPermissionRules = ({ includeWorkflow = false } = {}) => (
   includeWorkflow ? [{ action: WORKFLOW_ANSWER_TOOL, resource: '*', effect: 'deny' }] : []
 );
 
-const CONTROL_TOOL_DESCRIPTION = "Spleen projects, sessions, settings, UI control, AI Teams, project agents, recovery, Discord and UnknownCheats. One action per call; projectId or directory scope it, default this session's directory. "
-  + "You can inspect/update non-secret Spleen settings (settings.list, settings.read, settings.update), drive the desktop/web UI live (ui.control), stop sessions (session.stop), inspect/resume auto-continue recovery (recovery.*), connect sessions (chat.link/links/unlink), create/edit/delete project-scoped or global custom agents (agent.list/create/update/delete), orchestrate multi-agent AI Teams with a shared board and DAG task scheduler (team.list/create/get/stop/addMember/removeMember/post/addTask/updateTask/retryTask/cancelTask), interact with connected Discord servers/DMs (discord.status/guilds/dms/channels/members/messages/pins/search/send/react/createThread), and browse/search/bookmark UnknownCheats forums and threads (uc.status/home/recent/forum/thread/search/bookmarks/addBookmark/history). "
+const CONTROL_TOOL_DESCRIPTION = "Spleen projects, sessions, settings, UI control, AI Teams, agents, recovery, Discord and UnknownCheats. One action per call; projectId or directory scope it, default this session's directory. "
+  + "Inspect/update non-secret settings (settings.*), drive UI (ui.control), stop/recover sessions (session.stop, recovery.*), link sessions (chat.*), manage custom agents (agent.*), run AI Teams (team.*), use Discord (discord.* including listForumPosts, archivedThreads, messages with before/after/around, downloadAttachment with savePath, and raw discord.api), and browse UnknownCheats (uc.*). "
   + "A session you create, send to or fork belongs to the user, who follows and talks to it. Dispatch one when the user asks, even for work related to yours, with any agent, optionally in a new worktree. A session you start to get work done and collect its answer takes ownWork, also when the user told you to delegate; smaller pieces go to the subagent tool. A dispatch returns at once; returnResult brings its final answer back here as a message. session.send always starts a new prompt. "
   + "session.moveToWorktree moves this session into a new worktree on a new branch from the default branch, taking the changed files you name in carry. It can help when the checkout looks busy: someone's pull request branch, uncommitted changes, another session here, a branch changed between your messages. Whether that fits depends on how the user works: ask, unless the request already calls for separate work, such as a pull request of its own. Unlike git worktree add, the session moves along and the branch starts from the default branch. "
-  + "This tool cannot delete sessions or worktrees, and cannot read or modify secret settings.";
+  + "Cannot delete sessions/worktrees or read/modify secret settings.";
 
 const SCHEDULE_TOOL_DESCRIPTION = "Scheduled tasks: prompts Spleen runs on a schedule, in a new session each run or in targetSessionId. A task is the user's; create or change one when the user asks. One action per call; projectId or directory scope it, default this session's directory.";
 
@@ -480,6 +474,7 @@ const WORKFLOW_TOOL_DESCRIPTION = 'Workflows: a script that fans a large task ou
 
 const BOOLEAN_PARAMETER_NAMES = [...new Set([
   ALL_PARAMETER_PROPERTIES,
+  CONTROL_PARAMETER_PROPERTIES,
   SCHEDULE_PARAMETER_PROPERTIES,
   MEMORY_PARAMETER_PROPERTIES,
   KNOWLEDGE_PARAMETER_PROPERTIES,
@@ -627,7 +622,7 @@ const SECRET_RUN_PERMISSION = String.raw`        if (args.action === "secret.run
         }
 `;
 
-const createToolEntry = ({ name, description, definitions, parameters, codeMode, answers = null, secretRun = false }) => {
+const createToolEntry = ({ name, description, definitions, parameters, codeMode, answers = null, secretRun = false, allowAdditionalParameters = false }) => {
   const normalizeBooleans = booleanNormalizationBlock(parameters);
   const reviveDependsOn = dependsOnRevivalBlock(parameters);
   const actionSchema = definitions.length === 1 ? singleActionSchema(definitions[0]) : multiActionSchema(definitions);
@@ -640,7 +635,7 @@ const createToolEntry = ({ name, description, definitions, parameters, codeMode,
         type: "object",
         properties: {
           action: ${JSON.stringify(actionSchema.property)},
-          parameters: { type: "object", properties: ${JSON.stringify(parameters)}, additionalProperties: false, description: "Inputs for the action; use an empty object when none are needed" },
+          parameters: { type: "object", properties: ${JSON.stringify(parameters)}, additionalProperties: ${allowAdditionalParameters ? 'true' : 'false'}, description: "Inputs for the action; use an empty object when none are needed" },
         },
         required: ${JSON.stringify(actionSchema.required)},
         // Models routinely put the inputs next to the action; the schema has to
@@ -756,6 +751,7 @@ const createPluginSource = ({ includeControl, includeSchedule, includeWeb, inclu
       definitions: SPLEEN_AGENT_TOOL_ACTION_DEFINITIONS,
       parameters: CONTROL_PARAMETER_PROPERTIES,
       codeMode: true,
+      allowAdditionalParameters: true,
     }));
   }
   if (includeSchedule) {
@@ -1024,20 +1020,11 @@ export const createAgentToolRuntime = (dependencies) => {
       const data = await executeAction(action, { ...payload.input, action }, contextDirectory, actionOptions);
       return createResult({ ok: true, action, data });
     } catch (error) {
-      return createResult({
-        ok: false,
-        action,
-        ...(error?.partial === true ? { data: {
-          partial: true,
-          partialAction: error.partialAction,
-          sessionId: error.sessionId,
-          directory: error.directory,
-        } } : {}),
-        error: {
-          message: error instanceof Error ? error.message : String(error),
-          kind: Number(error?.statusCode) >= 400 && Number(error?.statusCode) < 499 ? 'usage' : 'runtime',
-        },
-      });
+      const httpStatus = Number(error?.statusCode ?? error?.status);
+      const rawMessage = error instanceof Error ? error.message : String(error ?? '');
+      const errorPayload = { message: rawMessage.trim() || 'Spleen action failed', kind: httpStatus >= 400 && httpStatus < 499 ? 'usage' : 'runtime' };
+      const partialData = error?.partial === true ? { partial: true, partialAction: error.partialAction, sessionId: error.sessionId, directory: error.directory } : undefined;
+      return createResult({ ok: false, action, data: partialData, error: errorPayload });
     }
   };
 
