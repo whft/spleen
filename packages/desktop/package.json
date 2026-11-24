@@ -1,6 +1,6 @@
 {
   "name": "@spleen/desktop",
-  "version": "1.5.4",
+  "version": "1.6.0",
   "private": true,
   "description": "Spleen Windows desktop host (Rust + Tauri 2)",
   "type": "module",
