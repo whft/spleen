@@ -1,7 +1,12 @@
 import express from 'express';
 import { asNonEmptyString } from '../shared/guards.js';
 
-export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, requireAuthorized = null }) => {
+export const registerAutonomyRoutes = (app, {
+  supervisor,
+  executionCoordinator = null,
+  listSessions = null,
+  requireAuthorized = null,
+}) => {
   const wrap = (handler) => async (req, res) => {
     if (requireAuthorized) {
       const ok = await requireAuthorized(req, res);
@@ -17,6 +22,24 @@ export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, r
 
   app.get('/api/autonomy/status', wrap(async (_req, res) => {
     res.json(supervisor.getStatus());
+  }));
+
+  app.get('/api/autonomy/coordinator', wrap(async (req, res) => {
+    const base = executionCoordinator ? executionCoordinator.getStatus() : { lanes: {}, activeSessions: [], parkedSessions: [], cooldowns: [], activeFailovers: [] };
+    const freeZenModels = executionCoordinator?.providerGate
+      ? await executionCoordinator.providerGate.discoverFreeZenModels(asNonEmptyString(req.query?.directory) || '')
+      : [];
+    res.json({ ...base, freeZenModels });
+  }));
+
+  app.post('/api/autonomy/cooldowns/clear', express.json({ limit: '16kb' }), wrap(async (req, res) => {
+    executionCoordinator?.providerGate?.clearCooldown({
+      providerID: asNonEmptyString(req.body?.providerID) || '',
+      modelID: asNonEmptyString(req.body?.modelID) || '',
+      credentialID: asNonEmptyString(req.body?.credentialID) || '',
+    });
+    void supervisor.tick({ awaitTasks: false });
+    res.json({ ok: true, cooldowns: executionCoordinator?.providerGate?.listCooldowns() ?? [] });
   }));
 
   app.get('/api/autonomy/sessions', wrap(async (req, res) => {
@@ -36,7 +59,7 @@ export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, r
   app.post('/api/autonomy/objectives', express.json({ limit: '256kb' }), wrap(async (req, res) => {
     const created = supervisor.createObjective(req.body ?? {});
     if (req.body?.runImmediately !== false) {
-      void supervisor.tick();
+      void supervisor.tick({ awaitTasks: false });
     }
     res.status(201).json(created);
   }));
@@ -54,11 +77,15 @@ export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, r
   }));
 
   app.post('/api/autonomy/objectives/:id/tasks', express.json({ limit: '128kb' }), wrap(async (req, res) => {
-    res.status(201).json(supervisor.addTask(req.params.id, req.body ?? {}));
+    const added = supervisor.addTask(req.params.id, req.body ?? {});
+    void supervisor.tick({ awaitTasks: false });
+    res.status(201).json(added);
   }));
 
   app.post('/api/autonomy/objectives/:id/replan', express.json({ limit: '256kb' }), wrap(async (req, res) => {
-    res.json(supervisor.replanObjective(req.params.id, req.body ?? {}));
+    const replanned = supervisor.replanObjective(req.params.id, req.body ?? {});
+    void supervisor.tick({ awaitTasks: false });
+    res.json(replanned);
   }));
 
   app.post('/api/autonomy/objectives/:id/pause', express.json({ limit: '32kb' }), wrap(async (req, res) => {
@@ -70,14 +97,14 @@ export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, r
   app.post('/api/autonomy/objectives/:id/resume', wrap(async (req, res) => {
     const updated = supervisor.resumeObjective(req.params.id);
     if (!updated) return res.status(404).json({ error: 'Objective not found' });
-    void supervisor.tick();
+    void supervisor.tick({ awaitTasks: false });
     res.json(updated);
   }));
 
   app.post('/api/autonomy/objectives/:id/continue', express.json({ limit: '64kb' }), wrap(async (req, res) => {
     const updated = supervisor.continueObjective(req.params.id, req.body?.note ?? '');
     if (!updated) return res.status(404).json({ error: 'Objective not found' });
-    void supervisor.tick();
+    void supervisor.tick({ awaitTasks: false });
     res.json(updated);
   }));
 
@@ -90,7 +117,7 @@ export const registerAutonomyRoutes = (app, { supervisor, listSessions = null, r
   app.post('/api/autonomy/objectives/:id/run-now', wrap(async (req, res) => {
     const existing = supervisor.getObjective(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Objective not found' });
-    void supervisor.tick();
+    void supervisor.tick({ awaitTasks: false });
     res.json({ ok: true, id: existing.id });
   }));
 

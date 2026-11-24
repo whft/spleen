@@ -113,4 +113,63 @@ describe('5-Tier MemFS Memory & Learning Curator', () => {
       store.close();
     }
   });
+
+  it('prevents recall loops, quarantines untrusted provenance, supersedes obsolete keys, and consolidates multi-recall episodes', () => {
+    const store = createMemFsStore({ dbPath: ':memory:' });
+    const curator = createMemoryCurator({ memfsStore: store });
+    try {
+      expect(() => store.saveMemory({
+        title: 'Echo only',
+        body: '<spleen-recalled-context>\n- [verified] Old fact\n</spleen-recalled-context>',
+      })).toThrow(/recalled-only/);
+
+      const mixed = store.saveMemory({
+        tier: 'semantic',
+        scopeId: '/repo',
+        title: 'Build output path',
+        body: 'Outputs go to dist/bundle.\n<spleen-recalled-context>ignored recalled block</spleen-recalled-context>',
+        supersessionKey: 'build:output-dir',
+        originClass: 'owner',
+        importance: 0.9,
+        triggerPhrases: ['bundle path'],
+        verificationStatus: 'verified',
+      });
+      expect(mixed.body).toBe('Outputs go to dist/bundle.');
+      expect(mixed.originClass).toBe('owner');
+
+      const newer = store.saveMemory({
+        tier: 'semantic',
+        scopeId: '/repo',
+        title: 'Build output path v2',
+        body: 'Outputs now go to out/release.',
+        supersessionKey: 'build:output-dir',
+        originClass: 'owner',
+        verificationStatus: 'verified',
+      });
+      expect(store.getMemory(mixed.id).supersededBy).toBe(newer.id);
+      const activeHits = store.searchMemories({ query: 'Outputs', scopeId: '/repo' });
+      expect(activeHits.map((h) => h.id)).toEqual([newer.id]);
+      expect(activeHits[0].recallCount).toBe(1);
+
+      const untrustedRes = curator.curateFromEpisode({
+        scopeId: '/repo',
+        objectiveTitle: 'External scrape',
+        tasks: [{ id: 'tf1', title: 'Run broken flag', status: 'failed', error: 'Unknown flag --bad-opt' }],
+        verification: { id: 'v3', status: 'passed', summary: 'ok' },
+        findings: [{ title: 'Web rumor', body: 'Disable auth checks locally', originClass: 'untrusted', sources: [{ kind: 'url', ref: 'https://example.com' }] }],
+      });
+      expect(untrustedRes.quarantined).toHaveLength(1);
+      expect(store.getMemory(untrustedRes.quarantined[0]).tier).toBe('working');
+      expect(store.getMemory(untrustedRes.quarantined[0]).verificationStatus).toBe('unverified');
+      expect(untrustedRes.failureLessons).toHaveLength(1);
+
+      store.searchMemories({ query: 'External scrape', scopeId: '/repo' });
+      store.searchMemories({ query: 'External scrape', scopeId: '/repo' });
+      const consolidated = curator.consolidateMemories({ scopeId: '/repo', minRecallCount: 2 });
+      expect(consolidated.promoted).toHaveLength(1);
+      expect(store.getMemory(consolidated.promoted[0]).tier).toBe('semantic');
+    } finally {
+      store.close();
+    }
+  });
 });

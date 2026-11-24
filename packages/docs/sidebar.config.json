@@ -273,6 +273,10 @@
           }
         },
         {
+          "label": "Autonomous Harness",
+          "link": "/autonomous-harness/"
+        },
+        {
           "label": "Sidebar",
           "link": "/sidebar/",
           "translations": {

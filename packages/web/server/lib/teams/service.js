@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isLimitError } from '../limit-failover/policy.js';
 import { detectBlockedTasks, extractMentions, getReadyTasks, summarizeDag, validateDag } from './graph.js';
 import { TEAM_PRESETS } from './presets.js';
 
@@ -31,6 +32,7 @@ export class TeamServiceError extends Error {
 export const createTeamsService = ({
   store,
   sessionService = null,
+  executionCoordinator = null,
   readSessionStatus = null,
   readLastAssistantMessage = null,
   broadcastEvent = () => {},
@@ -55,14 +57,9 @@ export const createTeamsService = ({
     if (sessionId && useWorktrees === true && member.role !== 'lead' && sessionService.moveToWorktree) {
       try {
         const slug = `${teamName}-${member.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'worker';
-        const moved = await sessionService.moveToWorktree(sessionId, {
-          directory,
-          worktree: { name: `team-${slug}-${crypto.randomUUID().slice(0, 4)}` },
-        });
+        const moved = await sessionService.moveToWorktree(sessionId, { directory, worktree: { name: `team-${slug}-${crypto.randomUUID().slice(0, 4)}` } });
         if (moved?.worktree?.path) memberDir = moved.worktree.path;
-      } catch {
-        // Non-git directories or unavailable worktree service fall back cleanly to checkout directory.
-      }
+      } catch {}
     }
     return { sessionId, directory: memberDir };
   };
@@ -525,7 +522,6 @@ export const createTeamsService = ({
       task.leaseUntil = null;
       task.updatedAt = at;
 
-      // Unblock downstream tasks that were blocked by this task (transitively)
       const unblocked = new Set([taskId]);
       let progressed = true;
       while (progressed) {
@@ -541,12 +537,8 @@ export const createTeamsService = ({
           }
         }
       }
-
       const team = draft.teams.find((t) => t.id === teamId);
-      if (team && team.status !== 'active') {
-        team.status = 'active';
-        team.updatedAt = at;
-      }
+      if (team && team.status !== 'active') { team.status = 'active'; team.updatedAt = at; }
     });
     emitUpdate({ action: 'task_retried', teamId, taskId });
     await tickScheduler(teamId);
@@ -607,12 +599,33 @@ export const createTeamsService = ({
         if (task.status !== 'running') continue;
         const member = team.members.find((m) => m.id === task.assignee) ?? team.members[0];
         if (member?.sessionId && readSessionStatus) {
+          const arb = executionCoordinator ? executionCoordinator.getArbitration(member.sessionId, 'team', { at }) : { allowed: true };
+          if (!arb.allowed && (arb.reason === 'waiting_provider' || arb.reason === 'recovery_active')) {
+            await store.update((draft) => {
+              const target = draft.tasks.find((t) => t.id === task.id);
+              if (target && target.status === 'running') target.leaseUntil = Math.max(at + DEFAULT_LEASE_MS, Number(arb.nextWakeAt) || 0);
+            });
+            continue;
+          }
           const status = await Promise.resolve(readSessionStatus(member.sessionId, member.directory || team.directory)).catch(() => null);
+          if (status && (status.type === 'busy' || status.type === 'retry')) {
+            await store.update((draft) => {
+              const target = draft.tasks.find((t) => t.id === task.id);
+              if (target && target.status === 'running') target.leaseUntil = at + DEFAULT_LEASE_MS;
+            });
+            continue;
+          }
           if (status && status.type === 'idle' && at > (task.dispatchedAt || 0)) {
-            const reply = readLastAssistantMessage
-              ? await Promise.resolve(readLastAssistantMessage(member.sessionId, member.directory || team.directory)).catch(() => null)
-              : null;
+            const reply = readLastAssistantMessage ? await Promise.resolve(readLastAssistantMessage(member.sessionId, member.directory || team.directory)).catch(() => null) : null;
             if (reply && Number(reply.completedAt || 0) >= (task.dispatchedAt || 0)) {
+              if (reply.failed && isLimitError({ message: reply.error || '' })) {
+                executionCoordinator?.noteLimitParked?.({ sessionId: member.sessionId, error: { message: reply.error }, at });
+                await store.update((draft) => {
+                  const target = draft.tasks.find((t) => t.id === task.id);
+                  if (target && target.status === 'running') target.leaseUntil = at + DEFAULT_LEASE_MS;
+                });
+                continue;
+              }
               await store.update((draft) => {
                 const target = draft.tasks.find((t) => t.id === task.id);
                 if (!target || target.status !== 'running') return;
@@ -715,7 +728,6 @@ export const createTeamsService = ({
         }
       }
 
-      // 4. Mark team settled once every DAG task has reached a non-active state.
       const finalSnapshot = await store.read();
       const finalTasks = finalSnapshot.tasks.filter((t) => t.teamId === team.id);
       const settledStatuses = new Set(['completed', 'failed', 'cancelled', 'blocked']);
@@ -730,33 +742,19 @@ export const createTeamsService = ({
         changed = true;
       }
     }
-
     if (changed) emitUpdate({ action: 'scheduler_tick', teamId: onlyTeamId });
   };
 
   const linkSessions = async ({ sourceSessionId, targetSessionId, relation = 'reference', note = '' } = {}) => {
-    const source = asText(sourceSessionId);
-    const target = asText(targetSessionId);
+    const source = asText(sourceSessionId), target = asText(targetSessionId);
     if (!source || !target) throw new TeamServiceError('sourceSessionId and targetSessionId are required', 400);
     if (source === target) throw new TeamServiceError('Cannot link a session to itself', 400);
     if (!LINK_RELATIONS.has(relation)) throw new TeamServiceError('relation must be reference, supervise, or delegate', 400);
     const at = now();
     const link = await store.update((draft) => {
       const existing = draft.links.find((l) => l.sourceSessionId === source && l.targetSessionId === target && l.relation === relation);
-      if (existing) {
-        existing.note = asText(note) || existing.note;
-        existing.updatedAt = at;
-        return existing;
-      }
-      const created = {
-        id: `link_${crypto.randomUUID().slice(0, 8)}`,
-        sourceSessionId: source,
-        targetSessionId: target,
-        relation,
-        note: asText(note) || null,
-        createdAt: at,
-        updatedAt: at,
-      };
+      if (existing) { existing.note = asText(note) || existing.note; existing.updatedAt = at; return existing; }
+      const created = { id: `link_${crypto.randomUUID().slice(0, 8)}`, sourceSessionId: source, targetSessionId: target, relation, note: asText(note) || null, createdAt: at, updatedAt: at };
       draft.links.push(created);
       return created;
     });

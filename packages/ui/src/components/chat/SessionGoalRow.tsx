@@ -26,9 +26,8 @@ export const SessionGoalRow: React.FC<SessionGoalRowProps> = React.memo(({ sessi
   const objectiveContent = useGoalObjectiveContent(sessionId ?? '', goal);
   const sessionStatus = useSessionStatus(sessionId ?? '', directory);
   const [busy, setBusy] = React.useState(false);
-  // The agent stopped but the goal is still active: the server is sitting out
-  // the quiet window and running the audit.
-  const evaluating = Boolean(sessionId && enabled && goal?.status === 'active' && (!sessionStatus || sessionStatus.type === 'idle'));
+  const waitingForQuota = Boolean(sessionId && enabled && goal?.status === 'active' && goal?.statusReason === 'waiting for provider limit reset');
+  const evaluating = Boolean(sessionId && enabled && goal?.status === 'active' && !waitingForQuota && (!sessionStatus || sessionStatus.type === 'idle'));
 
   const handleToggleStatus = React.useCallback(async (nextStatus: 'active' | 'paused') => {
     if (!sessionId || busy) return;
@@ -72,8 +71,11 @@ export const SessionGoalRow: React.FC<SessionGoalRowProps> = React.memo(({ sessi
       <span dir="auto" className="min-w-0 flex-1 truncate oc-ui-start-align text-sm text-foreground" title={objectiveContent ?? undefined}>
         {objectiveContent || t('chat.goal.dialog.titleManage')}
       </span>
-      {evaluating ? (
-        // Show the audit instead of a static "Active" that looks stuck.
+      {waitingForQuota ? (
+        <span className="flex-shrink-0 typography-meta text-muted-foreground">
+          Waiting for quota reset
+        </span>
+      ) : evaluating ? (
         <span className="flex flex-shrink-0 items-center gap-1 typography-meta text-muted-foreground">
           <Spinner className="h-3 w-3" aria-hidden="true" />
           {t('chat.goal.status.evaluating')}

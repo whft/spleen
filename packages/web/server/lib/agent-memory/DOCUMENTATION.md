@@ -265,3 +265,30 @@ The agent writes on its own initiative, so without the announcement an open
 panel would learn what was stored only the next time something reloaded. The
 memory is already on disk by then, and a listener that throws must not report
 the write as failed.
+
+## Five-tier MemFS (`memfs-store.js`, `curator.js`, `memfs-routes.js`)
+
+Alongside the JSON project/global store, Spleen runs a SQLite FTS5 five-tier
+memory subsystem (`working`, `episodic`, `semantic`, `procedural`, `archive`)
+used by the autonomous harness, research runner, and Memory Inspector:
+
+- **Provenance (`originClass` and `sessionKind`)**: Every entry records
+  `originClass` (`owner | agent | untrusted | system`) and `sessionKind`
+  (`interactive | autonomous | recovery | subagent | research`). Entries marked
+  `untrusted` or flagged by prompt-injection detection are quarantined from
+  core `semantic`/`procedural` promotion (`verificationStatus = 'quarantined'`).
+- **Recall-loop prevention (`<spleen-recalled-context>`)**: Recalled memories
+  injected into autonomous prompts are wrapped in `<spleen-recalled-context>`
+  blocks. Both `memfs-store.js` and `curator.js` strip those blocks before
+  indexing or extracting facts so recalled memories never re-ingest themselves.
+- **Supersession (`supersessionKey`)**: Writing a newer fact with the same
+  `(scope, scopeId, tier, supersessionKey)` atomically demotes the prior entry
+  to `archive` (`verificationStatus = 'superseded'`), preventing contradictory
+  facts from coexisting in active retrieval.
+- **Hybrid retrieval ranking**: `searchMemories` combines SQLite FTS5 BM25
+  relevance with exponential recency decay, `importance`, `confidence`, and
+  `owner`/`verified` boosts while tracking `recallCount` and `lastRecalledAt`.
+- **Two-gate consolidation (`POST /api/memory-v2/consolidate`)**: Promotes
+  recurring verified `episodic` insights (`>= minEpisodicSupport` episodes and
+  `confidence >= minConfidence`, excluding `untrusted` origins) into durable
+  `semantic` facts while archiving stale working scratchpads.

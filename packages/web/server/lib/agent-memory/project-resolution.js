@@ -1,11 +1,22 @@
 import path from 'node:path';
-
+import { asNonEmptyString } from '../shared/guards.js';
 import { createProjectIdFromPath } from '../projects/project-id.js';
 
+const isPosixAbsolute = (value) => value.startsWith('/') && !value.startsWith('//');
+
 const normalize = (value) => {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  return trimmed ? path.resolve(trimmed) : '';
+  const trimmed = asNonEmptyString(value);
+  if (!trimmed) return '';
+  if (isPosixAbsolute(trimmed)) {
+    return path.posix.resolve(trimmed);
+  }
+  return path.resolve(trimmed);
+};
+
+const isWithinRoot = (root, candidate) => {
+  const mod = isPosixAbsolute(root) && isPosixAbsolute(candidate) ? path.posix : path;
+  const relative = mod.relative(root, candidate);
+  return relative === '' || (!relative.startsWith('..') && !mod.isAbsolute(relative));
 };
 
 export const createMemoryProjectResolver = (dependencies) => {
@@ -18,10 +29,7 @@ export const createMemoryProjectResolver = (dependencies) => {
       return '';
     }
 
-    const managedRoot = managedRoots.find((root) => {
-      const relative = path.relative(root, resolved);
-      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-    });
+    const managedRoot = managedRoots.find((root) => isWithinRoot(root, resolved));
     if (managedRoot) {
       return createProjectIdFromPath(managedRoot);
     }
@@ -29,11 +37,7 @@ export const createMemoryProjectResolver = (dependencies) => {
     let configured = [];
     try {
       configured = ((await listProjectPaths()) || []).map(normalize).filter(Boolean);
-    } catch {
-      // An unreadable project list must not lose the memory: the git-derived
-      // root below still converges every worktree of the repository on one
-      // store rather than scattering one per checkout.
-    }
+    } catch {}
     if (configured.includes(resolved)) {
       return createProjectIdFromPath(resolved);
     }
@@ -41,9 +45,7 @@ export const createMemoryProjectResolver = (dependencies) => {
     let primaryRoot = '';
     try {
       primaryRoot = normalize((await resolvePrimaryWorktreeRoot(resolved))?.root);
-    } catch {
-      // Not a git checkout, or git is unavailable.
-    }
+    } catch {}
 
     return createProjectIdFromPath(primaryRoot || resolved);
   };

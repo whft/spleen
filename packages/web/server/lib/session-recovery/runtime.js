@@ -51,6 +51,7 @@ const providerIdFromEventData = (data, error) => (
 export const createSessionRecoveryRuntime = ({
   store,
   openCodeFetch,
+  executionCoordinator = null,
   globalEventHub = null,
   broadcastEvent = () => {},
   now = Date.now,
@@ -86,11 +87,6 @@ export const createSessionRecoveryRuntime = ({
     }
   };
 
-  /**
-   * Arm a one-shot timer for the earliest upcoming auto-continue wake so Zen
-   * continuations fire right on schedule (e.g. 3s) rather than waiting up to
-   * pollMs (30s) for the next periodic scan.
-   */
   const armNextWakeTimer = () => {
     clearWakeTimer();
     if (stopped || !hasLease) return;
@@ -175,6 +171,7 @@ export const createSessionRecoveryRuntime = ({
     broadcastSummary({ parked: sessionID });
     if (allowed) {
       recentLimitParks.set(sessionID, { at, nextWakeAt: limitResetAt, providerID: providerID || '' });
+      executionCoordinator?.noteLimitParked?.({ sessionId: sessionID, providerID, error, resetAt: limitResetAt, at });
       armNextWakeTimer();
     }
     return true;
@@ -282,6 +279,7 @@ export const createSessionRecoveryRuntime = ({
         }
         recentLimitParks.delete(sessionID);
         store.finish(sessionID, 'completed', { at });
+        executionCoordinator?.noteLimitResumed?.({ sessionId: sessionID, at });
         break;
       }
       case 'session.execution.failed': {
@@ -458,6 +456,7 @@ export const createSessionRecoveryRuntime = ({
         at: sentAt,
       });
       store.noteRecovery('resume.sent', sessionID, { attempt: decision.attempt, resumeMessageID, afterLimit: Boolean(decision.afterLimit) }, sentAt);
+      executionCoordinator?.noteLimitResumed?.({ sessionId: sessionID, at: sentAt });
       broadcastSummary({ resumed: sessionID });
       return true;
     } catch (error) {
@@ -493,14 +492,6 @@ export const createSessionRecoveryRuntime = ({
     }
   };
 
-  /**
-   * Decide whether a child session must wait for its parent before resuming.
-   * Crash recovery always resumes the parent first so parent and child do not
-   * duplicate work. For usage-limit stops (`afterLimit` / `waiting_provider`),
-   * a stopped subagent must still receive `Continue.` when its parent is
-   * actively running (waiting on the subagent's task tool) or already due to
-   * wake; it only waits while the parent itself is still parked in the future.
-   */
   const shouldDeferToParent = (row, parent, afterLimit) => {
     if (!parent) return false;
     const isUsageLimitChild = afterLimit || row.state === 'waiting_provider';
@@ -583,6 +574,10 @@ export const createSessionRecoveryRuntime = ({
         });
         break;
       case 'resume': {
+        if (executionCoordinator && !executionCoordinator.getArbitration(sessionID, 'recovery').allowed) {
+          store.schedule(sessionID, { state: row.state, attempts: Number(row.attempts) || 0, nextWakeAt: now() + 5_000, at: now(), error: 'yielded to user queue' });
+          break;
+        }
         const manualConsumed = manualWakeIds.delete(sessionID);
         if (!manualConsumed && !decision.afterLimit && now() - runtimeStartedAt < startGraceMs) {
           store.schedule(sessionID, {

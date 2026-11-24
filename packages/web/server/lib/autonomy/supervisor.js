@@ -1,8 +1,11 @@
 import { asNonEmptyString, isRecord } from '../shared/guards.js';
+import {
+  BASE_RETRY_BACKOFF_MS,
+  createSupervisorSettlement,
+  validateTaskDag,
+} from './supervisor-settlement.js';
 
 const DEFAULT_LEASE_MS = 10 * 60_000;
-const BASE_RETRY_BACKOFF_MS = 5_000;
-const MAX_FAILURE_STREAK = 3;
 
 export const LOOP_PHASES = Object.freeze([
   'objective',
@@ -16,32 +19,12 @@ export const LOOP_PHASES = Object.freeze([
   'replan',
 ]);
 
-const validateTaskDag = (tasks) => {
-  const byId = new Map(tasks.map((t) => [t.id, t]));
-  const state = new Map();
-  const visit = (id) => {
-    const s = state.get(id) ?? 0;
-    if (s === 1) return false;
-    if (s === 2) return true;
-    state.set(id, 1);
-    const task = byId.get(id);
-    for (const dep of task?.dependsOn ?? []) {
-      if (dep === id) return false;
-      if (byId.has(dep) && !visit(dep)) return false;
-    }
-    state.set(id, 2);
-    return true;
-  };
-  for (const t of tasks) {
-    if (!visit(t.id)) return { valid: false, error: `Cycle detected involving task ${t.id}` };
-  }
-  return { valid: true };
-};
-
 export const createAutonomySupervisor = ({
   store,
   verifier,
   executeTask = null,
+  executionCoordinator = null,
+  globalEventHub = null,
   onObjectiveCompleted = null,
   broadcastEvent = null,
   workerId = `supervisor-${process.pid}`,
@@ -50,14 +33,140 @@ export const createAutonomySupervisor = ({
   now = () => Date.now(),
 } = {}) => {
   let timer = null;
+  let wakeTimer = null;
   let ticking = false;
+  let pendingImmediateTick = false;
   let stopped = false;
+  const inFlight = new Map();
+  const unsubscribers = [];
 
   const emit = (type, payload) => {
     if (broadcastEvent) {
       try { broadcastEvent({ type, ...payload, timestamp: now() }); } catch {}
     }
   };
+
+  const clearWakeTimer = () => {
+    if (wakeTimer) {
+      clearTimeout(wakeTimer);
+      wakeTimer = null;
+    }
+  };
+
+  const armWakeTimer = () => {
+    clearWakeTimer();
+    if (stopped || !timer || store.isClosed?.()) return;
+    const at = now();
+    let earliest = null;
+    const candidates = [
+      ...store.listObjectives({ status: 'waiting', limit: 200 }),
+      ...store.listObjectives({ status: 'active', limit: 200 }),
+    ];
+    for (const obj of candidates) {
+      for (const ts of [obj.nextReviewAt, obj.waitingUntil]) {
+        const n = Number(ts);
+        if (Number.isFinite(n) && n > 0 && (earliest === null || n < earliest)) {
+          earliest = n;
+        }
+      }
+      if (obj.status === 'active') {
+        for (const t of store.listTasks(obj.id)) {
+          const r = Number(t.nextRetryAt);
+          if (t.status === 'pending' && Number.isFinite(r) && r > 0 && (earliest === null || r < earliest)) {
+            earliest = r;
+          }
+        }
+      }
+    }
+    if (earliest === null) return;
+    const delay = Math.max(25, Math.min(tickIntervalMs, earliest - at + 15));
+    wakeTimer = setTimeout(() => {
+      wakeTimer = null;
+      void tick({ awaitTasks: false });
+    }, delay);
+    wakeTimer.unref?.();
+  };
+
+  const scheduleImmediateTick = () => {
+    if (stopped || !timer || store.isClosed?.()) return;
+    if (ticking) {
+      pendingImmediateTick = true;
+      return;
+    }
+    const immediate = setTimeout(() => { void tick({ awaitTasks: false }); }, 0);
+    immediate.unref?.();
+  };
+
+  const abortObjectiveExecution = (objectiveId, { reason = 'interrupted' } = {}) => {
+    const obj = store.getObjective(objectiveId);
+    const sessionsToInterrupt = new Set();
+    if (asNonEmptyString(obj?.sessionId)) {
+      sessionsToInterrupt.add(obj.sessionId);
+    }
+    for (const [taskId, active] of inFlight.entries()) {
+      if (active.objectiveId !== objectiveId) continue;
+      try { active.abortController.abort(); } catch {}
+      if (asNonEmptyString(active.sessionId)) sessionsToInterrupt.add(active.sessionId);
+      inFlight.delete(taskId);
+    }
+    for (const t of store.listTasks(objectiveId)) {
+      if (asNonEmptyString(t.sessionId) && t.status === 'running') {
+        sessionsToInterrupt.add(t.sessionId);
+      }
+      for (const childId of t.subagentSessionIds || []) {
+        if (asNonEmptyString(childId)) sessionsToInterrupt.add(childId);
+      }
+    }
+    if (executionCoordinator) {
+      for (const sid of sessionsToInterrupt) {
+        void executionCoordinator.interruptSession(sid, {
+          directory: obj?.directory || '',
+          reason,
+          includeDescendants: true,
+        }).catch(() => {});
+      }
+    }
+  };
+
+  const getObjectiveDetail = (id) => {
+    const objective = store.getObjective(id);
+    if (!objective) return null;
+    return {
+      ...objective,
+      tasks: store.listTasks(id),
+      decisions: store.listDecisions(id, 50),
+      verifications: store.listVerifications(id, 20),
+      checkpoints: store.listCheckpoints(id, 40),
+    };
+  };
+
+  const verifyObjectiveNow = async (objectiveId, { autoDetect = false } = {}) => {
+    const obj = store.getObjective(objectiveId);
+    if (!obj) throw new Error(`Objective not found: ${objectiveId}`);
+    store.updateObjective(objectiveId, { loopPhase: 'validate' });
+    const result = await verifier.verifyObjective(obj, { autoDetect });
+    const record = store.recordVerification({
+      objectiveId,
+      status: result.status,
+      checks: result.checks,
+      gitDiffSummary: result.gitDiffSummary,
+      summary: result.summary,
+    });
+    store.recordDecision({ objectiveId, kind: 'verify', summary: result.summary, details: { status: result.status } });
+    emit('autonomy:verified', { objectiveId, status: result.status });
+    return { ...result, verification: record };
+  };
+
+  const { settleTaskOutcome, evaluateSettledObjective } = createSupervisorSettlement({
+    store,
+    verifyObjectiveNow,
+    onObjectiveCompleted,
+    getObjectiveDetail,
+    emit,
+    armWakeTimer,
+    scheduleImmediateTick,
+    now,
+  });
 
   const createObjective = (input = {}) => {
     const objective = store.createObjective(input);
@@ -80,6 +189,14 @@ export const createAutonomySupervisor = ({
       store.updateObjective(objective.id, { status: 'blocked', lastError: check.error });
       throw new Error(check.error);
     }
+    store.saveCheckpoint({
+      objectiveId: objective.id,
+      sessionId: objective.sessionId,
+      kind: 'objective_created',
+      summary: `Initialized ${objective.mode} objective "${objective.title}"`,
+      remaining: createdTasks.map((t) => t.title),
+      nextAction: createdTasks[0]?.title || objective.title,
+    });
     store.recordDecision({
       objectiveId: objective.id,
       kind: 'plan',
@@ -90,17 +207,6 @@ export const createAutonomySupervisor = ({
     return getObjectiveDetail(objective.id);
   };
 
-  const getObjectiveDetail = (id) => {
-    const objective = store.getObjective(id);
-    if (!objective) return null;
-    return {
-      ...objective,
-      tasks: store.listTasks(id),
-      decisions: store.listDecisions(id, 50),
-      verifications: store.listVerifications(id, 20),
-    };
-  };
-
   const addTask = (objectiveId, taskInput = {}) => {
     const obj = store.getObjective(objectiveId);
     if (!obj) throw new Error(`Objective not found: ${objectiveId}`);
@@ -108,8 +214,11 @@ export const createAutonomySupervisor = ({
     const created = store.addTask(objectiveId, taskInput);
     const check = validateTaskDag([...existing.filter((t) => t.id !== created.id), created]);
     if (!check.valid) {
-      store.updateTask(created.id, { status: 'cancelled', error: check.error });
+      store.updateTask(created.id, { status: 'cancelled', bumpEpoch: true, error: check.error });
       throw new Error(check.error);
+    }
+    if (obj.status === 'waiting') {
+      store.updateObjective(objectiveId, { status: 'active', waitingUntil: null, waitingReason: null });
     }
     store.recordDecision({ objectiveId, taskId: created.id, kind: 'plan', summary: `Added task "${created.title}"` });
     emit('autonomy:task_added', { objectiveId, taskId: created.id });
@@ -120,14 +229,32 @@ export const createAutonomySupervisor = ({
     const obj = store.getObjective(objectiveId);
     if (!obj) throw new Error(`Objective not found: ${objectiveId}`);
     for (const cid of cancelTaskIds) {
-      store.updateTask(cid, { status: 'cancelled', error: `Cancelled during replan: ${reason}` });
+      const active = inFlight.get(cid);
+      if (active) {
+        try { active.abortController.abort(); } catch {}
+        inFlight.delete(cid);
+      }
+      store.updateTask(cid, {
+        status: 'cancelled',
+        bumpEpoch: true,
+        leaseOwner: null,
+        leaseUntil: null,
+        error: `Cancelled during replan: ${reason}`,
+      });
     }
     const added = [];
     const specs = newTasks.length > 0 ? newTasks : addTasks;
     for (const spec of specs) {
       added.push(addTask(objectiveId, spec));
     }
-    store.updateObjective(objectiveId, { loopPhase: 'replan', status: obj.status === 'blocked' ? 'active' : obj.status, failureStreak: 0 });
+    store.updateObjective(objectiveId, {
+      loopPhase: 'replan',
+      status: obj.status === 'blocked' || obj.status === 'waiting' ? 'active' : obj.status,
+      failureStreak: 0,
+      stagnationStreak: 0,
+      waitingUntil: null,
+      waitingReason: null,
+    });
     store.recordDecision({
       objectiveId,
       kind: 'replan',
@@ -162,7 +289,28 @@ export const createAutonomySupervisor = ({
   };
 
   const pauseObjective = (id, reason = 'Paused by user') => {
-    const updated = store.updateObjective(id, { status: 'paused', lastError: reason });
+    const existing = store.getObjective(id);
+    if (!existing) return null;
+    abortObjectiveExecution(id, { reason });
+    for (const task of store.listTasks(id)) {
+      if (task.status === 'running') {
+        store.updateTask(task.id, {
+          status: 'pending',
+          bumpEpoch: true,
+          attempts: Math.max(0, task.attempts - 1),
+          leaseOwner: null,
+          leaseUntil: null,
+          error: reason,
+        });
+      }
+    }
+    const updated = store.updateObjective(id, {
+      status: 'paused',
+      bumpEpoch: true,
+      waitingUntil: null,
+      waitingReason: null,
+      lastError: reason,
+    });
     if (updated) {
       store.recordDecision({ objectiveId: id, kind: 'policy', summary: reason });
       emit('autonomy:updated', { objectiveId: id, status: 'paused' });
@@ -180,6 +328,7 @@ export const createAutonomySupervisor = ({
       if (task.status === 'failed' || task.status === 'blocked') {
         store.updateTask(task.id, {
           status: 'pending',
+          bumpEpoch: true,
           attempts: 0,
           leaseOwner: null,
           leaseUntil: null,
@@ -187,6 +336,8 @@ export const createAutonomySupervisor = ({
           error: null,
         });
         requeued += 1;
+      } else if (task.status === 'pending' && task.nextRetryAt && task.nextRetryAt > at) {
+        store.updateTask(task.id, { nextRetryAt: at });
       }
     }
     const hasPendingOrRunning = tasks.some((t) => t.status === 'pending' || t.status === 'running') || requeued > 0;
@@ -199,8 +350,20 @@ export const createAutonomySupervisor = ({
         idempotencyKey: `resume_${id}_${current.turnsUsed}_${at}`,
       });
     }
-    const updated = store.updateObjective(id, { status: 'active', failureStreak: 0, lastError: null, nextReviewAt: null });
-    store.recordDecision({ objectiveId: id, kind: 'recovery', summary: requeued > 0 ? `Resumed and retried ${requeued} failed/blocked task(s)` : 'Objective resumed with next continuation turn' });
+    const updated = store.updateObjective(id, {
+      status: 'active',
+      failureStreak: 0,
+      stagnationStreak: 0,
+      waitingUntil: null,
+      waitingReason: null,
+      lastError: null,
+      nextReviewAt: null,
+    });
+    store.recordDecision({
+      objectiveId: id,
+      kind: 'recovery',
+      summary: requeued > 0 ? `Resumed and retried ${requeued} failed/blocked task(s)` : 'Objective resumed',
+    });
     emit('autonomy:updated', { objectiveId: id, status: 'active' });
     return updated;
   };
@@ -210,14 +373,9 @@ export const createAutonomySupervisor = ({
     if (!current) return null;
     const at = now();
     const guidance = asNonEmptyString(note);
-    const tasks = store.listTasks(id);
-    for (const task of tasks) {
+    for (const task of store.listTasks(id)) {
       if (task.status === 'failed' || task.status === 'blocked') {
-        store.updateTask(task.id, {
-          status: 'cancelled',
-          leaseOwner: null,
-          leaseUntil: null,
-        });
+        store.updateTask(task.id, { status: 'cancelled', bumpEpoch: true, leaseOwner: null, leaseUntil: null });
       }
     }
     store.addTask(id, {
@@ -227,20 +385,41 @@ export const createAutonomySupervisor = ({
       prompt: guidance ? `${current.description}\n\nUser continuation note: ${guidance}` : current.description,
       idempotencyKey: `continue_${id}_${at}`,
     });
-    const updated = store.updateObjective(id, { status: 'active', failureStreak: 0, lastError: null, nextReviewAt: null, loopPhase: 'research' });
-    store.recordDecision({ objectiveId: id, kind: 'recovery', summary: guidance ? `Queued continuation turn: ${guidance}` : 'Queued continuation turn' });
+    const updated = store.updateObjective(id, {
+      status: 'active',
+      failureStreak: 0,
+      stagnationStreak: 0,
+      waitingUntil: null,
+      waitingReason: null,
+      lastError: null,
+      nextReviewAt: null,
+      loopPhase: 'research',
+    });
+    store.recordDecision({
+      objectiveId: id,
+      kind: 'recovery',
+      summary: guidance ? `Queued continuation turn: ${guidance}` : 'Queued continuation turn',
+    });
     emit('autonomy:updated', { objectiveId: id, status: 'active' });
     return updated;
   };
 
   const cancelObjective = (id, reason = 'Cancelled by user') => {
-    const tasks = store.listTasks(id);
-    for (const task of tasks) {
+    const existing = store.getObjective(id);
+    if (!existing) return null;
+    abortObjectiveExecution(id, { reason });
+    for (const task of store.listTasks(id)) {
       if (task.status === 'pending' || task.status === 'running') {
-        store.updateTask(task.id, { status: 'cancelled', leaseOwner: null, leaseUntil: null, error: reason });
+        store.updateTask(task.id, { status: 'cancelled', bumpEpoch: true, leaseOwner: null, leaseUntil: null, error: reason });
       }
     }
-    const updated = store.updateObjective(id, { status: 'cancelled', lastError: reason });
+    const updated = store.updateObjective(id, {
+      status: 'cancelled',
+      bumpEpoch: true,
+      waitingUntil: null,
+      waitingReason: null,
+      lastError: reason,
+    });
     if (updated) {
       store.recordDecision({ objectiveId: id, kind: 'policy', summary: reason });
       emit('autonomy:updated', { objectiveId: id, status: 'cancelled' });
@@ -249,48 +428,33 @@ export const createAutonomySupervisor = ({
   };
 
   const emergencyStopAll = (reason = 'Emergency stop triggered') => {
-    const active = store.listObjectives({ status: 'active' });
+    const candidates = [
+      ...store.listObjectives({ status: 'active', limit: 500 }),
+      ...store.listObjectives({ status: 'waiting', limit: 500 }),
+    ];
     const stoppedIds = [];
-    for (const obj of active) {
+    for (const obj of candidates) {
       pauseObjective(obj.id, reason);
-      for (const task of store.listTasks(obj.id)) {
-        if (task.status === 'running') {
-          store.updateTask(task.id, { status: 'pending', leaseOwner: null, leaseUntil: null, error: reason });
-        }
-      }
       stoppedIds.push(obj.id);
     }
     emit('autonomy:emergency_stop', { stoppedIds });
     return { stoppedIds };
   };
 
-  const verifyObjectiveNow = async (objectiveId, { autoDetect = false } = {}) => {
-    const obj = store.getObjective(objectiveId);
-    if (!obj) throw new Error(`Objective not found: ${objectiveId}`);
-    store.updateObjective(objectiveId, { loopPhase: 'validate' });
-    const result = await verifier.verifyObjective(obj, { autoDetect });
-    const record = store.recordVerification({
-      objectiveId,
-      status: result.status,
-      checks: result.checks,
-      gitDiffSummary: result.gitDiffSummary,
-      summary: result.summary,
-    });
-    store.recordDecision({ objectiveId, kind: 'verify', summary: result.summary, details: { status: result.status } });
-    emit('autonomy:verified', { objectiveId, status: result.status });
-    return { ...result, verification: record };
-  };
-
   const recoverOnStartup = () => {
     const at = now();
-    const active = store.listObjectives({ status: 'active' });
+    const candidates = [
+      ...store.listObjectives({ status: 'active', limit: 500 }),
+      ...store.listObjectives({ status: 'waiting', limit: 500 }),
+    ];
     const recovered = [];
-    for (const obj of active) {
-      const tasks = store.listTasks(obj.id);
-      for (const task of tasks) {
+    for (const obj of candidates) {
+      for (const task of store.listTasks(obj.id)) {
         if (task.status === 'running' && task.leaseOwner !== workerId) {
           store.updateTask(task.id, {
             status: 'pending',
+            bumpEpoch: true,
+            attempts: Math.max(0, task.attempts - 1),
             leaseOwner: null,
             leaseUntil: null,
             nextRetryAt: at,
@@ -300,50 +464,112 @@ export const createAutonomySupervisor = ({
             objectiveId: obj.id,
             taskId: task.id,
             kind: 'recovery',
-            summary: `Reclaimed orphaned running task "${task.title}" after restart`,
+            summary: `Reclaimed interrupted task "${task.title}" after startup`,
           });
           recovered.push(task.id);
         }
       }
     }
-    return { activeObjectives: active.length, reclaimedTasks: recovered };
+    return { activeObjectives: candidates.length, reclaimedTasks: recovered };
   };
 
-  const processObjective = async (objective) => {
+  const launchTaskExecution = (objective, claimedTask, parallelCount, slotIndex) => {
+    const abortController = new AbortController();
+    const runEpoch = claimedTask.runEpoch;
+    const entry = {
+      taskId: claimedTask.id,
+      objectiveId: objective.id,
+      runEpoch,
+      sessionId: claimedTask.sessionId || objective.sessionId || null,
+      abortController,
+      promise: null,
+    };
+
+    const runPromise = (async () => {
+      try {
+        const freshObj = store.getObjective(objective.id) || objective;
+        const outcome = await executeTask(freshObj, claimedTask, {
+          runEpoch,
+          parallelCount,
+          slotIndex,
+          signal: abortController.signal,
+        });
+        if (store.isClosed?.()) return;
+        const refreshedTask = store.getTask(claimedTask.id);
+        if (refreshedTask?.sessionId) entry.sessionId = refreshedTask.sessionId;
+        settleTaskOutcome(objective.id, claimedTask.id, runEpoch, outcome);
+      } catch (err) {
+        if (!store.isClosed?.()) {
+          settleTaskOutcome(objective.id, claimedTask.id, runEpoch, {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      } finally {
+        const current = inFlight.get(claimedTask.id);
+        if (current && current.runEpoch === runEpoch) {
+          inFlight.delete(claimedTask.id);
+        }
+        if (!stopped && timer && !store.isClosed?.()) {
+          scheduleImmediateTick();
+        }
+      }
+    })();
+
+    entry.promise = runPromise;
+    inFlight.set(claimedTask.id, entry);
+    return runPromise;
+  };
+
+  const processObjective = async (objective, launchedPromises) => {
     const at = now();
     const budget = isRecord(objective.budget) ? objective.budget : {};
-    const maxTurns = Number(budget.maxTurns) || 25;
-    const maxRuntimeMs = Number(budget.maxRuntimeMs) || 3_600_000;
-    const maxParallel = Number(budget.maxParallel) || 2;
+    const rawMaxTurns = budget.maxTurns;
+    const maxTurns = rawMaxTurns === null || rawMaxTurns === undefined
+      ? (objective.mode === 'ongoing' ? Infinity : 50)
+      : (Number.isFinite(Number(rawMaxTurns)) && Number(rawMaxTurns) > 0 ? Number(rawMaxTurns) : Infinity);
+    const rawMaxRuntime = budget.maxRuntimeMs;
+    const maxRuntimeMs = rawMaxRuntime === null || rawMaxRuntime === undefined
+      ? (objective.mode === 'ongoing' ? Infinity : 4 * 3_600_000)
+      : (Number.isFinite(Number(rawMaxRuntime)) && Number(rawMaxRuntime) > 0 ? Number(rawMaxRuntime) : Infinity);
+    const maxParallel = Math.max(1, Math.min(8, Number(budget.maxParallel) || 2));
 
-    if (objective.turnsUsed >= maxTurns) {
+    const tasksSnapshot = store.listTasks(objective.id);
+    const activeRunningCount = tasksSnapshot.filter((t) => t.status === 'running').length;
+
+    if (activeRunningCount === 0 && objective.turnsUsed >= maxTurns) {
       store.updateObjective(objective.id, { status: 'blocked', lastError: `Turn budget exhausted (${objective.turnsUsed}/${maxTurns})` });
       store.recordDecision({ objectiveId: objective.id, kind: 'budget', summary: `Turn budget exhausted (${objective.turnsUsed}/${maxTurns})` });
       return;
     }
-    if (objective.mode === 'finite' && at - objective.createdAt > maxRuntimeMs) {
+    if (activeRunningCount === 0 && objective.mode === 'finite' && at - objective.createdAt > maxRuntimeMs) {
       store.updateObjective(objective.id, { status: 'blocked', lastError: 'Runtime budget exhausted' });
       store.recordDecision({ objectiveId: objective.id, kind: 'budget', summary: 'Runtime budget exhausted' });
       return;
     }
 
-    const tasks = store.listTasks(objective.id);
-    for (const task of tasks) {
-      if (task.status === 'running' && Number(task.leaseUntil) > 0 && at > Number(task.leaseUntil)) {
-        const nextAttempt = task.attempts + 1;
+    for (const task of tasksSnapshot) {
+      if (task.status === 'running' && !inFlight.has(task.id) && Number(task.leaseUntil) > 0 && at > Number(task.leaseUntil)) {
+        const nextAttempt = task.attempts;
         if (nextAttempt < task.maxAttempts) {
           const backoff = BASE_RETRY_BACKOFF_MS * (2 ** Math.min(nextAttempt, 5));
           store.updateTask(task.id, {
             status: 'pending',
-            attempts: nextAttempt,
+            bumpEpoch: true,
             leaseOwner: null,
             leaseUntil: null,
             nextRetryAt: at + backoff,
-            error: 'Worker lease expired; retrying with backoff',
+            error: 'Worker lease expired; retrying from checkpoint',
           });
           store.recordDecision({ objectiveId: objective.id, taskId: task.id, kind: 'recovery', summary: `Lease expired; retry #${nextAttempt}` });
         } else {
-          store.updateTask(task.id, { status: 'failed', attempts: nextAttempt, leaseOwner: null, leaseUntil: null, error: 'Lease expired after max retries' });
+          store.updateTask(task.id, {
+            status: 'failed',
+            bumpEpoch: true,
+            leaseOwner: null,
+            leaseUntil: null,
+            error: 'Lease expired after max retries',
+          });
           store.recordDecision({ objectiveId: objective.id, taskId: task.id, kind: 'blocker', summary: `Task "${task.title}" failed after max lease retries` });
         }
       }
@@ -351,161 +577,68 @@ export const createAutonomySupervisor = ({
 
     const currentTasks = store.listTasks(objective.id);
     const byId = new Map(currentTasks.map((t) => [t.id, t]));
-    const runningCount = currentTasks.filter((t) => t.status === 'running').length;
-
-    const failedTasks = currentTasks.filter((t) => t.status === 'failed');
-    if (failedTasks.length > 0 && runningCount === 0) {
-      for (const pending of currentTasks.filter((t) => t.status === 'pending')) {
-        const blockedBy = pending.dependsOn.find((depId) => byId.get(depId)?.status === 'failed' || byId.get(depId)?.status === 'blocked');
-        if (blockedBy) {
-          store.updateTask(pending.id, { status: 'blocked', error: `Blocked by failed dependency ${blockedBy}` });
-        }
+    for (const pending of currentTasks.filter((t) => t.status === 'pending')) {
+      const blockedBy = pending.dependsOn.find((depId) => {
+        const st = byId.get(depId)?.status;
+        return st === 'failed' || st === 'blocked' || st === 'cancelled';
+      });
+      if (blockedBy) {
+        store.updateTask(pending.id, { status: 'blocked', bumpEpoch: true, error: `Blocked by failed dependency ${blockedBy}` });
       }
     }
 
     const refreshed = store.listTasks(objective.id);
-    const slots = Math.max(0, maxParallel - refreshed.filter((t) => t.status === 'running').length);
+    const refreshedById = new Map(refreshed.map((t) => [t.id, t]));
+    const runningTasks = refreshed.filter((t) => t.status === 'running');
+    const slots = Math.max(0, maxParallel - runningTasks.length);
+
     const ready = refreshed.filter((task) => {
       if (task.status !== 'pending') return false;
       if (task.nextRetryAt && at < task.nextRetryAt) return false;
-      return task.dependsOn.every((depId) => byId.get(depId)?.status === 'completed');
+      return task.dependsOn.every((depId) => refreshedById.get(depId)?.status === 'completed');
     }).slice(0, slots);
 
     if (ready.length > 0 && executeTask) {
       let turnsUsed = objective.turnsUsed;
-      for (const task of ready) {
+      const actualParallel = ready.length + runningTasks.length;
+      let slotIdx = runningTasks.length;
+      for (const candidate of ready) {
         if (turnsUsed >= maxTurns) break;
+        const claimed = store.claimTaskForExecution(candidate.id, { workerId, leaseMs, at });
+        if (!claimed) continue;
         turnsUsed += 1;
         const phaseByKind = { research: 'research', verify: 'validate', curate: 'remember', code: 'experiment', test: 'observe' };
-        store.updateObjective(objective.id, { loopPhase: phaseByKind[task.kind] || 'experiment', turnsUsed });
-        store.updateTask(task.id, {
-          status: 'running',
-          leaseOwner: workerId,
-          leaseUntil: at + leaseMs,
-          heartbeatAt: at,
-          attempts: task.attempts + 1,
+        store.updateObjective(objective.id, {
+          loopPhase: phaseByKind[claimed.kind] || 'experiment',
+          turnsUsed,
+          waitingUntil: null,
+          waitingReason: null,
         });
-        try {
-          const outcome = await executeTask(objective, store.getTask(task.id));
-          if (outcome?.ok === false) {
-            const errMsg = asNonEmptyString(outcome.error) || 'Task execution failed';
-            const latestTask = store.getTask(task.id);
-            const canRetry = latestTask && latestTask.attempts < latestTask.maxAttempts;
-            const retryDelay = BASE_RETRY_BACKOFF_MS * (2 ** Math.min(latestTask?.attempts ?? 1, 5));
-            store.updateTask(task.id, {
-              status: canRetry ? 'pending' : 'failed',
-              leaseOwner: null,
-              leaseUntil: null,
-              error: errMsg,
-              checkpoint: outcome.checkpoint ?? latestTask?.checkpoint ?? null,
-              nextRetryAt: canRetry ? now() + retryDelay : null,
-            });
-            const nextStreak = objective.failureStreak + 1;
-            store.updateObjective(objective.id, {
-              failureStreak: nextStreak,
-              lastError: errMsg,
-              status: nextStreak >= MAX_FAILURE_STREAK ? 'blocked' : 'active',
-            });
-            store.recordDecision({ objectiveId: objective.id, taskId: task.id, kind: 'blocker', summary: errMsg });
-          } else {
-            store.updateTask(task.id, {
-              status: 'completed',
-              leaseOwner: null,
-              leaseUntil: null,
-              result: asNonEmptyString(outcome?.result) || 'Completed',
-              artifacts: Array.isArray(outcome?.artifacts) ? outcome.artifacts : [],
-              checkpoint: outcome?.checkpoint ?? null,
-              error: null,
-            });
-            store.updateObjective(objective.id, { failureStreak: 0, lastError: null, loopPhase: 'observe' });
-            store.recordDecision({ objectiveId: objective.id, taskId: task.id, kind: 'dispatch', summary: `Completed task "${task.title}"` });
-          }
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          const latestTask = store.getTask(task.id);
-          const canRetry = latestTask && latestTask.attempts < latestTask.maxAttempts;
-          store.updateTask(task.id, {
-            status: canRetry ? 'pending' : 'failed',
-            leaseOwner: null,
-            leaseUntil: null,
-            error: errMsg,
-            nextRetryAt: canRetry ? now() + BASE_RETRY_BACKOFF_MS : null,
-          });
-          store.recordDecision({ objectiveId: objective.id, taskId: task.id, kind: 'blocker', summary: errMsg });
-        }
+        launchedPromises.push(launchTaskExecution(objective, claimed, actualParallel, slotIdx));
+        slotIdx += 1;
       }
       return;
     }
 
-    const postTasks = store.listTasks(objective.id);
-    const anyPendingOrRunning = postTasks.some((t) => t.status === 'pending' || t.status === 'running');
-    if (postTasks.length > 0 && !anyPendingOrRunning) {
-      const anyFailed = postTasks.some((t) => t.status === 'failed' || t.status === 'blocked');
-      if (anyFailed) {
-        store.updateObjective(objective.id, { status: 'blocked', lastError: 'One or more tasks failed or are blocked' });
-        return;
-      }
-
-      const verifyRes = await verifyObjectiveNow(objective.id);
-      if (verifyRes.status === 'passed' || (objective.mode === 'ongoing' && verifyRes.status === 'unverified')) {
-        if (objective.mode === 'ongoing') {
-          const intervalMs = Math.max(10_000, Number(budget.reviewIntervalMs) || 30_000);
-          const nextReview = now() + intervalMs;
-          store.updateObjective(objective.id, { status: 'waiting', loopPhase: 'remember', nextReviewAt: nextReview, lastError: null });
-          store.recordDecision({
-            objectiveId: objective.id,
-            kind: 'verify',
-            summary: `Ongoing cycle finished (${verifyRes.status}); next continuation scheduled in ${Math.round(intervalMs / 1000)}s`,
-          });
-        } else {
-          store.updateObjective(objective.id, { status: 'completed', loopPhase: 'remember', completedAt: now(), lastError: null });
-        }
-        if (onObjectiveCompleted) {
-          await Promise.resolve(onObjectiveCompleted(getObjectiveDetail(objective.id), verifyRes)).catch(() => {});
-        }
-      } else if (verifyRes.status === 'failed') {
-        if (objective.mode === 'ongoing') {
-          const intervalMs = Math.max(10_000, Number(budget.reviewIntervalMs) || 30_000);
-          const nextReview = now() + intervalMs;
-          store.updateObjective(objective.id, { status: 'waiting', loopPhase: 'remember', nextReviewAt: nextReview, lastError: null });
-          store.recordDecision({
-            objectiveId: objective.id,
-            kind: 'verify',
-            summary: `Verification check exited non-zero (${verifyRes.summary}); continuing ongoing research in ${Math.round(intervalMs / 1000)}s without forcing code edits`,
-          });
-          if (onObjectiveCompleted) {
-            await Promise.resolve(onObjectiveCompleted(getObjectiveDetail(objective.id), verifyRes)).catch(() => {});
-          }
-        } else {
-          const nextStreak = objective.failureStreak + 1;
-          if (nextStreak >= MAX_FAILURE_STREAK) {
-            store.updateObjective(objective.id, { status: 'blocked', failureStreak: nextStreak, lastError: verifyRes.summary });
-            store.recordDecision({ objectiveId: objective.id, kind: 'blocker', summary: `Stopped after ${nextStreak} consecutive verification failures` });
-          } else {
-            store.updateObjective(objective.id, { failureStreak: nextStreak, loopPhase: 'replan', lastError: verifyRes.summary });
-            for (const followUp of verifyRes.followUpTasks) {
-              store.addTask(objective.id, { ...followUp, idempotencyKey: `fix_${verifyRes.verification.id}_${followUp.title}` });
-            }
-          }
-        }
-      } else {
-        store.updateObjective(objective.id, {
-          status: 'blocked',
-          lastError: verifyRes.summary,
-        });
-      }
-    }
+    await evaluateSettledObjective(store.getObjective(objective.id) || objective);
   };
 
-  const tick = async () => {
-    if (ticking || stopped) return;
+  const tick = async ({ awaitTasks = true } = {}) => {
+    if (stopped || store.isClosed?.()) return;
+    if (ticking) {
+      pendingImmediateTick = true;
+      if (awaitTasks && inFlight.size > 0) {
+        await Promise.allSettled([...inFlight.values()].map((item) => item.promise));
+      }
+      return;
+    }
     ticking = true;
+    const launchedPromises = [];
     try {
       const at = now();
-      const waitingOngoing = store.listObjectives({ status: 'waiting' });
-      for (const obj of waitingOngoing) {
+      for (const obj of store.listObjectives({ status: 'waiting', limit: 200 })) {
         if (obj.mode === 'ongoing' && obj.nextReviewAt && at >= obj.nextReviewAt) {
-          store.updateObjective(obj.id, { status: 'active', loopPhase: 'research' });
+          store.updateObjective(obj.id, { status: 'active', loopPhase: 'research', waitingUntil: null, waitingReason: null });
           store.addTask(obj.id, {
             title: `Ongoing review cycle #${obj.turnsUsed + 1}: ${obj.title}`,
             role: 'researcher',
@@ -515,13 +648,21 @@ export const createAutonomySupervisor = ({
           });
         }
       }
-      const active = store.listObjectives({ status: 'active' });
-      for (const obj of active) {
+      for (const obj of store.listObjectives({ status: 'active', limit: 200 })) {
         if (stopped) break;
-        await processObjective(obj);
+        await processObjective(obj, launchedPromises);
       }
     } finally {
       ticking = false;
+      armWakeTimer();
+      if (pendingImmediateTick && !stopped) {
+        pendingImmediateTick = false;
+        scheduleImmediateTick();
+      }
+    }
+
+    if (awaitTasks && launchedPromises.length > 0) {
+      await Promise.allSettled(launchedPromises);
     }
   };
 
@@ -529,27 +670,72 @@ export const createAutonomySupervisor = ({
     stopped = false;
     const recovered = recoverOnStartup();
     if (!timer) {
-      timer = setInterval(() => { void tick(); }, tickIntervalMs);
+      timer = setInterval(() => { void tick({ awaitTasks: false }); }, tickIntervalMs);
       timer.unref?.();
     }
+    if (executionCoordinator?.subscribeWake) {
+      unsubscribers.push(executionCoordinator.subscribeWake((evt) => {
+        if (evt?.reason === 'limit_resumed' || evt?.reason === 'turn_released' || evt?.reason === 'controller_released') {
+          if (evt.reason === 'limit_resumed' && asNonEmptyString(evt.sessionId) && !store.isClosed?.()) {
+            const at = now();
+            for (const task of store.listTasksBySession(evt.sessionId)) {
+              if (task.status === 'pending' && task.nextRetryAt && task.nextRetryAt > at) {
+                store.updateTask(task.id, { nextRetryAt: at });
+              }
+            }
+          }
+          scheduleImmediateTick();
+        }
+      }));
+    }
+    if (globalEventHub?.subscribeStatus) {
+      unsubscribers.push(globalEventHub.subscribeStatus((st) => {
+        if (st?.type === 'connect') scheduleImmediateTick();
+      }));
+    }
+    armWakeTimer();
     return recovered;
   };
 
   const stop = () => {
     stopped = true;
+    clearWakeTimer();
     if (timer) {
       clearInterval(timer);
       timer = null;
+    }
+    for (const unsub of unsubscribers.splice(0)) {
+      try { unsub(); } catch {}
+    }
+    for (const active of inFlight.values()) {
+      try { active.abortController.abort(); } catch {}
+    }
+    inFlight.clear();
+  };
+
+  const waitForIdle = async () => {
+    while (inFlight.size > 0) {
+      await Promise.allSettled([...inFlight.values()].map((item) => item.promise));
     }
   };
 
   const getStatus = () => {
     const all = store.listObjectives({ limit: 500 });
     const counts = { active: 0, paused: 0, waiting: 0, blocked: 0, completed: 0, failed: 0, cancelled: 0 };
+    let waitingProviderCount = 0;
     for (const o of all) {
       if (Object.hasOwn(counts, o.status)) counts[o.status] += 1;
+      if (o.waitingReason === 'waiting_provider') waitingProviderCount += 1;
     }
-    return { running: !stopped && Boolean(timer), workerId, totalObjectives: all.length, counts };
+    return {
+      running: !stopped && Boolean(timer),
+      workerId,
+      inFlightTasks: inFlight.size,
+      waitingProviderObjectives: waitingProviderCount,
+      totalObjectives: all.length,
+      counts,
+      coordinator: executionCoordinator ? executionCoordinator.getStatus() : null,
+    };
   };
 
   return {
@@ -568,6 +754,7 @@ export const createAutonomySupervisor = ({
     verifyObjective: verifyObjectiveNow,
     recoverOnStartup,
     tick,
+    waitForIdle,
     start,
     stop,
     getStatus,

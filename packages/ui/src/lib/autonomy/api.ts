@@ -17,13 +17,27 @@ export type AutonomyObjective = {
   sessionId: string | null;
   turnsUsed: number;
   failureStreak: number;
+  stagnationStreak?: number;
+  useWorktrees?: boolean;
+  waitingUntil?: number | null;
+  waitingReason?: string | null;
+  nextReviewAt?: number | null;
   lastError: string | null;
   verificationCommands: string[];
   acceptanceCriteria: string[];
-  budget: { maxTurns?: number; maxRuntimeMs?: number; maxParallel?: number; reviewIntervalMs?: number };
+  budget: { maxTurns?: number | null; maxRuntimeMs?: number | null; maxParallel?: number; reviewIntervalMs?: number };
   createdAt: number;
   updatedAt: number;
   completedAt: number | null;
+};
+
+export type AutonomyCheckpoint = {
+  id: string;
+  kind: string;
+  summary: string;
+  nextAction: string | null;
+  compactionEpoch: number;
+  createdAt: number;
 };
 
 export type AutonomyObjectiveDetail = AutonomyObjective & {
@@ -38,9 +52,50 @@ export type AutonomyObjectiveDetail = AutonomyObjective & {
     error: string | null;
     attempts: number;
     maxAttempts: number;
+    providerWaits?: number;
+    sessionId?: string | null;
+    worktreePath?: string | null;
+    nextRetryAt?: number | null;
   }>;
   decisions: Array<{ id: string; kind: string; summary: string; createdAt: number }>;
   verifications: Array<{ id: string; status: string; summary: string; gitDiffSummary: string; createdAt: number }>;
+  checkpoints?: AutonomyCheckpoint[];
+};
+
+export type ProviderCooldownItem = {
+  scopeKey: string;
+  providerID: string;
+  modelID: string | null;
+  errorType: string | null;
+  reason: string | null;
+  resetAt: number;
+  remainingMs: number;
+  waits: number;
+};
+
+export type ActiveModelFailover = {
+  sessionID: string;
+  originalProviderID: string;
+  originalModelID: string;
+  activeProviderID: string;
+  activeModelID: string;
+  restoreAfter: number;
+};
+
+export type FreeZenModelItem = {
+  providerID: string;
+  id: string;
+  name: string;
+  contextLimit: number;
+};
+
+export type CoordinatorOverview = {
+  lanes: Record<string, { limit: number; active: number; queued: number }>;
+  activeSessions: Array<{ sessionId: string; owner: string | null; epoch: number }>;
+  parkedSessions: Array<{ sessionId: string; providerID: string; resetAt: number; reason: string }>;
+  cooldowns: ProviderCooldownItem[];
+  activeFailovers: ActiveModelFailover[];
+  freeZenModels?: FreeZenModelItem[];
 };
 
 export type ResearchSource = {
@@ -76,6 +131,9 @@ export type MemFsEntry = {
   body: string;
   tags: string[];
   confidence: number;
+  importance?: number;
+  originClass?: 'owner' | 'agent' | 'untrusted' | 'system';
+  recallCount?: number;
   verificationStatus: 'unverified' | 'verified' | 'contradicted' | 'stale';
   version: number;
   updatedAt: number;
@@ -85,17 +143,27 @@ export type DiagnosticSubsystems = {
   status?: string;
   running?: boolean;
   connected?: boolean;
+  coordinator?: boolean;
   activeCount?: number;
   pendingCount?: number;
   taskCount?: number;
   guildCount?: number;
+  counts?: Record<string, number>;
 };
 
 export type DiagnosticsOverview = {
   timestamp: string;
   uptimeSec: number;
   memoryMb: number;
-  autonomy: { running: boolean; workerId: string; totalObjectives: number; counts: Record<string, number> };
+  autonomy: {
+    running: boolean;
+    workerId: string;
+    inFlightTasks?: number;
+    waitingProviderObjectives?: number;
+    totalObjectives: number;
+    counts: Record<string, number>;
+  };
+  coordinator?: CoordinatorOverview | null;
   research: { sources: number; findings: number };
   memfs: { total: number; verified: number; contradicted: number };
   recovery: DiagnosticSubsystems | null;
@@ -109,10 +177,11 @@ export type CreateObjectiveInput = {
   directory?: string;
   sessionId?: string;
   mode?: 'finite' | 'ongoing';
+  useWorktrees?: boolean;
   priority?: number;
   verificationCommands?: string[];
   acceptanceCriteria?: string[];
-  budget?: { maxTurns?: number; maxRuntimeMs?: number; maxParallel?: number; reviewIntervalMs?: number };
+  budget?: { maxTurns?: number | null; maxRuntimeMs?: number | null; maxParallel?: number; reviewIntervalMs?: number };
 };
 
 export type AutonomySessionSummary = {
@@ -152,7 +221,7 @@ export type ObjectiveActionResult = {
 
 export type EmergencyStopResult = {
   ok?: boolean;
-  paused?: number;
+  stoppedIds?: string[];
 };
 
 export type ResearchActionResult = {
@@ -160,6 +229,10 @@ export type ResearchActionResult = {
   id?: string;
   source?: ResearchSource;
   indexedDocuments?: number;
+};
+
+export type ConsolidateMemoriesResult = {
+  promoted: string[];
 };
 
 const readJson = async <T,>(response: Response): Promise<T> => {
@@ -208,11 +281,21 @@ export const autonomyLabApi = {
       body: JSON.stringify({ sessionId }),
     }))
   ),
-  updateObjective: async (id: string, patch: { verificationCommands?: string[]; mode?: 'finite' | 'ongoing'; budget?: { reviewIntervalMs?: number; maxTurns?: number } }): Promise<AutonomyObjective> => (
+  updateObjective: async (id: string, patch: { verificationCommands?: string[]; mode?: 'finite' | 'ongoing'; useWorktrees?: boolean; budget?: { reviewIntervalMs?: number; maxTurns?: number | null; maxParallel?: number } }): Promise<AutonomyObjective> => (
     readJson<AutonomyObjective>(await apiFetch(`/api/autonomy/objectives/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
+    }))
+  ),
+  getCoordinator: async (): Promise<CoordinatorOverview> => (
+    readJson<CoordinatorOverview>(await apiFetch('/api/autonomy/coordinator'))
+  ),
+  clearCooldowns: async (providerID = ''): Promise<{ ok: boolean }> => (
+    readJson<{ ok: boolean }>(await apiFetch('/api/autonomy/cooldowns/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providerID }),
     }))
   ),
   listSessions: async (): Promise<AutonomySessionSummary[]> => {
@@ -260,6 +343,13 @@ export const autonomyLabApi = {
     const res = await readJson<{ entries: MemFsEntry[] }>(await apiFetch(`/api/memory-v2?${params.toString()}`));
     return res.entries ?? [];
   },
+  consolidateMemories: async (scopeId = ''): Promise<ConsolidateMemoriesResult> => (
+    readJson<ConsolidateMemoriesResult>(await apiFetch('/api/memory-v2/consolidate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scopeId }),
+    }))
+  ),
   saveMemory: async (payload: SaveMemoryInput): Promise<MemFsEntry> => (
     readJson<MemFsEntry>(await apiFetch('/api/memory-v2', {
       method: 'POST',

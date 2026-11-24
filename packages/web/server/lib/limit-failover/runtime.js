@@ -143,6 +143,7 @@ export const createLimitFailoverRuntime = ({
   instanceDir,
   readSettings,
   authorizeRequest,
+  providerGate = null,
   broadcastUiEvent = () => {},
   onFailoverApplied = () => {},
   now = Date.now,
@@ -203,6 +204,14 @@ export const createLimitFailoverRuntime = ({
 
     forgetOldSettlements(at);
     const active = report.activeCredentialID;
+    providerGate?.recordLimit?.({
+      providerID: report.providerID,
+      modelID: report.modelID,
+      credentialID: active || '',
+      error: report.error,
+      resetAt: failure.resetAt,
+      at,
+    });
     if (active) {
       const key = `${report.sessionID}:${active}`;
       const switched = switchedAt.get(active);
@@ -251,6 +260,31 @@ export const createLimitFailoverRuntime = ({
         },
       });
       return { action: 'switch-model', model: fallback, ticket };
+    }
+
+    if (providerGate?.selectFailoverModel) {
+      const freeChoice = await Promise.resolve(providerGate.selectFailoverModel({
+        sessionID: report.sessionID,
+        providerID: report.providerID,
+        modelID: report.modelID,
+        error: report.error,
+        at,
+      })).catch(() => null);
+      if (freeChoice?.model && freeChoice.verifiedZeroCost === true) {
+        const ticket = openTicket(at, {
+          sessionID: report.sessionID,
+          credentialID: null,
+          announcement: {
+            kind: 'free-zen-model',
+            sessionId: report.sessionID,
+            providerId: report.providerID,
+            modelId: report.modelID,
+            toProviderId: freeChoice.model.providerID,
+            toModelId: freeChoice.model.id,
+          },
+        });
+        return { action: 'switch-model', model: freeChoice.model, ticket };
+      }
     }
     return { action: 'none' };
   };

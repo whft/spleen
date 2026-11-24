@@ -121,8 +121,67 @@ async fn boot(app: tauri::AppHandle) -> Result<(), String> {
     {
         let state = app.state::<AppState>();
         *state.client_token.lock().unwrap() = token.clone();
+        let mut server_guard = state.server.lock().unwrap();
+        if let Some(server) = server_guard.as_mut() {
+            server.client_token = token.clone();
+        }
     }
     log::info!("backend ready at {origin}");
+
+    let monitor_app = app.clone();
+    let monitor_origin = origin.clone();
+    let monitor_token = token.clone();
+    tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::new();
+        let mut was_holding_awake = false;
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+            if SHUTDOWN_STARTED.load(Ordering::SeqCst) {
+                break;
+            }
+            let autonomy_res = client
+                .get(format!("{monitor_origin}/api/autonomy/status"))
+                .bearer_auth(&monitor_token)
+                .timeout(std::time::Duration::from_secs(4))
+                .send()
+                .await;
+            let mut active_count: i64 = 0;
+            if let Ok(resp) = autonomy_res {
+                if let Ok(body) = resp.json::<Value>().await {
+                    let active_obj = body
+                        .pointer("/counts/active")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0);
+                    let waiting_obj = body
+                        .pointer("/counts/waiting")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0);
+                    let inflight = body
+                        .get("inFlightTasks")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0);
+                    active_count += active_obj.max(inflight) + waiting_obj;
+                }
+            }
+            let user_keep_awake = monitor_app
+                .state::<AppState>()
+                .settings
+                .lock()
+                .map(|s| s.keep_awake)
+                .unwrap_or(false);
+            let should_awake = user_keep_awake || active_count > 0;
+            if should_awake != was_holding_awake {
+                set_keep_awake(should_awake);
+                was_holding_awake = should_awake;
+            }
+            if active_count > 0 {
+                if let Some(tray) = monitor_app.tray_by_id("spleen-tray") {
+                    let tip = format!("Spleen — {active_count} autonomous active");
+                    let _ = tray.set_tooltip(Some(&tip));
+                }
+            }
+        }
+    });
 
     let bootstrap = window::Bootstrap {
         origin: origin.clone(),

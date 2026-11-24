@@ -1365,6 +1365,7 @@ export const createSpleenSessionService = (dependencies) => {
     setSessionLinks,
     send: (sessionID, payload) => runExisting('send', sessionID, payload),
     fork: (sessionID, payload) => runExisting('fork', sessionID, payload),
+    abort: (sessionID, payload) => clientFor(asNonEmptyString(payload?.directory)).session.interrupt({ sessionID }).then((r) => Boolean(r?.interrupted), () => false),
     moveToWorktree,
   };
 };
@@ -1373,12 +1374,7 @@ const sendServiceError = (res, error, fallback) => {
   const controlError = asControlError(error, fallback);
   const body = {
     error: controlError.message,
-    ...(controlError.partial === true ? {
-      partial: true,
-      partialAction: controlError.partialAction,
-      sessionId: controlError.sessionId,
-      directory: controlError.directory,
-    } : {}),
+    ...(controlError.partial === true ? { partial: true, partialAction: controlError.partialAction, sessionId: controlError.sessionId, directory: controlError.directory } : {}),
   };
   return res.status(controlError.statusCode).json(body);
 };

@@ -51,6 +51,10 @@ export const registerMemFsRoutes = (app, { memfsStore, curator, requireAuthorize
     res.json(curator.curateFromEpisode(req.body ?? {}));
   }));
 
+  app.post('/api/memory-v2/consolidate', express.json({ limit: '64kb' }), wrap(async (req, res) => {
+    res.json(curator.consolidateMemories(req.body ?? {}));
+  }));
+
   app.post('/api/memory-v2/propose-skill', express.json({ limit: '128kb' }), wrap(async (req, res) => {
     res.json(await curator.proposeProceduralSkill(req.body ?? {}));
   }));

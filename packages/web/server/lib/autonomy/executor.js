@@ -1,168 +1,98 @@
-import { asNonEmptyString, isRecord } from '../shared/guards.js';
+import crypto from 'node:crypto';
+import { asNonEmptyString, isRecord, isString } from '../shared/guards.js';
+import { isLimitError } from '../limit-failover/policy.js';
+import { providerLimitResetAt } from '../session-recovery/reconciler.js';
+import { stripRecalledContextBlocks } from './compaction-bridge.js';
+import { buildAutonomyTaskPrompt, createOpenCodeSessionAdapter } from './prompt-builder.js';
 
-const DEFAULT_POLL_MS = 2_000;
-const DEFAULT_MAX_WAIT_MS = 900_000;
+export { buildAutonomyTaskPrompt, createOpenCodeSessionAdapter };
 
-const sleep = (ms) => new Promise((resolve) => {
-  const timer = setTimeout(resolve, ms);
+const DEFAULT_POLL_MS = 1_500;
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 900_000;
+const DEFAULT_UNAVAILABLE_GRACE_MS = 60_000;
+const DEFAULT_LEASE_MS = 10 * 60_000;
+const TRANSIENT_BACKEND_RE = /ECONNREFUSED|ECONNRESET|ETIMEDOUT|socket hang up|fetch failed|not ready|502|503|504/i;
+
+const sleep = (ms, signal = null) => new Promise((resolve) => {
+  if (signal?.aborted) {
+    resolve();
+    return;
+  }
+  let onAbort = null;
+  const timer = setTimeout(() => {
+    if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+    resolve();
+  }, ms);
   timer.unref?.();
+  if (signal) {
+    onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
 });
-
-const extractAssistantText = (message) => {
-  const parts = Array.isArray(message?.content)
-    ? message.content
-    : (Array.isArray(message?.parts) ? message.parts : []);
-  return parts
-    .filter((p) => p?.type === 'text' && asNonEmptyString(p.text))
-    .map((p) => p.text)
-    .join('\n')
-    .trim();
-};
-
-const isSessionInActivePayload = (payload, sessionId) => {
-  if (!payload || !sessionId) return null;
-  const inner = isRecord(payload.data)
-    ? payload.data
-    : (Array.isArray(payload.data) ? payload.data : payload);
-  if (Array.isArray(inner)) {
-    return inner.some((entry) => entry === sessionId || entry?.id === sessionId || entry?.sessionID === sessionId);
-  }
-  if (isRecord(inner)) {
-    return Object.prototype.hasOwnProperty.call(inner, sessionId);
-  }
-  return null;
-};
-
-const normalizeAssistantMessage = (msg) => {
-  if (!isRecord(msg)) return null;
-  const isV2 = msg.type === 'assistant';
-  const isV1 = !isV2 && isRecord(msg.info) && msg.info.role === 'assistant';
-  if (!isV2 && !isV1) return null;
-  const meta = isV1 ? msg.info : msg;
-  const completedNum = Number(meta?.time?.completed);
-  const createdNum = Number(meta?.time?.created);
-  const finish = asNonEmptyString(meta?.finish);
-  const hasError = Boolean(meta?.error || finish === 'error' || meta?.aborted);
-  const isDone = (Number.isFinite(completedNum) && completedNum > 0) || Boolean(finish) || hasError;
-  if (!isDone) return null;
-  const completedAt = (Number.isFinite(completedNum) && completedNum > 0)
-    ? completedNum
-    : (Number.isFinite(createdNum) && createdNum > 0 ? createdNum : 0);
-  if (completedAt <= 0) return null;
-  return {
-    completedAt,
-    text: extractAssistantText(msg),
-    failed: hasError,
-    error: asNonEmptyString(meta?.error?.message) || (hasError ? 'Assistant turn failed' : null),
-  };
-};
-
-export const createOpenCodeSessionAdapter = ({
-  readOpenCodeJson,
-} = {}) => {
-  const readSessionStatus = async (sessionId, directory) => {
-    if (!readOpenCodeJson) return null;
-    const active = await readOpenCodeJson('/api/session/active', directory);
-    const busy = isSessionInActivePayload(active, sessionId);
-    if (busy === null) return null;
-    return busy ? { type: 'busy' } : { type: 'idle' };
-  };
-
-  const readLastAssistantMessage = async (sessionId, directory) => {
-    if (!readOpenCodeJson) return null;
-    const page = await readOpenCodeJson(`/api/session/${encodeURIComponent(sessionId)}/message?limit=15`, directory);
-    const list = Array.isArray(page?.data) ? page.data : (Array.isArray(page) ? page : []);
-    let best = null;
-    for (const msg of list) {
-      const normalized = normalizeAssistantMessage(msg);
-      if (!normalized) continue;
-      if (!best || normalized.completedAt >= best.completedAt) {
-        best = normalized;
-      }
-    }
-    return best;
-  };
-
-  const listSessions = async (limit = 40) => {
-    if (!readOpenCodeJson) return [];
-    const page = await readOpenCodeJson(`/api/session?limit=${Math.max(1, Math.min(100, Number(limit) || 40))}`, '');
-    const list = Array.isArray(page?.data) ? page.data : (Array.isArray(page) ? page : []);
-    return list
-      .filter((s) => asNonEmptyString(s?.id))
-      .map((s) => ({
-        id: s.id,
-        title: asNonEmptyString(s.title) || s.id,
-        directory: asNonEmptyString(s?.location?.directory) || asNonEmptyString(s?.directory) || '',
-        updatedAt: Number(s?.time?.updated) || Number(s?.time?.created) || 0,
-      }))
-      .sort((a, b) => b.updatedAt - a.updatedAt);
-  };
-
-  return { readSessionStatus, readLastAssistantMessage, listSessions };
-};
-
-export const buildAutonomyTaskPrompt = (objective, task, completedTasks = []) => {
-  const lines = [
-    `[Autonomy Supervisor — ${objective.mode === 'ongoing' ? 'Ongoing Research' : 'Objective'} Task]`,
-    `Objective: ${objective.title}`,
-  ];
-  if (asNonEmptyString(objective.description) && objective.description !== objective.title) {
-    lines.push(`Goal Details: ${objective.description}`);
-  }
-  lines.push(`Task: ${task.title} (role: ${task.role}, kind: ${task.kind})`);
-  if (asNonEmptyString(task.prompt)) {
-    lines.push(`Instructions: ${task.prompt}`);
-  }
-  if (Array.isArray(objective.acceptanceCriteria) && objective.acceptanceCriteria.length > 0) {
-    lines.push(`Acceptance Criteria:\n${objective.acceptanceCriteria.map((c) => `- ${c}`).join('\n')}`);
-  }
-  if (Array.isArray(objective.verificationCommands) && objective.verificationCommands.length > 0) {
-    lines.push(`Configured Verification Commands (informational — ignore unrelated/third-party repo failures outside your scope):\n${objective.verificationCommands.map((c) => `- ${c}`).join('\n')}`);
-  }
-  if (asNonEmptyString(task.error)) {
-    lines.push(`Previous Attempt Issue (recover and keep going): ${task.error}`);
-  }
-  if (completedTasks.length > 0) {
-    const recent = completedTasks
-      .filter((t) => asNonEmptyString(t.result) && t.result !== 'Turn completed')
-      .slice(-2)
-      .map((t) => `- ${t.title}: ${t.result.slice(0, 500)}`);
-    if (recent.length > 0) {
-      lines.push(`Prior Completed Work (continue directly from your stated next step):\n${recent.join('\n')}`);
-    }
-  }
-  lines.push(
-    'Scope Guardrail: Stay strictly within your stated goal and the user\'s instructions. Do NOT edit, patch, or try to fix unrelated third-party/reference repositories, vendored folders, or files you were not asked to modify. If any automated check fails on unrelated files, ignore those unrelated failures, note why they are out of scope, and keep working on your actual goal.',
-    'Continue working directly in this session without spawning unnecessary extra team chats unless explicitly requested.',
-    'Do concrete work on the next unresolved step, verify your findings, use research.search / research.registerSource for docs, and call memfs.save for verified discoveries.',
-    'End with concrete verified evidence, files touched, and the exact next concrete step if more work remains.',
-  );
-  return lines.join('\n\n');
-};
 
 export const createAutonomySessionExecutor = ({
   store,
   sessionService = null,
+  executionCoordinator = null,
+  memfsStore = null,
   readSessionStatus = null,
   readLastAssistantMessage = null,
   pollIntervalMs = DEFAULT_POLL_MS,
-  maxTurnWaitMs = DEFAULT_MAX_WAIT_MS,
+  maxTurnWaitMs = DEFAULT_INACTIVITY_TIMEOUT_MS,
+  unavailableGraceMs = DEFAULT_UNAVAILABLE_GRACE_MS,
+  leaseMs = DEFAULT_LEASE_MS,
+  workerId = `executor-${process.pid}`,
   now = () => Date.now(),
   wait = sleep,
 } = {}) => {
-  const resolveSession = async (objective) => {
-    const existing = asNonEmptyString(objective?.sessionId);
-    if (existing) return existing;
-    if (!sessionService?.create) return null;
+  const resolveSessionAndDirectory = async (objective, task, { parallelCount = 1, slotIndex = 0 } = {}) => {
+    const taskSession = asNonEmptyString(task?.sessionId);
+    const taskDir = asNonEmptyString(task?.worktreePath) || objective.directory;
+    if (taskSession) return { sessionId: taskSession, directory: taskDir };
+
+    const existingObjSession = asNonEmptyString(objective?.sessionId);
+    const needsDedicatedSession = (
+      objective.useWorktrees === true
+      || (parallelCount > 1 && slotIndex > 0)
+    ) && Boolean(sessionService?.create);
+
+    if (!needsDedicatedSession && existingObjSession) {
+      return { sessionId: existingObjSession, directory: objective.directory };
+    }
+    if (!sessionService?.create) {
+      return { sessionId: existingObjSession || null, directory: objective.directory };
+    }
+
+    const titleSuffix = needsDedicatedSession
+      ? `${String(objective.title || 'Objective').slice(0, 32)} · ${String(task.title || 'Task').slice(0, 28)}`
+      : String(objective.title || 'Objective').slice(0, 60);
     const created = await sessionService.create({
       directory: objective.directory,
-      title: `Autonomy · ${String(objective.title || 'Objective').slice(0, 60)}`,
+      title: `Autonomy · ${titleSuffix}`,
     });
     const sessionId = asNonEmptyString(created?.sessionId) || asNonEmptyString(created?.id);
-    if (sessionId) {
+    if (!sessionId) return { sessionId: null, directory: objective.directory };
+
+    let effectiveDir = asNonEmptyString(created?.directory) || objective.directory;
+    if (objective.useWorktrees === true && sessionService.moveToWorktree) {
+      try {
+        const slug = String(task.title || 'task').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'task';
+        const moved = await sessionService.moveToWorktree(sessionId, {
+          directory: objective.directory,
+          worktree: { name: `autonomy-${slug}-${crypto.randomBytes(2).toString('hex')}` },
+        });
+        const wtPath = asNonEmptyString(moved?.worktree?.path);
+        if (wtPath) effectiveDir = wtPath;
+      } catch {}
+    }
+
+    if (!needsDedicatedSession && !existingObjSession) {
       store.updateObjective(objective.id, { sessionId });
     }
-    return sessionId;
+    return { sessionId, directory: effectiveDir };
   };
 
   const isObjectiveStopped = (objectiveId) => {
@@ -170,76 +100,414 @@ export const createAutonomySessionExecutor = ({
     return !current || current.status === 'paused' || current.status === 'cancelled';
   };
 
-  const executeTask = async (objective, task) => {
-    if (!sessionService?.send) {
-      return { ok: false, error: 'OpenCode session runtime is unavailable' };
+  const recallRelevantMemories = (objective, task) => {
+    if (!memfsStore?.searchMemories) return [];
+    try {
+      return memfsStore.searchMemories({
+        query: `${objective.title} ${task.title}`,
+        scope: 'project',
+        scopeId: objective.directory || '',
+        minConfidence: 0.55,
+        limit: 5,
+      });
+    } catch {
+      return [];
     }
-    const sessionId = await resolveSession(objective);
-    if (!sessionId) {
-      return { ok: false, error: 'Failed to resolve or create target chat session' };
-    }
-    const directory = objective.directory;
-    store.updateTask(task.id, { sessionId });
+  };
 
-    const deadline = now() + maxTurnWaitMs;
+  const runTurnOnSession = async ({
+    objective,
+    task,
+    runEpoch,
+    sessionId,
+    directory,
+    signal,
+    isCurrentEpoch,
+  }) => {
+    const checkCancelled = () => (
+      Boolean(signal?.aborted)
+      || (isCurrentEpoch && !isCurrentEpoch())
+      || isObjectiveStopped(objective.id)
+      || store.getTask(task.id)?.runEpoch !== runEpoch
+    );
+
+    const renew = (checkpointPatch = undefined, subagentSessionIds = undefined) => {
+      store.renewTaskLease(task.id, runEpoch, {
+        workerId,
+        leaseMs,
+        checkpoint: checkpointPatch,
+        subagentSessionIds,
+        at: now(),
+      });
+    };
+
+    let idleWaitStart = now();
+    let unavailableSince = null;
     if (readSessionStatus) {
-      while (now() < deadline) {
-        if (isObjectiveStopped(objective.id)) {
-          return { ok: false, error: 'Objective paused or cancelled while waiting for session' };
+      while (now() - idleWaitStart < maxTurnWaitMs) {
+        if (checkCancelled()) {
+          return { ok: false, aborted: true, kind: 'cancelled', error: 'Objective paused or cancelled while waiting for session' };
         }
         const status = await readSessionStatus(sessionId, directory).catch(() => null);
-        if (status?.type === 'idle') break;
-        await wait(pollIntervalMs);
+        if (status === null) {
+          if (unavailableSince === null) unavailableSince = now();
+          renew();
+          if (now() - unavailableSince >= unavailableGraceMs) {
+            return {
+              ok: false,
+              deferred: true,
+              kind: 'backend_unavailable',
+              nextWakeAt: now() + 5_000,
+              error: 'OpenCode backend temporarily unavailable before dispatch',
+            };
+          }
+          await wait(pollIntervalMs, signal);
+          continue;
+        }
+        unavailableSince = null;
+        if (status.type === 'idle') break;
+        renew(undefined, status.activeChildren);
+        idleWaitStart = now();
+        await wait(pollIntervalMs, signal);
       }
+    }
+
+    if (checkCancelled()) {
+      return { ok: false, aborted: true, kind: 'cancelled', error: 'Execution superseded before prompt dispatch' };
     }
 
     const baseline = readLastAssistantMessage
       ? await readLastAssistantMessage(sessionId, directory).catch(() => null)
       : null;
     const baselineTs = Number(baseline?.completedAt) || 0;
+    const baselineId = asNonEmptyString(baseline?.id);
+    const baselineAfterIdleId = asNonEmptyString(baseline?.afterIdleId);
 
-    const completedTasks = store.listTasks(objective.id).filter((t) => t.status === 'completed');
-    const prompt = buildAutonomyTaskPrompt(objective, task, completedTasks);
-    const sendResult = await sessionService.send(sessionId, { directory, prompt });
+    const allTasks = store.listTasks(objective.id);
+    const prompt = buildAutonomyTaskPrompt(objective, task, {
+      completedTasks: allTasks.filter((t) => t.status === 'completed'),
+      pendingTasks: allTasks.filter((t) => t.status === 'pending' || t.status === 'running'),
+      failedTasks: allTasks.filter((t) => t.status === 'failed' || t.status === 'blocked'),
+      dependencyTasks: (task.dependsOn || [])
+        .map((depId) => allTasks.find((t) => t.id === depId))
+        .filter((t) => t && t.status === 'completed'),
+      latestCheckpoint: store.getLatestCheckpoint({ taskId: task.id }) || store.getLatestCheckpoint({ objectiveId: objective.id }),
+      compactionCheckpoint: store.getLatestCheckpoint({ objectiveId: objective.id, kind: 'compaction' }),
+      recalledMemories: recallRelevantMemories(objective, task),
+      stagnationWarning: objective.stagnationStreak >= 2
+        ? `The last ${objective.stagnationStreak} turn(s) produced repetitive or unverified output. Change strategy, inspect concrete code/logs, or run a decisive experiment.`
+        : null,
+    });
+
+    const preCheckpoint = {
+      phase: 'dispatched',
+      sessionId,
+      directory,
+      dispatchedAt: now(),
+      baselineMessageId: baselineId,
+      afterIdleId: baselineAfterIdleId,
+    };
+    renew(preCheckpoint);
+
+    let sendResult = null;
+    try {
+      sendResult = await sessionService.send(sessionId, { directory, prompt });
+    } catch (sendErr) {
+      const errObj = isRecord(sendErr) ? sendErr : { message: sendErr instanceof Error ? sendErr.message : String(sendErr) };
+      if (isLimitError(errObj)) {
+        const resetAt = providerLimitResetAt(errObj, now(), task.providerWaits || 0, now(), '') ?? (now() + 15_000);
+        executionCoordinator?.noteLimitParked({ sessionId, error: errObj, resetAt, reason: errObj.message });
+        return {
+          ok: false,
+          deferred: true,
+          kind: 'usage_limit',
+          resetAt,
+          checkpoint: preCheckpoint,
+          error: asNonEmptyString(errObj.message) || 'Provider usage limit reached on dispatch',
+        };
+      }
+      const errText = asNonEmptyString(errObj.message) || 'Prompt dispatch failed';
+      if (TRANSIENT_BACKEND_RE.test(errText)) {
+        return {
+          ok: false,
+          deferred: true,
+          kind: 'backend_unavailable',
+          nextWakeAt: now() + 5_000,
+          checkpoint: preCheckpoint,
+          error: errText,
+        };
+      }
+      return { ok: false, kind: 'dispatch_failed', checkpoint: preCheckpoint, error: errText };
+    }
+
     if (sendResult && sendResult.promptDispatched === false) {
-      return { ok: false, error: asNonEmptyString(sendResult.promptError) || 'Session rejected prompt dispatch' };
+      const errText = asNonEmptyString(sendResult.promptError) || 'Session rejected prompt dispatch';
+      const syntheticErr = { message: errText };
+      if (isLimitError(syntheticErr)) {
+        const resetAt = providerLimitResetAt(syntheticErr, now(), task.providerWaits || 0, now(), '') ?? (now() + 15_000);
+        executionCoordinator?.noteLimitParked({ sessionId, error: syntheticErr, resetAt, reason: errText });
+        return { ok: false, deferred: true, kind: 'usage_limit', resetAt, checkpoint: preCheckpoint, error: errText };
+      }
+      return { ok: false, kind: 'dispatch_rejected', checkpoint: preCheckpoint, error: errText };
     }
 
     if (!readSessionStatus && !readLastAssistantMessage) {
-      return { ok: true, result: `Dispatched to session ${sessionId}` };
+      return {
+        ok: true,
+        confirmed: true,
+        result: `Dispatched to session ${sessionId}`,
+        checkpoint: { ...preCheckpoint, phase: 'completed', completedAt: now() },
+      };
     }
 
     let seenBusy = false;
-    let idleTicks = 0;
-    while (now() < deadline) {
-      await wait(pollIntervalMs);
-      if (isObjectiveStopped(objective.id)) {
-        return { ok: false, error: 'Objective paused or cancelled during turn' };
+    let unconfirmedIdleTicks = 0;
+    let lastActiveAt = now();
+    unavailableSince = null;
+    const maxUnconfirmedIdleTicks = Math.max(6, Math.min(20, Math.ceil(12_000 / Math.max(50, pollIntervalMs))));
+
+    while (now() - lastActiveAt < maxTurnWaitMs) {
+      await wait(pollIntervalMs, signal);
+      if (checkCancelled()) {
+        return { ok: false, aborted: true, kind: 'cancelled', checkpoint: preCheckpoint, error: 'Objective paused or cancelled during turn' };
       }
+
+      if (executionCoordinator) {
+        const arb = executionCoordinator.getArbitration(sessionId, 'autonomy', { at: now() });
+        if (!arb.allowed && (arb.reason === 'waiting_provider' || arb.reason === 'recovery_active')) {
+          return {
+            ok: false,
+            deferred: true,
+            kind: 'usage_limit',
+            resetAt: arb.nextWakeAt || (now() + 15_000),
+            checkpoint: preCheckpoint,
+            error: 'Session parked for automatic provider recovery',
+          };
+        }
+      }
+
       const status = readSessionStatus
         ? await readSessionStatus(sessionId, directory).catch(() => null)
         : { type: 'idle' };
-      if (!status || status.type === 'busy') {
-        if (status?.type === 'busy') seenBusy = true;
-        idleTicks = 0;
-        store.updateTask(task.id, { heartbeatAt: now() });
+
+      if (status === null) {
+        if (unavailableSince === null) unavailableSince = now();
+        renew(preCheckpoint);
+        if (now() - unavailableSince >= unavailableGraceMs) {
+          return {
+            ok: false,
+            deferred: true,
+            kind: 'backend_unavailable',
+            nextWakeAt: now() + 8_000,
+            checkpoint: preCheckpoint,
+            error: 'OpenCode backend unreachable during active turn; preserving execution state',
+          };
+        }
         continue;
       }
+
+      unavailableSince = null;
+
+      if (status.type === 'retry') {
+        seenBusy = true;
+        unconfirmedIdleTicks = 0;
+        lastActiveAt = now();
+        renew({
+          ...preCheckpoint,
+          phase: 'provider_retry',
+          retryMessage: status.message,
+          nextRetryAt: status.next,
+        }, status.activeChildren);
+        continue;
+      }
+
+      if (status.type === 'busy') {
+        seenBusy = true;
+        unconfirmedIdleTicks = 0;
+        lastActiveAt = now();
+        renew({
+          ...preCheckpoint,
+          phase: 'running',
+          lastBusyAt: lastActiveAt,
+        }, status.activeChildren);
+        continue;
+      }
+
       const latest = readLastAssistantMessage
         ? await readLastAssistantMessage(sessionId, directory).catch(() => null)
         : null;
-      if (latest && Number(latest.completedAt) > baselineTs) {
-        if (latest.failed) {
-          return { ok: false, error: latest.error || 'Assistant turn failed' };
+
+      const hasNewId = Boolean(latest?.id && latest.id !== baselineId && Number(latest.completedAt) >= baselineTs);
+      const hasNewTimestamp = Boolean(latest && Number(latest.completedAt) > baselineTs);
+      const hasNewIdleRecord = Boolean(latest?.afterIdleId && latest.afterIdleId !== baselineAfterIdleId);
+
+      if (latest && (hasNewId || hasNewTimestamp || hasNewIdleRecord)) {
+        if (latest.isLimit) {
+          const resetAt = providerLimitResetAt(
+            latest.rawError || { type: 'provider.free-limit', message: latest.error || 'usage limit' },
+            now(),
+            task.providerWaits || 0,
+            latest.completedAt || now(),
+            latest.providerID || '',
+          ) ?? (now() + 15_000);
+          executionCoordinator?.noteLimitParked({
+            sessionId,
+            providerID: latest.providerID,
+            modelID: latest.modelID,
+            error: latest.rawError || { message: latest.error },
+            resetAt,
+            reason: latest.error || 'provider limit',
+          });
+          return {
+            ok: false,
+            deferred: true,
+            kind: 'usage_limit',
+            resetAt,
+            checkpoint: { ...preCheckpoint, phase: 'waiting_provider', lastMessageId: latest.id, resetAt },
+            error: latest.error || 'Provider usage limit reached',
+          };
         }
-        return { ok: true, result: (latest.text || 'Turn completed').slice(0, 4000) };
+        if (latest.aborted) {
+          return {
+            ok: false,
+            aborted: true,
+            kind: 'aborted',
+            checkpoint: { ...preCheckpoint, phase: 'aborted', lastMessageId: latest.id },
+            error: 'Assistant turn was interrupted',
+          };
+        }
+        if (latest.failed) {
+          return {
+            ok: false,
+            kind: 'assistant_error',
+            checkpoint: { ...preCheckpoint, phase: 'failed', lastMessageId: latest.id },
+            error: latest.error || 'Assistant turn failed',
+          };
+        }
+
+        const cleanResult = stripRecalledContextBlocks(latest.text || '').trim() || 'Completed verified turn';
+        const doneCheckpoint = {
+          ...preCheckpoint,
+          phase: 'completed',
+          completedAt: latest.completedAt,
+          lastMessageId: latest.id,
+        };
+        store.saveCheckpoint({
+          objectiveId: objective.id,
+          taskId: task.id,
+          sessionId,
+          kind: 'turn_completed',
+          summary: cleanResult.slice(0, 600),
+          completed: [`${task.title}: ${cleanResult.slice(0, 240)}`],
+          afterIdleId: latest.afterIdleId ?? null,
+          baselineMessageId: latest.id ?? null,
+        });
+        return {
+          ok: true,
+          confirmed: true,
+          messageId: latest.id,
+          result: cleanResult.slice(0, 4000),
+          checkpoint: doneCheckpoint,
+        };
       }
-      idleTicks += 1;
-      if ((seenBusy && idleTicks >= 4) || (!seenBusy && idleTicks >= 45)) {
-        return { ok: true, result: latest?.text?.slice(0, 4000) || `Session ${sessionId} completed turn` };
+
+      unconfirmedIdleTicks += 1;
+      renew(preCheckpoint);
+      if ((seenBusy && unconfirmedIdleTicks >= 4) || (!seenBusy && unconfirmedIdleTicks >= maxUnconfirmedIdleTicks)) {
+        return {
+          ok: false,
+          kind: 'unconfirmed_turn',
+          checkpoint: { ...preCheckpoint, phase: 'unconfirmed_idle', unconfirmedIdleTicks },
+          error: `No confirmed assistant response recorded for session ${sessionId}`,
+        };
       }
     }
-    return { ok: false, error: `Timed out waiting for session ${sessionId} to finish turn` };
+
+    return {
+      ok: false,
+      kind: 'inactivity_timeout',
+      checkpoint: { ...preCheckpoint, phase: 'stalled', stalledAt: now() },
+      error: `Session ${sessionId} produced no activity for ${Math.round(maxTurnWaitMs / 1000)}s`,
+    };
+  };
+
+  const executeTask = async (objective, task, execContext = {}) => {
+    if (!sessionService?.send) {
+      return { ok: false, kind: 'unavailable', error: 'OpenCode session runtime is unavailable' };
+    }
+    const runEpoch = Number.isFinite(Number(execContext.runEpoch)) ? Number(execContext.runEpoch) : (task.runEpoch ?? 0);
+    const parallelCount = Number(execContext.parallelCount) || 1;
+    const slotIndex = Number(execContext.slotIndex) || 0;
+    const signal = execContext.signal ?? null;
+
+    const { sessionId, directory } = await resolveSessionAndDirectory(objective, task, { parallelCount, slotIndex });
+    if (!sessionId) {
+      return { ok: false, kind: 'session_resolution_failed', error: 'Failed to resolve or create target chat session' };
+    }
+    const patch = { sessionId };
+    if (isString(directory) && directory !== objective.directory) {
+      patch.worktreePath = directory;
+    }
+    store.updateTaskIfEpoch(task.id, runEpoch, patch);
+
+    if (!executionCoordinator) {
+      return runTurnOnSession({
+        objective,
+        task: store.getTask(task.id) || task,
+        runEpoch,
+        sessionId,
+        directory,
+        signal,
+        isCurrentEpoch: () => !signal?.aborted,
+      });
+    }
+
+    const releaseController = executionCoordinator.claimController(sessionId, 'autonomy', {
+      objectiveId: objective.id,
+      taskId: task.id,
+    });
+    try {
+      const coordinated = await executionCoordinator.runExclusive(sessionId, {
+        owner: 'autonomy',
+        ownerRef: { objectiveId: objective.id, taskId: task.id },
+        lane: 'autonomy',
+        directory,
+        priority: objective.priority ?? 50,
+        signal,
+      }, ({ signal: turnSignal, isCurrentEpoch }) => runTurnOnSession({
+        objective,
+        task: store.getTask(task.id) || task,
+        runEpoch,
+        sessionId,
+        directory,
+        signal: turnSignal,
+        isCurrentEpoch,
+      }));
+
+      if (coordinated.skipped) {
+        return {
+          ok: false,
+          deferred: true,
+          kind: coordinated.reason === 'waiting_provider' || coordinated.reason === 'recovery_active'
+            ? 'usage_limit'
+            : 'yielded',
+          resetAt: coordinated.nextWakeAt ?? (now() + 5_000),
+          nextWakeAt: coordinated.nextWakeAt ?? (now() + 5_000),
+          error: `Deferred (${coordinated.reason})`,
+        };
+      }
+      if (coordinated.stale) {
+        return { ok: false, aborted: true, kind: 'superseded', error: 'Turn superseded by newer session epoch' };
+      }
+      return coordinated.result;
+    } catch (coordErr) {
+      if (coordErr?.code === 'ABORT_ERR' || signal?.aborted) {
+        return { ok: false, aborted: true, kind: 'cancelled', error: 'Task execution aborted' };
+      }
+      throw coordErr;
+    } finally {
+      releaseController();
+    }
   };
 
   return { executeTask };

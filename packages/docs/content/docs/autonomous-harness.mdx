@@ -1,0 +1,44 @@
+---
+title: Autonomous Harness
+description: Run persistent finite and ongoing multi-agent objectives with automatic quota recovery, checkpoints, and verification.
+---
+
+# Autonomous Harness
+
+Spleen's **Autonomy & Research Lab** runs durable, self-directing objectives that plan work, execute parallel tasks, coordinate subagents, run verification commands, learn across turns, and automatically recover from provider rate limits without requiring manual `"Continue"` nudges.
+
+## Finite vs. ongoing objectives
+
+- **Finite objective**: Pursues a concrete finish line. Spleen executes the task graph (sequentially or in parallel) and runs your verification commands (for example `bun test` or `cargo check`). The objective completes **only** when every task succeeds and every verification command exits with code `0`. If verification fails, Spleen automatically creates a targeted remediation task with the failure output and re-verifies.
+- **Ongoing objective**: Designed for continuous research, monitoring, or iterative improvement. Ongoing objectives default to **unlimited turns (`∞`)** and cycle cleanly between active work, verification, and scheduled sleep (`reviewIntervalMs`) until you pause or cancel them, or until an optional token/turn budget you set is reached.
+
+## Authoritative execution coordination
+
+All background loops in Spleen — **Autonomy Lab**, **Session Goals**, **Session Recovery**, **Scheduled Tasks**, **AI Teams**, and the **Message Queue** — share one authoritative **Execution Coordinator**:
+
+1. **Your messages always come first**: Queued user messages immediately take priority when a session finishes a turn.
+2. **Recovery before continuation**: Interrupted turns and provider cooldown waits finish cleanly before any objective or goal dispatches the next step.
+3. **True parallel lanes**: Setting **Parallel (`1..8`)** runs independent tasks concurrently across dedicated worker sessions (and optional isolated **Git worktrees** when **Worktrees** is checked), while unrelated objectives run in parallel without blocking one another.
+4. **Immediate pause, cancel, and emergency stop**: Pausing, cancelling, or pressing **Emergency Stop All** bumps the execution epoch and immediately interrupts both the main OpenCode session and any active child subagent sessions, preventing stale turns from overwriting newer state.
+
+## Automatic usage-limit recovery & free OpenCode Zen failover
+
+If you use free **OpenCode Zen** models, rate limits and quota windows are handled automatically without breaking your run:
+
+- **Zero wasted retries**: Rate limits (`429`, free-tier cooldowns, or temporary provider outages) never burn task retry attempts and never mark an objective or [Session Goal](/session-goals/) as failed or blocked. Instead, the objective parks calmly as **`waiting quota`** until the reset window passes.
+- **Verified `$0` Zen model pool**: When **Free Zen Failover** is enabled, Spleen discovers verified `$0`-cost OpenCode Zen models from your live OpenCode catalog (strictly excluding paid models and subscription-only pools), switches blocked turns silently with zero toast spam, and switches back to your primary model once its cooldown expires.
+
+## Context compaction & persistent memory (`MemFS`)
+
+- **Compaction checkpoints**: Whenever OpenCode compacts a long conversation, Spleen snapshots the objective's completed tasks, remaining acceptance criteria, verification history, and next planned step into a durable checkpoint so the agent picks up seamlessly after compaction.
+- **5-tier MemFS**: Autonomous runs record verified project facts, procedural failure lessons, and research findings with provenance (`owner`, `agent`, `untrusted`, `system`), `<spleen-recalled-context>` recall-loop protection, automatic supersession of outdated facts, and **Consolidate Episodes** promotion in **Autonomy Lab → MemFS (5-Tier)**.
+
+## Background execution on Desktop
+
+Closing the Spleen Desktop window minimizes Spleen to the system tray by default while keeping autonomous objectives running. While any autonomous objective or recovery is active, Spleen automatically holds a system awake lock so your machine does not sleep mid-run, and releases it as soon as all runs settle or sleep.
+
+## Related
+
+- [Session Goals](/session-goals/) — turn a single chat prompt into a self-auditing goal
+- [Worktree Sessions](/worktrees/) — isolate parallel runs on separate Git branches
+- [Scheduled Tasks](/scheduled-tasks/) — trigger prompts or goals on a recurring schedule

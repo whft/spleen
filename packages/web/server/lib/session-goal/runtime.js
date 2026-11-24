@@ -18,6 +18,7 @@ import { readMergedSettingsSync } from '../opencode/settings-files.js';
 import { createSessionActivityProbe } from '../opencode/session-activity.js';
 import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
 import { isOperatorChildSession, sessionParentId } from '../session-lineage.js';
+import { isLimitError } from '../limit-failover/policy.js';
 
 const SPLEEN_SETTINGS_FILE = path.join(
   process.env.SPLEEN_DATA_DIR
@@ -304,6 +305,7 @@ export const createSessionGoalRuntime = ({
   getMaxAutoTurns = () => readGoalSettings().maxAutoTurns,
   persistSessionGoal = null,
   readSessionMetadata = null,
+  executionCoordinator = null,
 }) => {
   const timers = new Map();
   const inflight = new Set();
@@ -702,30 +704,25 @@ export const createSessionGoalRuntime = ({
     }
 
     if (!abortedTail && !lengthTail && hasError) {
-      await settleGoal({
-        sessionId, directory, goal, status: 'blocked', statusReason: errorName || 'assistant turn failed', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID,
-      });
+      if (isLimitError(error)) {
+        await writeGoal(sessionId, directory, goal.id, () => ({ statusReason: 'waiting for provider limit reset', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID }));
+        armTimer(sessionId, directory, recheckMs);
+        return;
+      }
+      await settleGoal({ sessionId, directory, goal, status: 'blocked', statusReason: errorName || 'assistant turn failed', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID });
       return;
     }
-
     if (typeof goal.tokenBudget === 'number' && tokensUsed >= goal.tokenBudget) {
-      await settleGoal({
-        sessionId, directory, goal, status: 'budgetLimited', statusReason: 'token budget reached', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID,
-      });
+      await settleGoal({ sessionId, directory, goal, status: 'budgetLimited', statusReason: 'token budget reached', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID });
       return;
     }
-
     if (goal.turnsUsed >= maxAutoTurns) {
-      await settleGoal({
-        sessionId, directory, goal, status: 'blocked', statusReason: 'auto-continuation limit reached', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID,
-      });
+      await settleGoal({ sessionId, directory, goal, status: 'blocked', statusReason: 'auto-continuation limit reached', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID });
       return;
     }
 
     if (lengthTail && goal.statusReason !== 'resumed' && hasRepeatedLengthTail(messages, lastAssistant, goal.createdAt)) {
-      await settleGoal({
-        sessionId, directory, goal, status: 'blocked', statusReason: 'repeated output truncation', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID,
-      });
+      await settleGoal({ sessionId, directory, goal, status: 'blocked', statusReason: 'repeated output truncation', tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID });
       return;
     }
 
@@ -764,12 +761,13 @@ export const createSessionGoalRuntime = ({
       }
     }
 
-    const latest = await fetchRecentMessages(sessionId, directory);
-    const latestLastInfo = latest && latest.length > 0 ? latest[latest.length - 1]?.info : null;
-    if (!latestLastInfo || latestLastInfo.id !== lastMessageInfo?.id) {
-      console.log('[session-goal] tail moved on, dropping continuation');
+    if (executionCoordinator && !executionCoordinator.getArbitration(sessionId, 'session-goal').allowed) {
+      armTimer(sessionId, directory, recheckMs);
       return;
     }
+    const latest = await fetchRecentMessages(sessionId, directory);
+    const latestLastInfo = latest && latest.length > 0 ? latest[latest.length - 1]?.info : null;
+    if (!latestLastInfo || latestLastInfo.id !== lastMessageInfo?.id) { console.log('[session-goal] tail moved on, dropping continuation'); return; }
     const written = await writeGoal(sessionId, directory, goal.id, (current) => ({
       tokensUsed, tokensBaseline, tokensCommitted, lastAccountedMessageID,
       turnsUsed: current.turnsUsed + 1, auditFailStreak, statusReason: '',

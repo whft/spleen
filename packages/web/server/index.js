@@ -90,6 +90,7 @@ import { createDiscordClient } from './lib/discord/client.js';
 import { createDiscordGateway } from './lib/discord/gateway.js';
 import { registerDiscordRoutes } from './lib/discord/routes.js';
 import { bootstrapAutonomyPlatform } from './lib/autonomy/bootstrap.js';
+import { createExecutionCoordinator, createProviderGate } from './lib/execution-coordinator/index.js';
 import { createUnknownCheatsStore } from './lib/unknowncheats/store.js';
 import { createUnknownCheatsClient } from './lib/unknowncheats/client.js';
 import { registerUnknownCheatsRoutes } from './lib/unknowncheats/routes.js';
@@ -770,6 +771,8 @@ let exitOnShutdown = true;
 let uiAuthController = null;
 let sessionRecoveryRuntime = null;
 let recoveryStore = null;
+let providerGateRuntime = null;
+let executionCoordinatorRuntime = null;
 let teamsRuntime = null;
 let discordClientRuntime = null;
 let autonomyPlatformRuntime = null;
@@ -1082,6 +1085,7 @@ const sessionGoalRuntime = createSessionGoalRuntime({
   classifierEndpoint: () => routingRuntime.classifierEndpoint(),
   jev: createJevClient({ timeoutMs: JEV_BACKGROUND_TIMEOUT_MS }),
   readSessionMetadata: readStoredSessionMetadata,
+  executionCoordinator: { getArbitration: (...args) => executionCoordinatorRuntime ? executionCoordinatorRuntime.getArbitration(...args) : { allowed: true } },
   persistSessionGoal: async (sessionID, directory, goal, canWrite) => {
     if (!canWrite) return persistSessionMetadataPatch(sessionID, { spleen: { goal } }, { directory });
     const result = await updateSessionMetadataWith(sessionID, (metadata) => (
@@ -2147,23 +2151,32 @@ const serviceHostApi = createServiceHostApi({
 });
 serviceHostApi.register();
 
+providerGateRuntime = createProviderGate({
+  dbPath: path.join(SPLEEN_DATA_DIR, 'provider-gate.sqlite3'),
+  readModelCatalog: (dir) => readModelCatalog(dir),
+  readSettings: () => readSettingsFromDiskMigrated(),
+  broadcastEvent: broadcastSpleenUiEvent,
+});
+executionCoordinatorRuntime = createExecutionCoordinator({
+  providerGate: providerGateRuntime,
+  hasQueuedUserMessages: (sid) => (messageQueueRuntime?.sessionSnapshot?.(sid)?.items?.length ?? 0) > 0,
+  getRecoverySessionState: (sid) => recoveryStore?.get?.(sid) ?? null,
+  abortOpenCodeSession: (sid, dir) => spleenSessionService.abort(sid, { directory: dir }),
+  listChildSessions: (sid, dir) => autonomyPlatformRuntime?.openCodeAdapter?.listChildSessions?.(sid, dir) ?? [],
+  broadcastEvent: broadcastSpleenUiEvent,
+});
 const teamsStore = createTeamsStore({ filePath: path.join(SPLEEN_DATA_DIR, 'teams.json') });
 const readTeamSessionOpenCodeFetch = async (urlPath, directory) => {
   await waitForOpenCodeReady?.(5_000, 200).catch(() => {});
   const target = new URL(buildOpenCodeUrl(urlPath, ''));
-  const response = await fetch(target.href, {
-    headers: {
-      ...getOpenCodeAuthHeaders(),
-      ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}),
-    },
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!response.ok) return null;
-  return response.json().catch(() => null);
+  const headers = { ...getOpenCodeAuthHeaders(), ...(directory ? { 'x-opencode-directory': encodeURIComponent(directory) } : {}) };
+  const response = await fetch(target.href, { headers, signal: AbortSignal.timeout(5_000) });
+  return response.ok ? response.json().catch(() => null) : null;
 };
 const teamsService = createTeamsService({
   store: teamsStore,
   sessionService: spleenSessionService,
+  executionCoordinator: executionCoordinatorRuntime,
   readSessionStatus: async (sessionId, directory) => {
     const active = await readTeamSessionOpenCodeFetch('/api/session/active', directory);
     const map = active?.data && !Array.isArray(active.data) ? active.data : active;
@@ -2352,6 +2365,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   sessionGoalRuntime,
   getSessionRecoveryRuntime: () => sessionRecoveryRuntime,
   getAutonomyPlatform: () => autonomyPlatformRuntime,
+  getProviderGate: () => providerGateRuntime,
   teamsRuntime,
   contextObligatoryRuntime,
   sessionWarmingRuntime,
@@ -2437,9 +2451,7 @@ async function main(options = {}) {
     getActiveHost: () => server?.address?.()?.address ?? null,
   });
   limitFailoverRuntime = createLimitFailoverRuntime({
-    fsPromises,
-    path,
-    instanceDir,
+    fsPromises, path, instanceDir, providerGate: providerGateRuntime,
     readSettings: () => readSettingsFromDiskMigrated(),
     authorizeRequest: (req) => agentToolRuntime.authorizeRequest(req),
     broadcastUiEvent: (event) => broadcastSpleenUiEvent(event),
@@ -2807,52 +2819,29 @@ async function main(options = {}) {
   uiAuthController = bootstrapResult.uiAuthController;
   recoveryStore = createRecoveryStore({ filePath: path.join(SPLEEN_DATA_DIR, 'recovery.sqlite3') });
   sessionRecoveryRuntime = createSessionRecoveryRuntime({
-    store: recoveryStore,
+    store: recoveryStore, executionCoordinator: executionCoordinatorRuntime,
     openCodeFetch: createRecoveryOpenCodeFetch({ buildOpenCodeUrl, getOpenCodeAuthHeaders }),
-    globalEventHub: globalMessageStreamHub,
-    broadcastEvent: broadcastSpleenUiEvent,
+    globalEventHub: globalMessageStreamHub, broadcastEvent: broadcastSpleenUiEvent,
   });
   sessionRecoveryRuntime.start();
   app.get('/api/recovery/status', async (req, res) => {
-    const authorized = await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
-    if (!authorized) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
+    if (!(await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }))) return res.status(401).json({ error: 'Unauthorized' });
     res.json(sessionRecoveryRuntime?.status() ?? { coordinator: false, counts: {}, sessions: [] });
   });
   app.post('/api/recovery/:sessionId/resume', async (req, res) => {
-    const authorized = await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
-    if (!authorized) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
+    if (!(await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }))) return res.status(401).json({ error: 'Unauthorized' });
     const result = await sessionRecoveryRuntime?.resumeNow?.(req.params.sessionId);
-    if (!result?.ok) {
-      res.status(result?.reason === 'not_found' ? 404 : 400).json(result ?? { ok: false, error: 'Recovery runtime unavailable' });
-      return;
-    }
+    if (!result?.ok) return res.status(result?.reason === 'not_found' ? 404 : 400).json(result ?? { ok: false, error: 'Recovery runtime unavailable' });
     res.json(result);
   });
   app.post('/api/recovery/:sessionId/dismiss', async (req, res) => {
-    const authorized = await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
-    if (!authorized) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
+    if (!(await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }))) return res.status(401).json({ error: 'Unauthorized' });
     const result = sessionRecoveryRuntime?.dismiss?.(req.params.sessionId);
-    if (!result?.ok) {
-      res.status(result?.reason === 'not_found' ? 404 : 400).json(result ?? { ok: false, error: 'Recovery runtime unavailable' });
-      return;
-    }
+    if (!result?.ok) return res.status(result?.reason === 'not_found' ? 404 : 400).json(result ?? { ok: false, error: 'Recovery runtime unavailable' });
     res.json(result);
   });
   app.post('/api/recovery/wake', async (req, res) => {
-    const authorized = await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
-    if (!authorized) {
-      res.status(401).json({ error: 'Unauthorized' });
-      return;
-    }
+    if (!(await isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController }))) return res.status(401).json({ error: 'Unauthorized' });
     res.json(sessionRecoveryRuntime?.wakeWaitingProvider?.() ?? { ok: false, updated: 0 });
   });
   const authGuard = (req, res) => isRequestAuthorized(req, res, { tunnelAuthController, uiAuthController });
@@ -2863,7 +2852,9 @@ async function main(options = {}) {
   discordClientRuntime = createDiscordClient({ store: discordStore, gateway: discordGateway });
   registerDiscordRoutes(app, { client: discordClientRuntime, gateway: discordGateway, requireAuthorized: authGuard });
   autonomyPlatformRuntime = bootstrapAutonomyPlatform(app, {
-    dataDir: SPLEEN_DATA_DIR, requireAuthorized: authGuard, broadcastEvent: broadcastSpleenUiEvent, sessionService: spleenSessionService, readOpenCodeJson: readTeamSessionOpenCodeFetch,
+    dataDir: SPLEEN_DATA_DIR, requireAuthorized: authGuard, broadcastEvent: broadcastSpleenUiEvent, globalEventHub: globalMessageStreamHub,
+    executionCoordinator: executionCoordinatorRuntime, activityProbe: createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: 5_000 }),
+    sessionService: spleenSessionService, readOpenCodeJson: readTeamSessionOpenCodeFetch,
     getSessionRecoveryRuntime: () => sessionRecoveryRuntime, getScheduledTasksRuntime: () => scheduledTasksRuntime, getDiscordGateway: () => discordGateway,
   });
   const unknownCheatsStore = createUnknownCheatsStore({ filePath: path.join(SPLEEN_DATA_DIR, 'unknowncheats.json') });
